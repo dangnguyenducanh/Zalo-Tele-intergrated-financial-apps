@@ -1,0 +1,56 @@
+{
+  "title": "Danh mục",
+  "add": "Thêm danh mục",
+  "save": "Lưu",
+  "saved": "Đã lưu danh mục",
+  "deleted": "Đã xoá danh mục",
+  "retry": "Thử lại",
+  "loadError": "Không tải được danh sách danh mục.",
+  "fallback": "Danh mục dự phòng",
+  "typesLabel": "Loại danh mục",
+  "types": {
+    "expense": "Chi",
+    "income": "Thu"
+  },
+  "actions": {
+    "edit": "Sửa danh mục {{name}}",
+    "delete": "Xoá danh mục {{name}}"
+  },
+  "dialog": {
+    "addTitle": {
+      "expense": "Thêm danh mục chi",
+      "income": "Thêm danh mục thu"
+    },
+    "editTitle": "Sửa danh mục"
+  },
+  "fields": {
+    "name": "Tên danh mục",
+    "icon": "Biểu tượng",
+    "color": "Màu",
+    "keywords": "Từ khoá cho bot",
+    "keywordsHelp": "Bot dùng các từ này để đoán danh mục, ví dụ: phở, cà phê. Nhấn Enter để thêm; dấu phẩy tách nhiều từ."
+  },
+  "validation": {
+    "name": "Tên danh mục từ 1 đến 40 ký tự"
+  },
+  "deleteConfirm": {
+    "title": "Xoá danh mục?",
+    "message": "Các giao dịch của danh mục \"{{name}}\" sẽ chuyển sang danh mục \"{{fallback}}\".",
+    "confirm": "Xoá"
+  },
+  "icons": {
+    "Restaurant": "Ăn uống",
+    "DirectionsCar": "Xe cộ",
+    "ShoppingBag": "Mua sắm",
+    "ReceiptLong": "Hoá đơn",
+    "Home": "Nhà",
+    "Movie": "Phim ảnh",
+    "LocalHospital": "Y tế",
+    "School": "Học tập",
+    "Category": "Khác",
+    "Payments": "Tiền",
+    "EmojiEvents": "Cúp thưởng",
+    "CardGiftcard": "Quà tặng",
+    "Savings": "Tiết kiệm"
+  }
+}
