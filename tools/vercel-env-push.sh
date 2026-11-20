@@ -9,7 +9,15 @@ target="${1:?usage: tools/vercel-env-push.sh staging|production [KEY...]}"
 shift
 root="$(git rev-parse --show-toplevel)"
 env_file="$root/server/.env"
-get() { grep -E "^$1=" "$env_file" | head -1 | cut -d= -f2- || true; }
+# A value exactly as Node's --env-file reads it (what the local server sees), so Vercel gets the same thing:
+# quoted → the text inside the quotes; unquoted → cut at '#' (a comment) and trimmed.
+envval() {
+  local v="$1" q
+  v="${v#"${v%%[![:space:]]*}"}"; q="${v:0:1}"
+  if [[ "$q" == [\"\'\`] && "${v:1}" == *"$q"* ]]; then v="${v:1}"; printf '%s' "${v%%"$q"*}"; return; fi
+  v="${v%%#*}"; printf '%s' "${v%"${v##*[![:space:]]}"}"
+}
+get() { envval "$(grep -E "^$1=" "$env_file" | head -1 | cut -d= -f2- || true)"; }
 export VERCEL_ORG_ID="$(get VERCEL_ORG_ID)"
 case "$target" in
   staging)    export VERCEL_PROJECT_ID="$(get VERCEL_PROJECT_ID_STAGING)"; app_url="$(get STAGING_URL)"; db=finance_staging ;;
@@ -27,7 +35,7 @@ wanted() { [ "$all" = 1 ] || [[ "$only" == *" $1 "* ]]; }
 failed=0; pushed=0
 push() { # key value
   [ -n "$2" ] || { echo "  skip $1 (empty)"; return; }
-  case "$2" in *PASTE_*) echo "  skip $1 (not filled in yet)"; return ;; esac
+  case "$2" in *PASTE_* | *'<'*'>'*) echo "  skip $1 (not filled in yet)"; return ;; esac
   npx -y vercel@latest env rm "$1" production --yes </dev/null >/dev/null 2>&1 || true
   if printf '%s' "$2" | npx -y vercel@latest env add "$1" production >/dev/null 2>&1; then
     echo "  set  $1"; pushed=$((pushed + 1))
@@ -44,7 +52,7 @@ for k in "$@"; do # a requested key that isn't in server/.env is an error, not a
 done
 while IFS= read -r -u 3 line || [ -n "$line" ]; do
   [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
-  key="${line%%=*}"; val="${line#*=}" # split on the first '=' only, so values may contain '='
+  key="${line%%=*}"; val="$(envval "${line#*=}")" # split on the first '=' only, so values may contain '='
   wanted "$key" || continue
   if [[ "$key" =~ $skip ]]; then derived "$key" || [ "$all" = 1 ] || echo "  keep $key local only"; continue; fi
   push "$key" "$val"
@@ -54,7 +62,10 @@ if wanted MONGODB_DB; then push MONGODB_DB "$db"; fi
 # Locally KIE_URL is the local service; Vercel's KIE_URL is the public tunnel, kept in KIE_PUBLIC_URL.
 if wanted KIE_URL || wanted KIE_PUBLIC_URL; then
   if [ -z "$(get KIE_PUBLIC_URL)" ]; then
-    push KIE_URL "$(get KIE_URL)" # no separate tunnel entry: KIE_URL is the tunnel URL itself
+    case "$(get KIE_URL)" in
+      *://localhost* | *://127.* | *://0.0.0.0* | *://\[::1\]*) echo "  skip KIE_URL (local address; Vercel needs the tunnel: tools/set-secret.sh KIE_PUBLIC_URL)" ;;
+      *) push KIE_URL "$(get KIE_URL)" ;; # older layout: KIE_URL is the tunnel URL itself
+    esac
   elif wanted KIE_PUBLIC_URL; then
     push KIE_URL "$(get KIE_PUBLIC_URL)"
   else
