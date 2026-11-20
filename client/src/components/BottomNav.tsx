@@ -1,10 +1,9 @@
-import { Badge, BottomNavigation, BottomNavigationAction, Box, Drawer, IconButton, Paper, Toolbar, Typography, type Theme } from '@mui/material';
+import { BottomNavigation, BottomNavigationAction, Box, Drawer, IconButton, Paper, Toolbar, Typography, type Theme } from '@mui/material';
 import { Menu, X } from '@/components/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, matchPath, useLocation } from 'react-router';
 import { useAuth } from '@/auth/useAuth';
-import { useDraftCount } from '@/features/transactions/useDraftCount';
 import NavList from './NavList';
 import { ICON, navItemsFor } from './navItems';
 
@@ -16,7 +15,6 @@ export default function BottomNav() {
   const { user } = useAuth();
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
-  const drafts = useDraftCount();
 
   const items = navItemsFor(user);
   const tabs = items.filter((item) => item.inBottomNav);
@@ -47,7 +45,7 @@ export default function BottomNav() {
               key={tab.to}
               value={tab.to}
               label={t(tab.labelKey)}
-              icon={tab.to === '/bot' && drafts ? <Badge badgeContent={drafts} color="primary" sx={badgeSx} slotProps={{ badge: { "aria-hidden": true } }}>{tab.icon}</Badge> : tab.icon}
+              icon={tab.icon}
               component={Link}
               to={tab.to}
               aria-current={current === tab.to ? 'page' : undefined}
@@ -102,6 +100,3 @@ const actionSx = {
     '&.Mui-selected': { fontSize: '0.6875rem', fontWeight: 600 },
   },
 } as const;
-
-// A small square count on the inbox tab, not a round blob.
-const badgeSx = { '& .MuiBadge-badge': { borderRadius: '3px', height: 15, minWidth: 15, fontSize: 10, px: 0.5, top: 2, right: -4 } } as const;

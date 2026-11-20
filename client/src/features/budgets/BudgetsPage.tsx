@@ -157,9 +157,9 @@ function BudgetCard({ budget, name, onEdit, onDelete }: CardProps) {
             <Stack
               direction="row"
               spacing={0.75}
-              sx={{ alignItems: 'center', flexShrink: 0, px: 1, py: 0.25, borderRadius: '999px', bgcolor: 'action.hover' }}
+              sx={{ alignItems: 'center', flexShrink: 0, px: 1, py: 0.25, borderRadius: '3px', bgcolor: 'panel2' }}
             >
-              <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: `${LEVEL_COLOR[level]}.main` }} />
+              <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: `${LEVEL_COLOR[level]}.main` }} />
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 {t(`level.${level}`)}
               </Typography>
@@ -179,17 +179,17 @@ function BudgetCard({ budget, name, onEdit, onDelete }: CardProps) {
               return {
                 display: 'block',
                 width: '100%',
-                height: 8,
+                height: 4,
                 my: 1.75,
                 border: 0,
-                borderRadius: '999px',
+                borderRadius: '2px',
                 overflow: 'hidden',
                 appearance: 'none',
                 accentColor: fill,
                 bgcolor: track,
-                '&::-webkit-progress-bar': { backgroundColor: track, borderRadius: '999px' },
-                '&::-webkit-progress-value': { backgroundColor: fill, borderRadius: '999px' },
-                '&::-moz-progress-bar': { backgroundColor: fill, borderRadius: '999px' },
+                '&::-webkit-progress-bar': { backgroundColor: track, borderRadius: '2px' },
+                '&::-webkit-progress-value': { backgroundColor: fill, borderRadius: '2px' },
+                '&::-moz-progress-bar': { backgroundColor: fill, borderRadius: '2px' },
               };
             }}
           />

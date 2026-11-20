@@ -7,7 +7,7 @@ import { formatDate } from '@/i18n/format';
 import { strongLine } from '@/theme/theme';
 
 // The arrows are square segments of one bordered control (draft 2), not floating round buttons.
-const segmentSx = { width: 32, borderRadius: 0, color: 'text.secondary' } as const;
+const segmentSx = { width: 32, borderRadius: 0, color: 'text.secondary', '&.Mui-focusVisible': { outlineOffset: -2 } } as const;
 
 // "YYYY-MM" plus or minus some months.
 function shiftMonth(month: string, delta: number): string {

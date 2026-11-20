@@ -108,7 +108,7 @@ function SummaryStrip({ summary }: { summary: MonthSummary }) {
               variant="determinate"
               value={Math.min(used, 100)}
               color={used > 100 ? 'error' : used >= 85 ? 'warning' : 'primary'}
-              aria-label={t('cards.budgetLeft')}
+              aria-hidden // a picture of the line below; its label would say "left" while the value is the share used
               sx={{ my: 1 }}
             />
             <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
@@ -157,7 +157,7 @@ function LatestTransactions() {
   const language = useAppSelector((s) => s.ui.language);
   const { data } = useGetTransactionsQuery({ status: 'confirmed' }); // newest first; the first page is enough
   const { data: categories = [] } = useGetCategoriesQuery();
-  const { data: wallets = [] } = useGetWalletsQuery();
+  const { data: wallets = [] } = useGetWalletsQuery({ includeArchived: true }); // a past transaction may sit in an archived wallet
   const titleId = useId();
   const items = data?.items.slice(0, 5) ?? [];
 
