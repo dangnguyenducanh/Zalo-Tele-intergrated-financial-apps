@@ -9,7 +9,7 @@
     "failed": 0,
     "skipped": 1,
     "durationSec": 25,
-    "notes": "79 catalogue cases matched; 0 tests without a case ID; post-merge check: Vitest run on the merged main in a fresh worktree (not against the production site)"
+    "notes": "79 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
   },
   {
     "id": "RUN-002",
@@ -21,7 +21,7 @@
     "failed": 0,
     "skipped": 1,
     "durationSec": 31,
-    "notes": "82 catalogue cases matched; 0 tests without a case ID; post-merge check: Vitest run on the merged main in a fresh worktree (not against the production site)"
+    "notes": "82 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
   },
   {
     "id": "RUN-003",
@@ -33,7 +33,7 @@
     "failed": 0,
     "skipped": 1,
     "durationSec": 37,
-    "notes": "84 catalogue cases matched; 0 tests without a case ID; post-merge check: Vitest run on the merged main in a fresh worktree (not against the production site)"
+    "notes": "84 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
   },
   {
     "id": "RUN-004",
@@ -45,7 +45,7 @@
     "failed": 0,
     "skipped": 1,
     "durationSec": 41,
-    "notes": "90 catalogue cases matched; 0 tests without a case ID; post-merge check: Vitest run on the merged main in a fresh worktree (not against the production site)"
+    "notes": "90 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
   },
   {
     "id": "RUN-005",
@@ -57,7 +57,7 @@
     "failed": 0,
     "skipped": 1,
     "durationSec": 55,
-    "notes": "94 catalogue cases matched; 0 tests without a case ID; post-merge check: Vitest run on the merged main in a fresh worktree (not against the production site)"
+    "notes": "94 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
   },
   {
     "id": "RUN-006",
@@ -81,7 +81,7 @@
     "failed": 0,
     "skipped": 1,
     "durationSec": 295,
-    "notes": "104 catalogue cases matched; 0 tests without a case ID; post-merge check: Vitest run on the merged main in a fresh worktree (not against the production site)"
+    "notes": "104 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest + Playwright) (not against the production site)"
   },
   {
     "id": "RUN-008",
@@ -105,6 +105,6 @@
     "failed": 0,
     "skipped": 0,
     "durationSec": 21,
-    "notes": "4 catalogue cases matched; 0 tests without a case ID; rerun of client/e2e/auth.spec.ts after the flaky TC-F12-02 in RUN-007: 9/9 passed"
+    "notes": "4 catalogue cases matched; 0 tests without a case ID; rerun of client/e2e/auth.spec.ts after the flaky TC-F12-02 in RUN-008: 9/9 passed"
   }
 ]

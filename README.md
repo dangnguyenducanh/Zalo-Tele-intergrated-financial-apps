@@ -6,15 +6,15 @@ A personal finance web app (topic #16, *Quản lý chi tiêu cá nhân*) with **
 
 | | |
 |---|---|
-| Web app (production) | https://sochitieu-btl.vercel.app |
-| Test site (staging) | https://sochitieu-btl-staging.vercel.app |
-| Telegram bot | [@sochitieu_btl_bot](https://t.me/sochitieu_btl_bot) |
-| Zalo bot | "Bot Sổ Chi Tiêu" (search it in Zalo) |
+| Web app (production) | https://sochitieu-btl.vercel.app (not deployed yet: waits for the Atlas password and bot tokens) |
+| Test site (staging) | https://sochitieu-btl-staging.vercel.app (deployed; the API reports `db: down` until the Atlas password is set) |
+| Telegram bot | [@sochitieu_btl_bot](https://t.me/sochitieu_btl_bot) (created; webhook set after the production deploy) |
+| Zalo bot | not created yet: it can only be made in the Zalo phone app ([docs/06 §6.5](docs/06-deployment.md)) |
 | Test & bug report | [docs/testing/test-report.xlsx](docs/testing/test-report.xlsx) |
 
 ## Run it locally
 
-Needs Node.js 22 and npm. Tests need nothing else: they start an in-memory MongoDB.
+Needs Node.js 22 and npm. Tests need no database or secrets: they start an in-memory MongoDB and stub the bot APIs. Once per clone, the end-to-end tests need a browser (`npx playwright install chromium`) and the report tool needs its own package (`npm install --prefix tools/test-report`).
 
 ```bash
 npm ci
