@@ -56,7 +56,7 @@ test('TC-F1-08 without a session the app shows /login; logging in opens the app,
   expect(fake.loggedIn).toBe(false); // the server session was revoked too
 });
 
-test('TC-F1-13 ProtectedRoute sends a visitor to /login and back to the page they asked for after login', async () => {
+test('TC-F1-17 ProtectedRoute sends a visitor to /login and back to the page they asked for after login', async () => {
   const { router } = renderApp('/secret', guardedRoutes);
 
   await logIn();
@@ -65,7 +65,7 @@ test('TC-F1-13 ProtectedRoute sends a visitor to /login and back to the page the
   expect(router.state.location.pathname).toBe('/secret');
 });
 
-test('TC-F1-13 a logged-in user who opens /login or /register is sent to the app', async () => {
+test('TC-F1-17 a logged-in user who opens /login or /register is sent to the app', async () => {
   resetFake(LAN, true);
   const { router } = renderApp('/register', guardedRoutes);
 
@@ -73,7 +73,7 @@ test('TC-F1-13 a logged-in user who opens /login or /register is sent to the app
   expect(router.state.location.pathname).toBe('/');
 });
 
-test('TC-F1-13 AdminRoute shows 403 to a normal user and the page to an admin', async () => {
+test('TC-F1-17 AdminRoute shows 403 to a normal user and the page to an admin', async () => {
   resetFake(LAN, true);
   const first = renderApp('/admin/x', guardedRoutes);
   expect(await screen.findByRole('heading', { name: 'Không có quyền truy cập' })).toBeInTheDocument();
@@ -85,7 +85,7 @@ test('TC-F1-13 AdminRoute shows 403 to a normal user and the page to an admin', 
   expect(await screen.findByRole('heading', { name: 'Admin page' })).toBeInTheDocument();
 });
 
-test('TC-F1-13 admin pages appear in the navigation only for admins', async () => {
+test('TC-F1-17 admin pages appear in the navigation only for admins', async () => {
   resetFake({ ...LAN, role: 'admin' }, true);
   renderApp('/');
   const nav = await screen.findByRole('navigation', { name: 'Điều hướng chính' });

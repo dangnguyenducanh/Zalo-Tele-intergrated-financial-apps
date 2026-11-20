@@ -5,7 +5,7 @@ import { expect, test, vi } from 'vitest';
 import { fake, LAN, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 
-test('TC-F1-12 login shows translated field errors, focuses the first one and sends nothing', async () => {
+test('TC-F1-16 login shows translated field errors, focuses the first one and sends nothing', async () => {
   const user = userEvent.setup();
   const login = vi.fn(() => HttpResponse.json({}));
   server.use(http.post('*/api/auth/login', login));
@@ -23,7 +23,7 @@ test('TC-F1-12 login shows translated field errors, focuses the first one and se
   expect(login).not.toHaveBeenCalled();
 });
 
-test('TC-F1-12 login shows the server error code translated, and the show/hide password button works', async () => {
+test('TC-F1-16 login shows the server error code translated, and the show/hide password button works', async () => {
   const user = userEvent.setup();
   renderApp('/login');
 
@@ -38,7 +38,7 @@ test('TC-F1-12 login shows the server error code translated, and the show/hide p
   expect(await screen.findByRole('alert')).toHaveTextContent('Email hoặc mật khẩu không đúng.');
 });
 
-test('TC-F1-12 an unknown or network error falls back to a generic translated message', async () => {
+test('TC-F1-16 an unknown or network error falls back to a generic translated message', async () => {
   const user = userEvent.setup();
   server.use(http.post('*/api/auth/login', () => HttpResponse.error()));
   renderApp('/login');
@@ -50,7 +50,7 @@ test('TC-F1-12 an unknown or network error falls back to a generic translated me
   expect(await screen.findByRole('alert')).toHaveTextContent('Không kết nối được máy chủ.');
 });
 
-test('TC-F1-12 register checks name, password length and confirmation before calling the API', async () => {
+test('TC-F1-16 register checks name, password length and confirmation before calling the API', async () => {
   const user = userEvent.setup();
   renderApp('/register');
 
@@ -65,7 +65,7 @@ test('TC-F1-12 register checks name, password length and confirmation before cal
   expect(fake.account?.email).toBe(LAN.email); // nobody was registered
 });
 
-test('TC-F1-12 register shows EMAIL_TAKEN translated, then succeeds with a new email in the chosen language', async () => {
+test('TC-F1-16 register shows EMAIL_TAKEN translated, then succeeds with a new email in the chosen language', async () => {
   const user = userEvent.setup();
   renderApp('/register');
 

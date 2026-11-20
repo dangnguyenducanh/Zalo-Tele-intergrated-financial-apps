@@ -12,7 +12,7 @@ const pingApi = api.injectEndpoints({
 
 const tokenExpired = () => HttpResponse.json({ error: { code: 'TOKEN_EXPIRED', message: 'jwt expired' } }, { status: 401 });
 
-test('TC-F1-11 parallel requests with an expired token share ONE refresh, then all retry with the new token', async () => {
+test('TC-F1-15 parallel requests with an expired token share ONE refresh, then all retry with the new token', async () => {
   let refreshCalls = 0;
   server.use(
     http.post('*/api/auth/refresh', () => {
@@ -33,7 +33,7 @@ test('TC-F1-11 parallel requests with an expired token share ONE refresh, then a
   expect(getAccessToken()).toBe('fresh');
 });
 
-test('TC-F1-11 when the refresh fails the session ends, so the app goes back to /login', async () => {
+test('TC-F1-15 when the refresh fails the session ends, so the app goes back to /login', async () => {
   server.use(http.get('*/api/ping', tokenExpired)); // the default refresh handler answers 401 INVALID_REFRESH
   setSession({ accessToken: 'stale', user: LAN });
   const listener = vi.fn();
@@ -47,7 +47,7 @@ test('TC-F1-11 when the refresh fails the session ends, so the app goes back to 
   unsubscribe();
 });
 
-test('TC-F1-11 other errors are returned as they are, without a refresh', async () => {
+test('TC-F1-15 other errors are returned as they are, without a refresh', async () => {
   const refresh = vi.fn(() => HttpResponse.json({ accessToken: 'fresh', user: LAN }));
   server.use(
     http.post('*/api/auth/refresh', refresh),
