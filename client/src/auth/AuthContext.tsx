@@ -14,13 +14,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ status: 'loading', user: null, accessToken: null });
 
   useEffect(() => {
+    let userId: string | null = null; // who the preferences were last applied for
     // Every session change (login, register, refresh, logout, failed refresh) arrives here.
     const unsubscribe = onSessionChange((session) => {
       if (session) {
         setState({ status: 'authenticated', user: session.user, accessToken: session.accessToken });
-        dispatch(applyThemeMode(session.user.theme)); // the saved profile follows the user across devices
-        dispatch(applyLanguage(session.user.language));
+        // The saved profile follows the user across devices, but only when they log in (or the session
+        // is restored at start-up). A token refresh while logged in must not re-apply it: the refresh
+        // can carry the profile from before a theme/language change whose PATCH is still being retried.
+        if (session.user.id !== userId) {
+          dispatch(applyThemeMode(session.user.theme));
+          dispatch(applyLanguage(session.user.language));
+        }
+        userId = session.user.id;
       } else {
+        userId = null;
         setState({ status: 'anonymous', user: null, accessToken: null });
         dispatch(api.util.resetApiState()); // drop the previous user's cached data
       }

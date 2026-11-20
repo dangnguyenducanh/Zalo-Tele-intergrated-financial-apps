@@ -6,6 +6,7 @@ import { useAuth } from './useAuth';
 export default function ProtectedRoute() {
   const { status } = useAuth();
   const location = useLocation();
-  if (status !== 'authenticated') return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  const from = location.pathname + location.search + location.hash; // keeps URL-synced filters
+  if (status !== 'authenticated') return <Navigate to="/login" replace state={{ from }} />;
   return <Outlet />;
 }

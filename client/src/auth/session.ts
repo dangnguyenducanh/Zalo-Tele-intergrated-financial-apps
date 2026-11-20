@@ -48,11 +48,18 @@ export async function postAuth<T>(path: string, body?: unknown): Promise<T> {
   return data as T;
 }
 
-// Exchanges the refresh cookie for a new access token. Calls made while a refresh is running get the
-// same promise: the server rotates the cookie on every refresh and treats a second use of the old
-// one as theft, so two parallel refreshes would log the user out everywhere.
+// The server rotates the refresh cookie on every refresh and treats a second use of the old one as
+// theft. Other tabs share the cookie, so a Web Lock makes them take turns: the second tab waits and
+// then sends the already-rotated cookie. (No Web Locks, e.g. in jsdom: just post.)
+function postRefresh(): Promise<AuthResponse> {
+  const post = () => postAuth<AuthResponse>('refresh');
+  return 'locks' in navigator ? navigator.locks.request('auth-refresh', post) : post();
+}
+
+// Exchanges the refresh cookie for a new access token. Calls made in this tab while a refresh is
+// running get the same promise, so two parallel refreshes would not log the user out everywhere.
 export function refreshSession(): Promise<AuthResponse | null> {
-  refreshing ??= postAuth<AuthResponse>('refresh')
+  refreshing ??= postRefresh()
     .catch(() => null)
     .then((session) => {
       setSession(session);

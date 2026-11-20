@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import { expect, test, vi } from 'vitest';
-import { getAccessToken, onSessionChange, setSession } from '@/auth/session';
+import { getAccessToken, onSessionChange, refreshSession, setSession } from '@/auth/session';
 import { LAN, server } from '@/test/fakeApi';
 import { api } from './api';
 import { makeStore } from './store';
@@ -59,4 +59,16 @@ test('TC-F1-15 other errors are returned as they are, without a refresh', async 
 
   expect(result.error).toMatchObject({ status: 403, data: { error: { code: 'FORBIDDEN' } } });
   expect(refresh).not.toHaveBeenCalled();
+});
+
+test('TC-F1-15 the refresh runs inside a Web Lock, so two tabs never send the same refresh cookie at once', async () => {
+  const request = vi.fn((_name: string, callback: () => Promise<unknown>) => callback());
+  vi.stubGlobal('navigator', { ...navigator, locks: { request } });
+  server.use(http.post('*/api/auth/refresh', () => HttpResponse.json({ accessToken: 'fresh', user: LAN })));
+
+  const session = await refreshSession();
+  vi.unstubAllGlobals();
+
+  expect(request).toHaveBeenCalledWith('auth-refresh', expect.any(Function));
+  expect(session?.accessToken).toBe('fresh');
 });

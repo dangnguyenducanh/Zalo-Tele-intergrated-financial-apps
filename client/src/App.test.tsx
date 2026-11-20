@@ -1,10 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { expect, test } from 'vitest';
 import AdminRoute from '@/auth/AdminRoute';
 import ProtectedRoute from '@/auth/ProtectedRoute';
 import { authRoutes } from '@/features/auth/routes';
-import { fake, LAN, PASSWORD, resetFake } from '@/test/fakeApi';
+import { fake, LAN, PASSWORD, resetFake, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 
 // A route table with one protected page and one admin page, to test the guards on their own.
@@ -57,12 +58,13 @@ test('TC-F1-08 without a session the app shows /login; logging in opens the app,
 });
 
 test('TC-F1-17 ProtectedRoute sends a visitor to /login and back to the page they asked for after login', async () => {
-  const { router } = renderApp('/secret', guardedRoutes);
+  const { router } = renderApp('/secret?wallet=w1#top', guardedRoutes);
 
   await logIn();
 
   expect(await screen.findByRole('heading', { name: 'Secret page' })).toBeInTheDocument();
-  expect(router.state.location.pathname).toBe('/secret');
+  // The query string (e.g. URL-synced filters) and hash come back too.
+  expect(router.state.location).toMatchObject({ pathname: '/secret', search: '?wallet=w1', hash: '#top' });
 });
 
 test('TC-F1-17 a logged-in user who opens /login or /register is sent to the app', async () => {
@@ -130,6 +132,43 @@ test('TC-F12-02 switching to English translates the UI, sets <html lang> and sav
   expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
   expect(document.documentElement.lang).toBe('en');
   await waitFor(() => expect(fake.patches).toEqual([{ language: 'en' }]));
+});
+
+// The access token has expired (idle > 15 min): the first PATCH answers TOKEN_EXPIRED, the refresh
+// returns the profile as it was BEFORE the change, then the retried PATCH saves the new value.
+const expireFirstPatch = () =>
+  server.use(
+    http.patch('*/api/users/me', () => HttpResponse.json({ error: { code: 'TOKEN_EXPIRED', message: 'jwt expired' } }, { status: 401 }), {
+      once: true,
+    }),
+  );
+
+test('TC-F12-01 a theme change survives the token refresh it triggers (the refresh does not re-apply the old profile)', async () => {
+  const user = userEvent.setup();
+  resetFake(LAN, true);
+  renderApp('/');
+  const toDark = await screen.findByRole('button', { name: 'Chuyển sang giao diện tối' });
+  expireFirstPatch();
+
+  await user.click(toDark);
+
+  await waitFor(() => expect(fake.patches).toEqual([{ theme: 'dark' }]));
+  expect(screen.getByRole('button', { name: 'Chuyển sang giao diện sáng' })).toBeInTheDocument();
+  expect(localStorage.getItem('themeMode')).toBe('dark');
+});
+
+test('TC-F12-02 a language change survives the token refresh it triggers', async () => {
+  const user = userEvent.setup();
+  resetFake(LAN, true);
+  renderApp('/');
+  const switchToEnglish = await screen.findByRole('button', { name: 'Đổi ngôn ngữ sang English' });
+  expireFirstPatch();
+
+  await user.click(switchToEnglish);
+
+  await waitFor(() => expect(fake.patches).toEqual([{ language: 'en' }]));
+  expect(screen.getByRole('heading', { level: 1, name: 'Hello, Lan' })).toBeInTheDocument();
+  expect(document.documentElement.lang).toBe('en');
 });
 
 test('TC-F12-02 the language saved in the profile is applied after login', async () => {
