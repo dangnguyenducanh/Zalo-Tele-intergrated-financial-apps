@@ -1,0 +1,33 @@
+{
+  "name": "zalo-tele-finance",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently --kill-others --names api,web \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "typecheck": "npm run typecheck -w client",
+    "lint": "eslint .",
+    "test": "npm test -w server && npm test -w client",
+    "test:e2e": "playwright test",
+    "seed": "npm run seed -w server",
+    "seed:test": "npm run seed:test -w server",
+    "report": "node tools/test-report/build-report.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
+    "concurrently": "10.0.7",
+    "eslint": "10.15.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.8",
+    "globals": "17.14.0",
+    "typescript-eslint": "8.73.0"
+  }
+}
