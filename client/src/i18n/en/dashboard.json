@@ -1,0 +1,35 @@
+{
+  "title": "Dashboard",
+  "retry": "Retry",
+  "loadError": "Could not load this month's numbers.",
+  "cards": {
+    "income": "Income",
+    "expense": "Expenses",
+    "net": "Net (income − expenses)",
+    "budgetLeft": "Budget left",
+    "budgetOf": "Limit {{limit}}",
+    "budgetOver": "Over budget",
+    "noBudget": "No overall budget set",
+    "setBudget": "Set a limit"
+  },
+  "drafts": "{{count}} draft transactions are waiting for confirmation.",
+  "openInbox": "Review drafts",
+  "byCategory": {
+    "title": "Spending by category",
+    "empty": "No spending this month yet.",
+    "item": "{{name}}: {{amount}} ({{percent}}%)"
+  },
+  "daily": {
+    "title": "Income and spending by day",
+    "empty": "No transactions this month yet.",
+    "totals": "Total income {{income}}, total spending {{expense}}.",
+    "peak": "Biggest spending day: {{day}}, {{amount}}.",
+    "income": "Income",
+    "expense": "Spending"
+  },
+  "latest": {
+    "title": "Recent transactions",
+    "empty": "No transactions yet.",
+    "all": "See all"
+  }
+}

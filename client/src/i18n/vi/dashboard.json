@@ -1,0 +1,35 @@
+{
+  "title": "Tổng quan",
+  "retry": "Thử lại",
+  "loadError": "Không tải được số liệu của tháng.",
+  "cards": {
+    "income": "Thu nhập",
+    "expense": "Chi tiêu",
+    "net": "Chênh lệch (thu − chi)",
+    "budgetLeft": "Ngân sách còn lại",
+    "budgetOf": "Hạn mức {{limit}}",
+    "budgetOver": "Đã vượt ngân sách",
+    "noBudget": "Chưa đặt ngân sách tổng",
+    "setBudget": "Đặt hạn mức"
+  },
+  "drafts": "Có {{count}} giao dịch nháp đang chờ xác nhận.",
+  "openInbox": "Xem các bản nháp",
+  "byCategory": {
+    "title": "Chi tiêu theo danh mục",
+    "empty": "Tháng này chưa có khoản chi nào.",
+    "item": "{{name}}: {{amount}} ({{percent}}%)"
+  },
+  "daily": {
+    "title": "Thu chi theo ngày",
+    "empty": "Tháng này chưa có giao dịch nào.",
+    "totals": "Tổng thu {{income}}, tổng chi {{expense}}.",
+    "peak": "Ngày chi nhiều nhất: {{day}}, {{amount}}.",
+    "income": "Thu",
+    "expense": "Chi"
+  },
+  "latest": {
+    "title": "Giao dịch gần đây",
+    "empty": "Chưa có giao dịch nào.",
+    "all": "Xem tất cả"
+  }
+}
