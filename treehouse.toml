@@ -1,4 +1,4 @@
-max_trees = 6   # 3 coders + 1 reviewer + 1 merger + 1 spare
+max_trees = 9   # 3 coders + up to 3 reviewers + 1 merger + 2 spare
 root = ""
 
 # Worktree root directory (relative to repo root or absolute path).

@@ -15,10 +15,13 @@ You are the **reviewer agent**. The orchestrator gives you `PR` (the number). Yo
 ## Procedure
 
 1. **Lease a fresh worktree** (from the main checkout root):
-   `WT=$(treehouse get --lease --lease-holder "reviewer-pr$PR" --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["path"])')`.
-   Then `cd "$WT" && gh pr checkout $PR && eval "$(tools/wt-env.sh)" && npm ci`.
-2. **Context:** `gh pr view $PR` (body, linked issue), `gh issue view <issue>` (scope and case IDs), `gh pr diff $PR --name-only`.
-3. **Scope check:** every changed path must be inside the card's Scope list (plus its tests and `docs/testing/test-cases.json`). Anything else is a **blocker**, unless the PR body justifies it and the orchestrator approved.
+   `WT=$(treehouse get --lease --lease-holder "reviewer-pr$PR" --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["path"])')`. `--detach` is required: the coder's worktree has the branch checked out.
+   Then `cd "$WT" && gh pr checkout $PR --detach && eval "$(tools/wt-env.sh)" && npm ci`.
+2. **Context** (gh 2.4: plain `gh pr view`/`gh issue view`/`gh pr edit` fail with a "Projects (classic)" GraphQL error, so always use `--json` or `gh api`):
+   - `gh pr view $PR --json title,body,comments` (body, linked issue, earlier reviews and orchestrator decisions)
+   - `gh issue view <issue> --json title,body` (scope and case IDs)
+   - `gh api repos/{owner}/{repo}/pulls/$PR/files --paginate --jq '.[].filename'` (changed paths)
+3. **Scope check:** every changed path must be inside the card's Scope list (plus its tests and `docs/testing/test-cases.json`). Anything else is a **blocker**, unless the orchestrator approved it in a PR comment. The one-line registrations in the docs/08 §8.5 hotspots are always in scope.
 4. **Re-run the gates yourself:** `npm run typecheck`, `npm run lint`, `npm test`, and for UI changes the Playwright specs of the touched features. A failure, or a result that differs from the PR's claim, is a **blocker**.
 5. **Review rubric** (rate each finding blocker / should-fix / nit):
    - **Correctness vs spec:** behaviour, API paths and methods, status codes and error codes (docs/04 §4.4–4.5), data model and indexes (docs/03).
@@ -34,10 +37,10 @@ You are the **reviewer agent**. The orchestrator gives you `PR` (the number). Yo
    - **Explainability:** the PR's "How it works" section is accurate and the code is readable enough for the student to defend.
 6. **Verdict:** `APPROVE` only if there are 0 blockers and all gates are green. Otherwise `REQUEST_CHANGES`.
 7. **Publish.** All agents share the student's GitHub account, and GitHub won't let an account approve its own PR, so the verdict is a comment plus a commit status:
-   - `gh pr review $PR --comment --body-file <findings.md>`. The body ends with the line `REVIEW: APPROVE` or `REVIEW: REQUEST_CHANGES`.
-   - `SHA=$(gh pr view $PR --json headRefOid -q .headRefOid)`
+   - `gh pr comment $PR --body-file <findings.md>`. The body ends with the line `REVIEW: APPROVE` or `REVIEW: REQUEST_CHANGES`.
+   - `SHA=$(gh api repos/{owner}/{repo}/pulls/$PR --jq .head.sha)` (gh 2.4 has no `headRefOid`)
    - `gh api repos/{owner}/{repo}/statuses/$SHA -f state=<success|failure> -f context=agent-review -f description="<n> blockers, <m> should-fix"`
-   - `gh pr edit $PR --add-label review:approved` (or `review:changes-requested` plus `status:changes-requested`), and remove the opposite label.
+   - Labels (gh 2.4 has no working `gh pr edit`): add with `echo '{"labels":["review:approved"]}' | gh api -X POST repos/{owner}/{repo}/issues/$PR/labels --input -` (or `review:changes-requested` plus `status:changes-requested`), and remove the opposite one with `gh api -X DELETE repos/{owner}/{repo}/issues/$PR/labels/<name>` (a 404 just means it wasn't there).
 
    The status is tied to this exact commit. Any new push needs a new review.
 8. **Clean up:** `cd / && treehouse return "$WT"`. If treehouse refuses because the slot is dirty, report it and do **not** pass `--force`.
