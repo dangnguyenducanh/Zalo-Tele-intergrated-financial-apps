@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import { Router } from 'express';
 import { handleTelegramUpdate } from '../bot/telegram.js';
+import { handleZaloEvent } from '../bot/zalo.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 
@@ -28,6 +29,14 @@ router.post('/telegram', (req, res) => {
   }
   res.sendStatus(200);
   inBackground('telegram', handleTelegramUpdate(req.body));
+});
+
+router.post('/zalo', (req, res) => {
+  if (!sameSecret(req.get('X-Bot-Api-Secret-Token'), env.ZALO_WEBHOOK_SECRET)) {
+    throw new AppError(401, 'UNAUTHENTICATED', 'Bad webhook secret');
+  }
+  res.sendStatus(200);
+  inBackground('zalo', handleZaloEvent(req.body));
 });
 
 export default router;
