@@ -1,0 +1,48 @@
+{
+  "appName": "Sổ chi tiêu",
+  "loading": "Loading…",
+  "skipToContent": "Skip to main content",
+  "close": "Close",
+  "cancel": "Cancel",
+  "confirm": "OK",
+  "reload": "Reload the page",
+  "preferenceNotSaved": "Could not save this choice to your account. It still applies on this device.",
+  "nav": {
+    "label": "Main navigation",
+    "dashboard": "Dashboard",
+    "transactions": "Transactions",
+    "wallets": "Wallets",
+    "categories": "Categories",
+    "budgets": "Budgets",
+    "bot": "Bot inbox",
+    "settings": "Settings",
+    "adminUsers": "Manage users",
+    "adminCategories": "Default categories",
+    "more": "More",
+    "moreTitle": "More pages"
+  },
+  "theme": {
+    "toDark": "Switch to dark theme",
+    "toLight": "Switch to light theme"
+  },
+  "language": {
+    "switch": "Change language to Tiếng Việt"
+  },
+  "account": {
+    "menu": "Account",
+    "settings": "Settings",
+    "logout": "Log out"
+  },
+  "home": {
+    "title": "Hello, {{name}}",
+    "body": "You are signed in. Your money tracking screens will appear here."
+  },
+  "forbidden": {
+    "title": "Access denied",
+    "body": "This page is for administrators only."
+  },
+  "month": {
+    "previous": "Previous month",
+    "next": "Next month"
+  }
+}

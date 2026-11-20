@@ -1,25 +1,29 @@
-import { useEffect, useState } from 'react';
+import { Provider } from 'react-redux';
+import { RouterProvider, type createBrowserRouter } from 'react-router';
+import type { AppStore } from './app/store';
+import { AuthProvider } from './auth/AuthContext';
+import { useAuth } from './auth/useAuth';
+import Splash from './components/Splash';
+import { AppThemeProvider } from './theme/AppThemeProvider';
 
-type Health = { status: string; db: string };
+type Router = ReturnType<typeof createBrowserRouter>;
 
-// Temporary home page for the live skeleton: shows whether the API and database are up.
-// Task T03 replaces it with the real app shell (router, theme, i18n).
-export default function App() {
-  const [health, setHealth] = useState<Health | 'loading' | 'unreachable'>('loading');
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((res) => res.json() as Promise<Health>)
-      .then(setHealth, () => setHealth('unreachable'));
-  }, []);
-
-  const text =
-    health === 'loading' ? 'API: …' : health === 'unreachable' ? 'API: unreachable' : `API: ${health.status} · DB: ${health.db}`;
-
+// Providers, outermost first: Redux store → AuthContext → MUI theme → router (docs/05 §5.1).
+// main.tsx passes the real store and a browser router; tests pass a fresh store and a memory router.
+export default function App({ store, router }: { store: AppStore; router: Router }) {
   return (
-    <main>
-      <h1>Sổ chi tiêu</h1>
-      <p role="status">{text}</p>
-    </main>
+    <Provider store={store}>
+      <AuthProvider>
+        <AppThemeProvider>
+          <Pages router={router} />
+        </AppThemeProvider>
+      </AuthProvider>
+    </Provider>
   );
+}
+
+// Until the session is restored we don't know whether to show the app or /login, so show a splash.
+function Pages({ router }: { router: Router }) {
+  const { status } = useAuth();
+  return status === 'loading' ? <Splash /> : <RouterProvider router={router} />;
 }

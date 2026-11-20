@@ -1,0 +1,48 @@
+{
+  "appName": "Sổ chi tiêu",
+  "loading": "Đang tải…",
+  "skipToContent": "Bỏ qua tới nội dung chính",
+  "close": "Đóng",
+  "cancel": "Huỷ",
+  "confirm": "Đồng ý",
+  "reload": "Tải lại trang",
+  "preferenceNotSaved": "Không lưu được lựa chọn vào tài khoản. Lựa chọn vẫn được áp dụng trên thiết bị này.",
+  "nav": {
+    "label": "Điều hướng chính",
+    "dashboard": "Tổng quan",
+    "transactions": "Giao dịch",
+    "wallets": "Ví",
+    "categories": "Danh mục",
+    "budgets": "Ngân sách",
+    "bot": "Hộp thư bot",
+    "settings": "Cài đặt",
+    "adminUsers": "Quản trị người dùng",
+    "adminCategories": "Danh mục mặc định",
+    "more": "Thêm",
+    "moreTitle": "Các mục khác"
+  },
+  "theme": {
+    "toDark": "Chuyển sang giao diện tối",
+    "toLight": "Chuyển sang giao diện sáng"
+  },
+  "language": {
+    "switch": "Đổi ngôn ngữ sang English"
+  },
+  "account": {
+    "menu": "Tài khoản",
+    "settings": "Cài đặt",
+    "logout": "Đăng xuất"
+  },
+  "home": {
+    "title": "Xin chào, {{name}}",
+    "body": "Bạn đã đăng nhập. Các màn hình ghi chép thu chi sẽ xuất hiện tại đây."
+  },
+  "forbidden": {
+    "title": "Không có quyền truy cập",
+    "body": "Trang này chỉ dành cho quản trị viên."
+  },
+  "month": {
+    "previous": "Tháng trước",
+    "next": "Tháng sau"
+  }
+}
