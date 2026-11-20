@@ -2,7 +2,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { Alert, Box, Button, Card, CardActions, CardContent, CircularProgress, Grid, IconButton, Stack, Typography } from '@mui/material';
+import { alpha, Alert, Box, Button, Card, CardActions, CardContent, CircularProgress, Grid, IconButton, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -149,22 +149,49 @@ function BudgetCard({ budget, name, onEdit, onDelete }: CardProps) {
     <Grid size={{ xs: 12, sm: 6 }}>
       <Card component="article" aria-labelledby={nameId} variant="outlined" sx={{ height: '100%' }}>
         <CardContent>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="h6" component="h2" id={nameId} noWrap sx={{ minWidth: 0 }}>
               {name}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600, flexShrink: 0 }}>
-              {t(`level.${level}`)}
-            </Typography>
+            {/* The level in words beside a coloured dot: colour is never the only signal, and the text keeps full contrast. */}
+            <Stack
+              direction="row"
+              spacing={0.75}
+              sx={{ alignItems: 'center', flexShrink: 0, px: 1, py: 0.25, borderRadius: '999px', bgcolor: 'action.hover' }}
+            >
+              <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: `${LEVEL_COLOR[level]}.main` }} />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {t(`level.${level}`)}
+              </Typography>
+            </Stack>
           </Stack>
-          {/* Native <progress> (modern-web-guidance `progress`): role="progressbar" for free; accent-color paints the fill. */}
+          {/* Native <progress> (modern-web-guidance `progress`): role="progressbar" for free. Its bar and fill are
+              styled through the engine pseudo-elements; accent-color still paints it where those are not supported. */}
           <Box
             component="progress"
             value={Math.min(budget.spent, budget.limit)}
             max={budget.limit}
             aria-labelledby={nameId}
             aria-describedby={`${nameId}-usage`}
-            sx={{ display: 'block', width: '100%', my: 1, accentColor: (theme) => theme.palette[LEVEL_COLOR[level]].main }}
+            sx={(theme) => {
+              const fill = theme.palette[LEVEL_COLOR[level]].main;
+              const track = alpha(theme.palette.text.primary, 0.08);
+              return {
+                display: 'block',
+                width: '100%',
+                height: 8,
+                my: 1.75,
+                border: 0,
+                borderRadius: '999px',
+                overflow: 'hidden',
+                appearance: 'none',
+                accentColor: fill,
+                bgcolor: track,
+                '&::-webkit-progress-bar': { backgroundColor: track, borderRadius: '999px' },
+                '&::-webkit-progress-value': { backgroundColor: fill, borderRadius: '999px' },
+                '&::-moz-progress-bar': { backgroundColor: fill, borderRadius: '999px' },
+              };
+            }}
           />
           <Typography id={`${nameId}-usage`} variant="body2">
             {t('usage', { spent: money(budget.spent), limit: money(budget.limit), percent: budget.percent })}
@@ -173,7 +200,7 @@ function BudgetCard({ budget, name, onEdit, onDelete }: CardProps) {
             {left < 0 ? t('over', { amount: money(-left) }) : t('left', { amount: money(left) })}
           </Typography>
         </CardContent>
-        <CardActions>
+        <CardActions sx={{ px: 1.5, pt: 0 }}>
           <IconButton aria-label={t('actions.edit', { name })} onClick={onEdit}>
             <EditIcon />
           </IconButton>

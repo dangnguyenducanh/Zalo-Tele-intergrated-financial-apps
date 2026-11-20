@@ -72,7 +72,7 @@ test('TC-F6-04 dashboard cards and charts, with text summaries, update after a q
   await expect(page.getByRole('article', { name: 'Ngân sách còn lại' })).toContainText(/400\.000\s₫/);
 
   const pie = page.getByRole('figure', { name: 'Chi tiêu theo danh mục' });
-  await expect(pie.locator('.recharts-pie-sector')).toHaveCount(2); // the chart is drawn …
+  await expect(pie.getByRole('listitem')).toHaveCount(2); // one ranked row (colour key, amount, share, bar) per category …
   await expect(pie.getByRole('listitem')).toHaveText([/^Ăn uống: 450\.000\s₫ \(75%\)$/, /^Đi lại: 150\.000\s₫ \(25%\)$/]); // … and summed up in text
   const bars = page.getByRole('figure', { name: 'Thu chi theo ngày' });
   await expect(bars.locator('.recharts-bar-rectangle').first()).toBeVisible();
@@ -122,15 +122,15 @@ test('TC-F5-04 budget bars are green, amber and red with text labels; "Copy from
   const food = page.getByRole('article', { name: 'Ăn uống' });
   await expect(food).toContainText('Trong hạn mức');
   await expect(food).toContainText(/Đã chi 500\.000\s₫ \/ 1\.000\.000\s₫ \(50%\)/);
-  await expect(food.getByRole('progressbar', { name: 'Ăn uống' })).toHaveCSS('accent-color', 'rgb(27, 127, 59)'); // green
+  await expect(food.getByRole('progressbar', { name: 'Ăn uống' })).toHaveCSS('accent-color', 'rgb(6, 118, 71)'); // green
   const transport = page.getByRole('article', { name: 'Đi lại' });
   await expect(transport).toContainText('Sắp hết');
   await expect(transport).toContainText('(90%)');
-  await expect(transport.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(237, 108, 2)'); // amber
+  await expect(transport.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(181, 71, 8)'); // amber
   const overall = page.getByRole('article', { name: 'Tổng chi tiêu' });
   await expect(overall).toContainText('Vượt ngân sách');
   await expect(overall).toContainText(/Vượt 400\.000\s₫/);
-  await expect(overall.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(198, 40, 40)'); // red
+  await expect(overall.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(217, 45, 32)'); // red
 
   const copied = page.waitForResponse((res) => res.url().endsWith('/api/budgets/copy'));
   await page.getByRole('button', { name: 'Chép từ tháng trước' }).click();

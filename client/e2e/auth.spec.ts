@@ -130,7 +130,7 @@ for (const scheme of ['light', 'dark'] as const) {
       // The current page is marked by bold text, not by colour alone (WCAG 1.4.1).
       const current = nav.getByRole('link', { name: 'Tổng quan' });
       await expect(current).toHaveAttribute('aria-current', 'page');
-      await expect(current.getByText('Tổng quan')).toHaveCSS('font-weight', '700');
+      await expect(current.getByText('Tổng quan')).toHaveCSS('font-weight', '600'); // semibold, not colour alone
       if (viewport.desktop) {
         await expect(nav.getByRole('link', { name: 'Ví' })).toBeVisible(); // every page in the drawer
         await expect(page.getByRole('button', { name: 'Thêm' })).toHaveCount(0);

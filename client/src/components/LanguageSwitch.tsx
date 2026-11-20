@@ -1,4 +1,5 @@
 import { Button } from '@mui/material';
+import { Languages } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { applyLanguage, showSnackbar } from '@/app/uiSlice';
@@ -27,7 +28,8 @@ export default function LanguageSwitch() {
   const label = next.toUpperCase();
   // WCAG 2.5.3 Label in Name: the accessible name starts with the visible text, so "click EN" works by voice.
   return (
-    <Button color="inherit" aria-label={`${label} – ${t('language.switch')}`} onClick={change} sx={{ minWidth: 48 }}>
+    <Button variant="outlined" aria-label={`${label} – ${t('language.switch')}`} onClick={change} sx={{ minWidth: 48, height: 34, gap: 0.75 }}>
+      <Languages size={15} strokeWidth={1.75} aria-hidden />
       {label}
     </Button>
   );

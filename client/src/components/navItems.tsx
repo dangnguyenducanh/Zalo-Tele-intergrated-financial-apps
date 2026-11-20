@@ -1,14 +1,9 @@
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import CategoryIcon from '@mui/icons-material/Category';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import LabelIcon from '@mui/icons-material/Label';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import SavingsIcon from '@mui/icons-material/Savings';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SmartToyIcon from '@mui/icons-material/SmartToy';
+import { Gauge, Inbox, LayoutDashboard, ReceiptText, Settings, ShieldUser, Tags, Wallet, ListTree } from '@/components/icons';
 import type { ReactElement } from 'react';
 import type { User } from '@/types/api';
+
+// Line icons, one weight everywhere (draft 2: no filled glyphs).
+export const ICON = { size: 18, strokeWidth: 1.75, 'aria-hidden': true } as const;
 
 export type NavItem = {
   to: string;
@@ -20,15 +15,15 @@ export type NavItem = {
 
 // Every page in the side drawer, in order (docs/05 §5.2).
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', labelKey: 'nav.dashboard', icon: <DashboardIcon />, inBottomNav: true },
-  { to: '/transactions', labelKey: 'nav.transactions', icon: <ReceiptLongIcon />, inBottomNav: true },
-  { to: '/bot', labelKey: 'nav.bot', icon: <SmartToyIcon />, inBottomNav: true },
-  { to: '/budgets', labelKey: 'nav.budgets', icon: <SavingsIcon />, inBottomNav: true },
-  { to: '/wallets', labelKey: 'nav.wallets', icon: <AccountBalanceWalletIcon /> },
-  { to: '/categories', labelKey: 'nav.categories', icon: <CategoryIcon /> },
-  { to: '/settings', labelKey: 'nav.settings', icon: <SettingsIcon /> },
-  { to: '/admin/users', labelKey: 'nav.adminUsers', icon: <AdminPanelSettingsIcon />, adminOnly: true },
-  { to: '/admin/categories', labelKey: 'nav.adminCategories', icon: <LabelIcon />, adminOnly: true },
+  { to: '/', labelKey: 'nav.dashboard', icon: <LayoutDashboard {...ICON} />, inBottomNav: true },
+  { to: '/transactions', labelKey: 'nav.transactions', icon: <ReceiptText {...ICON} />, inBottomNav: true },
+  { to: '/bot', labelKey: 'nav.bot', icon: <Inbox {...ICON} />, inBottomNav: true },
+  { to: '/budgets', labelKey: 'nav.budgets', icon: <Gauge {...ICON} />, inBottomNav: true },
+  { to: '/wallets', labelKey: 'nav.wallets', icon: <Wallet {...ICON} /> },
+  { to: '/categories', labelKey: 'nav.categories', icon: <Tags {...ICON} /> },
+  { to: '/settings', labelKey: 'nav.settings', icon: <Settings {...ICON} /> },
+  { to: '/admin/users', labelKey: 'nav.adminUsers', icon: <ShieldUser {...ICON} />, adminOnly: true },
+  { to: '/admin/categories', labelKey: 'nav.adminCategories', icon: <ListTree {...ICON} />, adminOnly: true },
 ];
 
 export function navItemsFor(user: User | null): NavItem[] {

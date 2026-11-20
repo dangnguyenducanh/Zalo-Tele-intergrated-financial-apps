@@ -1,8 +1,9 @@
-import { AppBar, Box, Container, Link, Stack, Toolbar, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { AppBar, Box, Container, Link, Stack, Toolbar, useMediaQuery, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router';
 import AppSnackbar from './AppSnackbar';
 import BottomNav from './BottomNav';
+import Brand from './BrandMark';
 import LanguageSwitch from './LanguageSwitch';
 import NavDrawer, { DRAWER_WIDTH } from './NavDrawer';
 import ThemeToggle from './ThemeToggle';
@@ -27,13 +28,9 @@ export default function AppLayout() {
         elevation={0}
         sx={{ borderBottom: 1, borderColor: 'divider', width: { md: `calc(100% - ${DRAWER_WIDTH}px)` }, ml: { md: `${DRAWER_WIDTH}px` } }}
       >
-        <Toolbar>
-          {!isDesktop && (
-            <Typography variant="h6" component="div" noWrap sx={{ fontWeight: 700, color: 'primary.main' }}>
-              {t('appName')}
-            </Typography>
-          )}
-          <Stack direction="row" spacing={0.5} sx={{ ml: 'auto', alignItems: 'center' }}>
+        <Toolbar sx={{ px: { xs: 2, md: 3 } }}>
+          {!isDesktop && <Brand size={22} />}
+          <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
             <LanguageSwitch />
             <ThemeToggle />
             <UserMenu />
@@ -43,7 +40,7 @@ export default function AppLayout() {
       {isDesktop && <NavDrawer />}
       <Box component="main" id="main" tabIndex={-1} sx={{ flexGrow: 1, minWidth: 0, pb: { xs: 10, md: 4 }, outline: 'none' }}>
         <Toolbar />
-        <Container maxWidth="lg" sx={{ py: 3 }}>
+        <Container maxWidth="xl" disableGutters sx={{ py: { xs: 2.5, md: 3 }, px: { xs: 2, sm: 3 } }}>
           <Outlet />
         </Container>
       </Box>

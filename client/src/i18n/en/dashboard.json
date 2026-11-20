@@ -12,7 +12,7 @@
     "noBudget": "No overall budget set",
     "setBudget": "Set a limit"
   },
-  "drafts": "{{count}} draft transactions are waiting for confirmation.",
+  "drafts": "Drafts waiting for your confirmation: {{count}}",
   "openInbox": "Review drafts",
   "byCategory": {
     "title": "Spending by category",
