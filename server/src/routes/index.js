@@ -7,6 +7,8 @@ import users from './users.js';
 import wallets from './wallets.js';
 import categories from './categories.js';
 import transactions from './transactions.js';
+import budgets from './budgets.js';
+import stats from './stats.js';
 
 const router = Router();
 
@@ -21,5 +23,7 @@ router.use('/users', users);
 router.use('/wallets', wallets);
 router.use('/categories', categories);
 router.use('/transactions', transactions);
+router.use('/budgets', budgets);
+router.use('/stats', stats);
 
 export default router;
