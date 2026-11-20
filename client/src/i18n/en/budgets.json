@@ -1,0 +1,46 @@
+{
+  "title": "Budgets",
+  "add": "Add budget",
+  "copy": "Copy from last month",
+  "copied": "Budgets copied: {{count}}",
+  "nothingToCopy": "There are no new budgets to copy from last month.",
+  "save": "Save",
+  "saved": "Budget saved",
+  "deleted": "Budget deleted",
+  "retry": "Retry",
+  "loadError": "Could not load your budgets.",
+  "empty": "No budgets for this month yet",
+  "emptyHint": "Set a spending limit for a category or for all spending, or copy last month's budgets.",
+  "overall": "All spending",
+  "usage": "Spent {{spent}} of {{limit}} ({{percent}}%)",
+  "left": "{{amount}} left",
+  "over": "{{amount}} over",
+  "level": {
+    "ok": "On track",
+    "warn": "Almost used up",
+    "over": "Over budget"
+  },
+  "actions": {
+    "edit": "Edit budget {{name}}",
+    "delete": "Delete budget {{name}}"
+  },
+  "dialog": {
+    "addTitle": "Add budget",
+    "editTitle": "Edit budget"
+  },
+  "fields": {
+    "category": "Category",
+    "overallOption": "All spending (every category)",
+    "limit": "Limit (₫)",
+    "limitHelp": "For example: 2tr, 500k or 2,000,000"
+  },
+  "validation": {
+    "limit": "Enter an amount above 0, for example 2tr or 2,000,000",
+    "category": "Every expense category already has a budget this month."
+  },
+  "deleteConfirm": {
+    "title": "Delete budget?",
+    "message": "The \"{{name}}\" budget of this month will be deleted. Your transactions stay as they are.",
+    "confirm": "Delete"
+  }
+}
