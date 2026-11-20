@@ -1,0 +1,38 @@
+{
+  "_comment": "Zalo Bot Platform webhook bodies in the shape of the official samples (docs.zaloplatforms.com/docs/BOT/webhook), private chat. Tests copy them and change text, ids and the photo URL.",
+  "text": {
+    "event_name": "message.text.received",
+    "message": {
+      "message_id": "2d758cb5e222177a4e35",
+      "date": 1763620200000,
+      "message_type": "CHAT_TEXT",
+      "from": { "id": "6ede9afa66b88fe6d6a9", "display_name": "Anh Nguyen", "is_bot": false },
+      "chat": { "id": "6ede9afa66b88fe6d6a9", "chat_type": "PRIVATE" },
+      "text": "grab 32k"
+    }
+  },
+  "image": {
+    "event_name": "message.image.received",
+    "message": {
+      "message_id": "2d758cb5e222177a4e36",
+      "date": 1763620210000,
+      "message_type": "CHAT_PHOTO",
+      "from": { "id": "6ede9afa66b88fe6d6a9", "display_name": "Anh Nguyen", "is_bot": false },
+      "chat": { "id": "6ede9afa66b88fe6d6a9", "chat_type": "PRIVATE" },
+      "photo_url": "https://photo.zalo.example/receipt-42.jpg",
+      "caption": "hoá đơn"
+    }
+  },
+  "sticker": {
+    "event_name": "message.sticker.received",
+    "message": {
+      "message_id": "2d758cb5e222177a4e37",
+      "date": 1763620220000,
+      "message_type": "CHAT_STICKER",
+      "from": { "id": "6ede9afa66b88fe6d6a9", "display_name": "Anh Nguyen", "is_bot": false },
+      "chat": { "id": "6ede9afa66b88fe6d6a9", "chat_type": "PRIVATE" },
+      "sticker": "bfe458bf64fa8da4d4eb",
+      "url": "https://zalo-api.zadn.vn/api/emoticon/sticker/webpc?eid=46991"
+    }
+  }
+}
