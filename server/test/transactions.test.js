@@ -277,6 +277,19 @@ test('TC-F4-08 POST /transactions/:id/confirm confirms a draft once', async () =
   expect((await me.post(`/transactions/${draft.id}/confirm`)).status).toBe(404);
 });
 
+test('TC-F4-08 a draft cannot be confirmed into a deleted wallet', async () => {
+  const { me, user, food } = await newUser();
+  const { body: wallet } = await me.post('/wallets', { name: 'Bank', type: 'bank', initialBalance: 0 });
+  const draft = await Transaction.create({
+    userId: user.id, walletId: wallet.id, categoryId: food, type: 'expense', amount: 20_000, occurredAt: new Date(), status: 'draft', source: 'telegram',
+  });
+  expect((await me.delete(`/wallets/${wallet.id}`)).status).toBe(204); // allowed: only a draft uses it
+
+  const res = await me.post(`/transactions/${draft.id}/confirm`);
+  expect([res.status, res.body.error.details]).toEqual([404, [{ path: 'walletId', issue: 'not_found' }]]);
+  expect((await Transaction.findById(draft.id)).status).toBe('draft');
+});
+
 test('TC-F4-09 chatRef is unique per platform, chat and message; rows without chatRef are not limited', async () => {
   const { user, walletId, food } = await newUser();
   const draft = (chatRef) =>

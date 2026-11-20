@@ -103,6 +103,7 @@ export async function restoreTransaction(userId, transactionId) {
 export async function confirmTransaction(userId, transactionId) {
   const transaction = await findOwnTransaction(userId, transactionId);
   if (transaction.status === 'confirmed') throw new AppError(409, 'ALREADY_CONFIRMED', 'This transaction is already confirmed');
+  await checkReferences(userId, transaction); // a draft may point at a wallet deleted since it was made
   transaction.status = 'confirmed';
   return { transaction: await transaction.save() };
 }
