@@ -126,7 +126,7 @@ test('TC-F12-02 switching to English translates the UI, sets <html lang> and sav
   resetFake(LAN, true);
   renderApp('/');
 
-  await user.click(await screen.findByRole('button', { name: 'Đổi ngôn ngữ sang English' }));
+  await user.click(await screen.findByRole('button', { name: /Đổi ngôn ngữ sang English/ }));
 
   expect(await screen.findByRole('heading', { level: 1, name: 'Hello, Lan' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
@@ -161,7 +161,7 @@ test('TC-F12-02 a language change survives the token refresh it triggers', async
   const user = userEvent.setup();
   resetFake(LAN, true);
   renderApp('/');
-  const switchToEnglish = await screen.findByRole('button', { name: 'Đổi ngôn ngữ sang English' });
+  const switchToEnglish = await screen.findByRole('button', { name: /Đổi ngôn ngữ sang English/ });
   expireFirstPatch();
 
   await user.click(switchToEnglish);
@@ -169,6 +169,20 @@ test('TC-F12-02 a language change survives the token refresh it triggers', async
   await waitFor(() => expect(fake.patches).toEqual([{ language: 'en' }]));
   expect(screen.getByRole('heading', { level: 1, name: 'Hello, Lan' })).toBeInTheDocument();
   expect(document.documentElement.lang).toBe('en');
+});
+
+// WCAG 2.5.3 Label in Name: a speech-input user says what they see ("EN"), so the name must start with it.
+test('TC-NF-03 the language button is named starting with its visible text, in both languages', async () => {
+  const user = userEvent.setup();
+  resetFake(LAN, true);
+  renderApp('/');
+
+  const toEnglish = await screen.findByRole('button', { name: 'EN – Đổi ngôn ngữ sang English' });
+  expect(toEnglish).toHaveTextContent(/^EN$/);
+  await user.click(toEnglish);
+
+  const toVietnamese = await screen.findByRole('button', { name: 'VI – Change language to Tiếng Việt' });
+  expect(toVietnamese).toHaveTextContent(/^VI$/);
 });
 
 test('TC-F12-02 the language saved in the profile is applied after login', async () => {
