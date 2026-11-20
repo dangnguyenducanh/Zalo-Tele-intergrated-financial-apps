@@ -5,7 +5,8 @@ import { Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
 import { AppError } from '../utils/AppError.js';
-import { vnDate } from '../utils/vnTime.js';
+import { monthKey, vnDate } from '../utils/vnTime.js';
+import { budgetWarning } from './budgets.js';
 
 const notFound = () => new AppError(404, 'NOT_FOUND', 'Transaction not found');
 
@@ -99,13 +100,15 @@ export async function restoreTransaction(userId, transactionId) {
 }
 
 // POST /transactions/:id/confirm: a bot or receipt draft becomes real money. The bots call it too.
-// The budget warning ({ transaction, budgetWarning }) is added with budgets (T09).
+// After an expense, `budgetWarning` is added when its category or overall budget for that month is ≥ 80 % used.
 export async function confirmTransaction(userId, transactionId) {
   const transaction = await findOwnTransaction(userId, transactionId);
   if (transaction.status === 'confirmed') throw new AppError(409, 'ALREADY_CONFIRMED', 'This transaction is already confirmed');
   await checkReferences(userId, transaction); // a draft may point at a wallet deleted since it was made
   transaction.status = 'confirmed';
-  return { transaction: await transaction.save() };
+  await transaction.save();
+  const warning = transaction.type === 'expense' && (await budgetWarning(userId, transaction.categoryId, monthKey(transaction.occurredAt)));
+  return warning ? { transaction, budgetWarning: warning } : { transaction };
 }
 
 // POST /transactions/parse: the bot parser on the user's own categories and wallets. Nothing is saved.
