@@ -1,0 +1,45 @@
+{
+  "title": "Wallets",
+  "add": "Add wallet",
+  "save": "Save",
+  "saved": "Wallet saved",
+  "deleted": "Wallet deleted",
+  "retry": "Retry",
+  "loadError": "Could not load your wallets.",
+  "empty": "You have no wallets yet",
+  "archived": "Archived",
+  "archivedTitle": "Archived wallets",
+  "types": {
+    "cash": "Cash",
+    "bank": "Bank account",
+    "ewallet": "E-wallet",
+    "credit": "Credit card"
+  },
+  "actions": {
+    "edit": "Edit wallet {{name}}",
+    "archive": "Archive wallet {{name}}",
+    "unarchive": "Unarchive wallet {{name}}",
+    "delete": "Delete wallet {{name}}"
+  },
+  "dialog": {
+    "addTitle": "Add wallet",
+    "editTitle": "Edit wallet"
+  },
+  "fields": {
+    "name": "Wallet name",
+    "type": "Wallet type",
+    "initialBalance": "Opening balance (₫)",
+    "initialBalanceHelp": "The money in this wallet when you start tracking. A credit card can be negative.",
+    "aliases": "Short names for the bot",
+    "aliasesHelp": "For example: mm, momo. Press Enter to add; a comma separates several."
+  },
+  "validation": {
+    "name": "Wallet name must be 1 to 40 characters",
+    "initialBalance": "Enter a whole amount, for example 200000"
+  },
+  "deleteConfirm": {
+    "title": "Delete wallet?",
+    "message": "The wallet \"{{name}}\" will be deleted. A wallet with transactions cannot be deleted; archive it instead.",
+    "confirm": "Delete"
+  }
+}

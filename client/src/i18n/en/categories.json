@@ -1,0 +1,56 @@
+{
+  "title": "Categories",
+  "add": "Add category",
+  "save": "Save",
+  "saved": "Category saved",
+  "deleted": "Category deleted",
+  "retry": "Retry",
+  "loadError": "Could not load your categories.",
+  "fallback": "Fallback category",
+  "typesLabel": "Category type",
+  "types": {
+    "expense": "Expense",
+    "income": "Income"
+  },
+  "actions": {
+    "edit": "Edit category {{name}}",
+    "delete": "Delete category {{name}}"
+  },
+  "dialog": {
+    "addTitle": {
+      "expense": "Add expense category",
+      "income": "Add income category"
+    },
+    "editTitle": "Edit category"
+  },
+  "fields": {
+    "name": "Category name",
+    "icon": "Icon",
+    "color": "Colour",
+    "keywords": "Keywords for the bot",
+    "keywordsHelp": "The bot uses these words to guess the category, for example: pho, coffee. Press Enter to add; a comma separates several."
+  },
+  "validation": {
+    "name": "Category name must be 1 to 40 characters"
+  },
+  "deleteConfirm": {
+    "title": "Delete category?",
+    "message": "The transactions in \"{{name}}\" will move to \"{{fallback}}\".",
+    "confirm": "Delete"
+  },
+  "icons": {
+    "Restaurant": "Food",
+    "DirectionsCar": "Car",
+    "ShoppingBag": "Shopping",
+    "ReceiptLong": "Bill",
+    "Home": "Home",
+    "Movie": "Movie",
+    "LocalHospital": "Health",
+    "School": "School",
+    "Category": "Other",
+    "Payments": "Money",
+    "EmojiEvents": "Trophy",
+    "CardGiftcard": "Gift",
+    "Savings": "Savings"
+  }
+}
