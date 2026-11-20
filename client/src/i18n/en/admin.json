@@ -1,0 +1,76 @@
+{
+  "users": {
+    "title": "Manage users",
+    "search": "Search by name or email",
+    "role": "Role",
+    "status": "Status",
+    "all": "All",
+    "roles": { "user": "User", "admin": "Administrator" },
+    "statuses": { "active": "Active", "locked": "Locked" },
+    "apply": "Search",
+    "caption": "Users found: {{count}}",
+    "user": "User",
+    "actions": "Actions",
+    "you": "you",
+    "empty": "No users match these filters.",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "makeAdmin": "Make admin",
+    "removeAdmin": "Remove admin",
+    "confirm": {
+      "lock": { "title": "Lock this account?", "message": "{{name}} ({{email}}) will be logged out on every device and cannot log in until the account is unlocked." },
+      "unlock": { "title": "Unlock this account?", "message": "{{name}} ({{email}}) will be able to log in again." },
+      "makeAdmin": { "title": "Make this user an administrator?", "message": "{{name}} ({{email}}) will be able to manage users and default categories after their next login." },
+      "removeAdmin": { "title": "Remove administrator rights?", "message": "{{name}} ({{email}}) becomes a normal user. The change applies within 15 minutes." }
+    },
+    "done": {
+      "lock": "{{name}} is locked and logged out everywhere.",
+      "unlock": "{{name}} can log in again.",
+      "makeAdmin": "{{name}} is now an administrator.",
+      "removeAdmin": "{{name}} is now a normal user."
+    },
+    "pagination": {
+      "page": "Page {{page}}",
+      "first": "First page",
+      "last": "Last page",
+      "next": "Next page",
+      "previous": "Previous page"
+    }
+  },
+  "stats": {
+    "users": "Users",
+    "activeUsers7d": "Active in the last 7 days",
+    "chatLinks": "Linked chats",
+    "chatLinksDetail": "Telegram {{telegram}} · Zalo {{zalo}}",
+    "transactions": "Transactions",
+    "transactionsDetail": "Web {{web}} · Telegram {{telegram}} · Zalo {{zalo}} · Receipt {{receipt}}"
+  },
+  "categories": {
+    "title": "Default categories",
+    "intro": "Every new account gets a copy of these categories. Changes here do not touch the categories of existing users.",
+    "typeTabs": "Category type",
+    "types": { "expense": "Expense", "income": "Income" },
+    "add": "Add category",
+    "caption": "Default categories: {{count}}",
+    "nameVi": "Vietnamese name",
+    "nameEn": "English name",
+    "keywords": "Bot keywords",
+    "keywordsHelp": "Separated by commas, e.g. pho, bun bo, cafe",
+    "icon": "Icon",
+    "iconHelp": "Material icon name, e.g. Restaurant",
+    "color": "Colour",
+    "actions": "Actions",
+    "fallback": "Fallback",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "saved": "Default category saved.",
+    "deleted": "{{name}} deleted. Users who already have it keep their copy.",
+    "editTitle": "Edit default category",
+    "addTitle": { "expense": "New expense category", "income": "New income category" },
+    "confirmDelete": {
+      "title": "Delete this default category?",
+      "message": "New users will no longer get \"{{name}}\". Users who already have it keep their copy."
+    }
+  }
+}
