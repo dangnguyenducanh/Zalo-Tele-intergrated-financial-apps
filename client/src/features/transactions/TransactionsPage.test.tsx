@@ -1,10 +1,11 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { beforeEach, expect, test } from 'vitest';
 import type { Category } from '@/features/categories/categoriesApi';
 import type { Wallet } from '@/features/wallets/walletsApi';
 import { LAN, resetFake, server } from '@/test/fakeApi';
+import { api } from '@/app/api';
 import { renderApp } from '@/test/renderApp';
 import type { Transaction } from './transactionsApi';
 
@@ -206,10 +207,26 @@ test('TC-F4-10 delete hides the row and the snackbar Undo restores it', async ()
   await user.click(await screen.findByRole('button', { name: 'Xoá giao dịch phở' }));
   await waitFor(() => expect(screen.queryByRole('row', { name: /phở/ })).not.toBeInTheDocument());
   expect(screen.getByText('Đã xoá giao dịch')).toBeInTheDocument();
+  // The focused delete button left with its row, so focus goes to Undo (not <body>) and back to the heading after.
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Hoàn tác' })).toHaveFocus());
 
-  await user.click(screen.getByRole('button', { name: 'Hoàn tác' }));
+  await user.keyboard('{Enter}');
   expect(await screen.findByRole('row', { name: /phở/ })).toBeInTheDocument();
   expect(sent.map((s) => `${s.method} ${s.url}`)).toEqual(['DELETE /transactions/t1', 'POST /transactions/t1/restore']);
+  expect(screen.getByRole('heading', { level: 1, name: 'Giao dịch' })).toHaveFocus();
+});
+
+test('TC-F4-10 a page past the last one (its rows were deleted) goes back to the last page', async () => {
+  server.use(
+    http.get('*/api/transactions', ({ request }) => {
+      const page = new URL(request.url).searchParams.get('page');
+      if (page === '2') return HttpResponse.json({ items: [], page: 2, limit: 20, total: 3 });
+    }),
+  );
+  const { router } = renderApp('/transactions?page=2');
+
+  expect(await screen.findByRole('row', { name: /phở/ })).toBeInTheDocument();
+  expect(router.state.location.search).toBe('?page=1');
 });
 
 test('TC-F13-04 quick add previews after a typing pause and Enter saves; the row appears', async () => {
@@ -230,6 +247,30 @@ test('TC-F13-04 quick add previews after a typing pause and Enter saves; the row
   expect(posted()).toEqual([{ type: 'expense', amount: 45000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'phở' }]);
   expect(await screen.findByText('Đã lưu giao dịch: 1')).toBeInTheDocument();
   await waitFor(() => expect(screen.getAllByRole('row', { name: /phở/ })).toHaveLength(2));
+});
+
+test('TC-F13-04 quick add: a second Enter while the first is still parsing saves the line only once', async () => {
+  server.use(http.post('*/api/transactions/parse', () => delay(150))); // a slow parse, then the normal handler
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  await screen.findByRole('row', { name: /grab/ });
+
+  await user.type(quickAdd(), 'phở 45k{Enter}{Enter}');
+  await user.click(screen.getByRole('button', { name: 'Lưu' }));
+  await waitFor(() => expect(quickAdd()).toHaveValue(''));
+  expect(posted()).toHaveLength(1);
+});
+
+test('TC-F13-04 quick add: a wallet or category change re-parses the same text (no stale ids)', async () => {
+  const user = userEvent.setup();
+  const { store } = renderApp('/transactions');
+
+  await user.type(await screen.findByRole('textbox', { name: 'Thêm nhanh' }), 'cafe 30k mm');
+  await screen.findByRole('list', { name: 'Xem trước' });
+  const calls = () => parseCalls.filter((text) => text === 'cafe 30k mm');
+  expect(calls()).toHaveLength(1);
+  store.dispatch(api.util.invalidateTags(['Wallet'])); // e.g. the alias "mm" was just added
+  await waitFor(() => expect(calls()).toHaveLength(2));
 });
 
 test('TC-F13-04 quick add: no amount → inline error in the user language, nothing saved', async () => {
