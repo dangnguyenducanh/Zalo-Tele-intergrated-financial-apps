@@ -1,0 +1,91 @@
+{
+  "title": "Transactions",
+  "add": "Add transaction",
+  "saved": "Transaction saved",
+  "deleted": "Transaction deleted",
+  "undo": "Undo",
+  "restored": "Transaction restored",
+  "retry": "Retry",
+  "loadError": "Could not load your transactions.",
+  "empty": "No transactions yet",
+  "emptyHint": "Type in the Quick add box, e.g. \"pho 45k\", and press Enter.",
+  "noMatch": "No transactions match these filters",
+  "total": "Total: {{count}} transactions",
+  "listLabel": "Transaction list",
+  "pagination": "Choose a page",
+  "pages": {
+    "page": "Page {{page}}",
+    "first": "First page",
+    "last": "Last page",
+    "previous": "Previous page",
+    "next": "Next page"
+  },
+  "draft": "Draft",
+  "noNote": "(no note)",
+  "types": {
+    "expense": "Expense",
+    "income": "Income"
+  },
+  "statuses": {
+    "confirmed": "Confirmed",
+    "draft": "Draft"
+  },
+  "columns": {
+    "date": "Date",
+    "description": "Description",
+    "wallet": "Wallet",
+    "amount": "Amount",
+    "actions": "Actions"
+  },
+  "actions": {
+    "edit": "Edit transaction {{name}}",
+    "delete": "Delete transaction {{name}}"
+  },
+  "filters": {
+    "label": "Transaction filters",
+    "q": "Search notes",
+    "from": "From",
+    "to": "To",
+    "type": "Type",
+    "wallet": "Wallet",
+    "category": "Category",
+    "status": "Status",
+    "all": "All",
+    "clear": "Clear filters"
+  },
+  "dialog": {
+    "addTitle": "Add transaction",
+    "editTitle": "Edit transaction",
+    "draftTitle": "Edit quick-add line",
+    "save": "Save",
+    "apply": "Apply"
+  },
+  "fields": {
+    "type": "Type",
+    "amount": "Amount (₫)",
+    "amountHelp": "For example: 45000, 45k, 1.5tr",
+    "category": "Category",
+    "wallet": "Wallet",
+    "occurredAt": "Date and time",
+    "note": "Note"
+  },
+  "validation": {
+    "amount": "Enter an amount above 0, e.g. 45000 or 45k",
+    "category": "Choose a category",
+    "wallet": "Choose a wallet",
+    "occurredAt": "Choose a date and time"
+  },
+  "quickAdd": {
+    "label": "Quick add",
+    "placeholder": "What did you spend on? — e.g. pho 45k",
+    "hint": "Enter saves, Shift+Enter opens the full form. One transaction per line.",
+    "save": "Save",
+    "fullForm": "Open full form",
+    "preview": "Preview",
+    "change": "Change {{value}}",
+    "noCategory": "No category",
+    "noWallet": "No wallet",
+    "incomplete": "Choose a wallet and a category: click a preview chip to change it.",
+    "saved": "Transactions saved: {{count}}"
+  }
+}
