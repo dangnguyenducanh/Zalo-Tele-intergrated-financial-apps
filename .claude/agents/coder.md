@@ -9,6 +9,7 @@ You are a **coder agent** for the Zalo-Tele Integrated Financial App (React+Type
 - `ISSUE` — the task card number (e.g. `#12`)
 - `WT` — absolute path of your leased treehouse worktree, already on branch `feat/<slug>` cut from `main`. **If no `WT` is given**, lease one yourself from the main checkout root: `cd <main checkout> && treehouse get --lease --lease-holder coder-<issue> -b feat/<issue>-<slug> --json` and use its `path`. Report the path in your final line (`WT=<path>`, see step 9).
 - `MODE` — `implement` (first run) or `address-review` (fix review findings on the existing PR)
+- `PR` — the PR number, given in `address-review` mode (in `implement` mode you set it from `gh pr create`'s output)
 
 The specification lives in `docs/01-architecture.md` … `docs/07-testing.md`. The procedure and scope rules are in `docs/08-agent-workflow.md`. **Read the sections your task card cites before writing code.**
 
@@ -53,8 +54,9 @@ The specification lives in `docs/01-architecture.md` … `docs/07-testing.md`. T
 
 ## Procedure (MODE=address-review)
 
-1. `cd "$WT" && eval "$(tools/wt-env.sh)"`. Read the review and any orchestrator decisions: `gh pr view $PR --json comments --jq '.comments[].body'`, then act on the latest `REVIEW:` comment.
+1. `cd "$WT" && eval "$(tools/wt-env.sh)" && test -n "$PR"` (`PR` is an input in this mode). Read the review and any orchestrator decisions: `gh pr view $PR --json comments --jq '.comments[].body'`, then act on the latest `REVIEW:` comment.
 2. Fix every **blocker** and **should-fix**. Fix nits when cheap; otherwise reply with the reason.
+   If the orchestrator says the merger reported `CI_FAILED`, read the failing CI log first: `SHA=$(gh api repos/{owner}/{repo}/pulls/$PR --jq .head.sha); RUN=$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$SHA" --jq '[.workflow_runs[] | select(.name=="CI")][0].id // empty'); gh run view "$RUN" --log-failed | tail -200`, and fix the cause.
 3. If the merger labelled the PR `needs-update`: `git fetch origin && git merge origin/main`. Resolve conflicts in your scoped files only. A conflict outside your scope → `CODER: BLOCKED`.
 4. Re-run **all** local gates (step 6 above), push (no force), and reply to each review comment saying what changed.
 5. `gh api -X DELETE repos/{owner}/{repo}/issues/$PR/labels/status:changes-requested` (404 is fine), then `echo '{"labels":["status:in-review"]}' | gh api -X POST repos/{owner}/{repo}/issues/$PR/labels --input -`. Output `CODER: DONE PR=<url> tests=<passed>/<total> WT=<path>`.

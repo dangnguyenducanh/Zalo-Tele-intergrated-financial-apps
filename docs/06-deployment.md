@@ -120,8 +120,8 @@ On the dev server (or any machine with Docker and about 4 GB of free RAM):
 3. Build and run: `docker compose up -d --build`. The first build downloads PaddleOCR models into the image, which takes several minutes. Map port 8000 to a free host port if 8000 is taken.
 4. Check locally: `curl -s localhost:<port>/health` → `{"status":"ok"}`.
 5. Expose it: `cloudflared tunnel --url http://localhost:<port>` prints `https://<random>.trycloudflare.com`.
-6. Put that URL in Vercel `KIE_URL`, set `KIE_API_KEY`, and **redeploy**.
-7. A quick-tunnel URL changes every time `cloudflared` restarts, which means updating `KIE_URL` and redeploying. For a stable URL, create a free Cloudflare account and a **named tunnel** on your own domain.
+6. Save that URL with `tools/set-secret.sh KIE_PUBLIC_URL` (and `KIE_API_KEY` the same way), then **redeploy**. `server/.env` keeps `KIE_URL` as the local address the dev server calls; Vercel's `KIE_URL` is pushed from `KIE_PUBLIC_URL`.
+7. A quick-tunnel URL changes every time `cloudflared` restarts, which means running `tools/set-secret.sh KIE_PUBLIC_URL` again and redeploying. For a stable URL, create a free Cloudflare account and a **named tunnel** on your own domain.
 
 KIE handles **one image at a time** (~20 s each in its own benchmark). That's fine for a demo; tell the audience to send one photo at a time.
 

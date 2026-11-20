@@ -51,7 +51,16 @@ while IFS= read -r -u 3 line || [ -n "$line" ]; do
 done 3< "$env_file"
 if wanted APP_URL; then push APP_URL "$app_url"; fi
 if wanted MONGODB_DB; then push MONGODB_DB "$db"; fi
-if wanted KIE_URL || wanted KIE_PUBLIC_URL; then push KIE_URL "$(get KIE_PUBLIC_URL)"; fi # Vercel reaches KIE through the public tunnel
+# Locally KIE_URL is the local service; Vercel's KIE_URL is the public tunnel, kept in KIE_PUBLIC_URL.
+if wanted KIE_URL || wanted KIE_PUBLIC_URL; then
+  if [ -z "$(get KIE_PUBLIC_URL)" ]; then
+    push KIE_URL "$(get KIE_URL)" # no separate tunnel entry: KIE_URL is the tunnel URL itself
+  elif wanted KIE_PUBLIC_URL; then
+    push KIE_URL "$(get KIE_PUBLIC_URL)"
+  else
+    echo "  keep KIE_URL local only (Vercel's KIE_URL comes from KIE_PUBLIC_URL: tools/set-secret.sh KIE_PUBLIC_URL)"
+  fi
+fi
 
 [ "$failed" -eq 0 ] || { echo "Some keys FAILED for $target (see above)." >&2; exit 1; }
 if [ "$pushed" -eq 0 ]; then echo "Nothing pushed to $target."; else echo "Done ($target, $pushed keys). Redeploy (tools/deploy.sh $target) for them to take effect."; fi

@@ -74,9 +74,9 @@ sequenceDiagram
    - set `status:in-progress`
    - spawn `coder` (background, `ISSUE`, `WT`, `MODE=implement`)
 3. **On `CODER: DONE`:** spawn `reviewer` for the PR. **On `CODER: BLOCKED`:** read the reason. Either widen the scope (by editing the card, after you agree) or split off a new task.
-4. **On `REVIEW: REQUEST_CHANGES`:** re-spawn the same coder with `MODE=address-review`, in the same worktree. **On `REVIEW: APPROVE`:** spawn `merger` with `PR`, `CODER_WT` (the coder's worktree) and `USER_APPROVED=true`. That is the standing auto-merge policy (§8.8); without it, first ask you to merge, quoting the PR's "How it works" and test results.
+4. **On `REVIEW: REQUEST_CHANGES`:** re-spawn the same coder with `MODE=address-review` and `PR`, in the same worktree. **On `REVIEW: APPROVE`:** spawn `merger` with `PR`, `CODER_WT` (the coder's worktree) and `USER_APPROVED=true`. That is the standing auto-merge policy (§8.8); without it, first ask you to merge, quoting the PR's "How it works" and test results.
 5. **Handle the merger's result:**
-   - `NEEDS_UPDATE` or `CI_FAILED` → coder `address-review` (merge `main` in, fix CI), then review again.
+   - `NEEDS_UPDATE` or `CI_FAILED` → coder `address-review` with `PR` and the merger's reason (merge `main` in, or read the failed CI log and fix it), then review again.
    - `WAITING_FOR_USER` → only without the standing policy: ask you, quoting the merger's 3-line summary.
    - `MERGED` → the merger has already returned the coder's worktree (check `treehouse status`); dispatch the next unblocked task. With `deploy=PENDING_SECRETS` the code is on `main` but the deploy waits for the student's secrets: once they are in, deploy from a fresh lease cut from the latest `main`, never from the main checkout (it may be on another branch or stale): `WT=$(treehouse get --lease --lease-holder deploy --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["path"])')`, then `cd "$WT" && tools/deploy.sh staging`, smoke it, `tools/deploy.sh production`, smoke it, and `treehouse return "$WT"`.
    - `REVERT_OPENED` → log the bug and send the task back to its coder.

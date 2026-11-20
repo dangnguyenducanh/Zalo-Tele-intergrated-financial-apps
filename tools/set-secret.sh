@@ -17,9 +17,21 @@ env_file="$root/server/.env"
 get() { grep -E "^$1=" "$env_file" | head -1 | cut -d= -f2- || true; }
 
 tmp=""
-# Drop any extra pasted lines still waiting on the terminal, so they never reach the next prompt or the shell.
-drain() { [ -t 0 ] || return 0; while IFS= read -rs -t 0.2 _; do :; done; }
-trap '[ -z "$tmp" ] || rm -f "$tmp"; drain' EXIT
+# Drop anything still waiting on the terminal (extra pasted lines, or an unfinished last line), so it never
+# reaches the next prompt or the shell. -n makes read non-canonical, so a line without Enter is seen too.
+# Returns 0 if it threw away anything that wasn't blank.
+drain() {
+  [ -t 0 ] || return 1
+  local junk got=1
+  while :; do
+    junk=""
+    if IFS= read -rs -t 0.2 -n 4096 junk; then [[ "$junk" =~ [^[:space:]] ]] && got=0; continue; fi
+    [[ "$junk" =~ [^[:space:]] ]] && got=0 # a partial line read before the timeout
+    break
+  done
+  return $got
+}
+trap '[ -z "$tmp" ] || rm -f "$tmp"; drain || true' EXIT
 
 # Replace every KEY= line (or append one). Key and value reach awk through ENVIRON, not -v,
 # so they are not visible in `ps` and awk does not turn backslashes into escapes.
@@ -39,7 +51,8 @@ for key in "$@"; do
   while :; do
     printf '\nPaste %s (hidden, then Enter; "-" = skip): ' "$key"
     if ! IFS= read -rs value; then echo; echo "  input ended before $key was given; stopping here" >&2; errors=1; break 2; fi
-    echo; drain
+    echo
+    if drain; then echo "  your paste had more than one line, so nothing was saved: paste $key again as one line"; continue; fi
     value="${value//$'\r'/}"
     value="${value#"${value%%[![:space:]]*}"}" # trim leading whitespace
     value="${value%"${value##*[![:space:]]}"}" # trim trailing whitespace
