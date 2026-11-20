@@ -1,12 +1,11 @@
-import CloseIcon from '@mui/icons-material/Close';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import { BottomNavigation, BottomNavigationAction, Box, Drawer, IconButton, Paper, Toolbar, Typography, type Theme } from '@mui/material';
+import { Menu, X } from '@/components/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, matchPath, useLocation } from 'react-router';
 import { useAuth } from '@/auth/useAuth';
 import NavList from './NavList';
-import { navItemsFor } from './navItems';
+import { ICON, navItemsFor } from './navItems';
 
 // Phone (< md): four tabs at the bottom plus "More", which opens the other pages in a bottom sheet.
 // The sheet is a modal (MUI Drawer): focus moves into it, Escape and the backdrop close it, and focus
@@ -28,8 +27,17 @@ export default function BottomNav() {
       <Paper
         component="nav"
         aria-label={t('nav.label')}
-        elevation={8}
-        sx={{ position: 'fixed', insetInline: 0, bottom: 0, zIndex: 'appBar', pb: 'env(safe-area-inset-bottom)' }}
+        elevation={0}
+        square
+        sx={(theme) => ({
+          position: 'fixed',
+          insetInline: 0,
+          bottom: 0,
+          zIndex: 'appBar',
+          pb: 'env(safe-area-inset-bottom)',
+          borderTop: `1px solid ${theme.palette.divider}`,
+          bgcolor: theme.palette.background.default,
+        })}
       >
         <BottomNavigation showLabels value={current}>
           {tabs.map((tab) => (
@@ -47,7 +55,7 @@ export default function BottomNav() {
           <BottomNavigationAction
             value="more"
             label={t('nav.more')}
-            icon={<MoreHorizIcon />}
+            icon={<Menu {...ICON} />}
             onClick={() => setMoreOpen(true)}
             aria-haspopup="dialog"
             aria-expanded={moreOpen}
@@ -66,7 +74,7 @@ export default function BottomNav() {
             {t('nav.moreTitle')}
           </Typography>
           <IconButton aria-label={t('close')} onClick={() => setMoreOpen(false)}>
-            <CloseIcon />
+            <X {...ICON} />
           </IconButton>
         </Toolbar>
         <Box component="nav" aria-label={t('nav.moreTitle')}>
@@ -83,10 +91,12 @@ export default function BottomNav() {
 const actionSx = {
   minWidth: 0,
   px: 0.5,
-  '&.Mui-selected': { boxShadow: (theme: Theme) => `inset 0 3px 0 ${theme.palette.primary.main}` },
+  '&.Mui-selected': { boxShadow: (theme: Theme) => `inset 0 2px 0 ${theme.palette.primary.main}` },
+  '& svg': { mb: 0.5 },
   '& .MuiBottomNavigationAction-label': {
-    fontSize: '0.7rem',
+    fontSize: '0.6875rem',
+    fontWeight: 500,
     whiteSpace: 'nowrap',
-    '&.Mui-selected': { fontSize: '0.7rem', fontWeight: 700 },
+    '&.Mui-selected': { fontSize: '0.6875rem', fontWeight: 600 },
   },
 } as const;

@@ -1,7 +1,4 @@
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import {
-  Avatar,
   Box,
   Chip,
   IconButton,
@@ -20,11 +17,11 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { createElement } from 'react';
+import { Pencil, Trash2 } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
-import { DEFAULT_COLOR, iconOf } from '@/features/categories/icons';
+import { DEFAULT_COLOR } from '@/features/categories/icons';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
 import { formatDate } from '@/i18n/format';
 import { signedMoney } from './helpers';
@@ -48,14 +45,13 @@ export default function TransactionList({ items, onEdit, onDelete }: Props) {
       transaction,
       categoryLabel,
       avatar: (
-        <Avatar sx={{ bgcolor: category?.color || DEFAULT_COLOR, color: '#fff', width: 32, height: 32 }}>
-          {createElement(iconOf(category?.icon ?? ''), { fontSize: 'small' })}
-        </Avatar>
+        // The category's colour as a small square key (draft 2: no coloured icon tiles in lists).
+        <Box aria-hidden sx={{ width: 10, height: 10, borderRadius: '2px', flexShrink: 0, bgcolor: category?.color || DEFAULT_COLOR }} />
       ),
       wallet: wallets.find((w) => w.id === transaction.walletId)?.name ?? '',
       date: formatDate(transaction.occurredAt, language),
       amount: (
-        <Typography component="span" sx={{ fontWeight: 600, whiteSpace: 'nowrap', color: transaction.type === 'income' ? 'success.main' : 'text.primary' }}>
+        <Typography component="span" sx={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color: transaction.type === 'income' ? 'success.main' : 'text.primary' }}>
           {signedMoney(transaction.type, transaction.amount, language)}
         </Typography>
       ),
@@ -63,10 +59,10 @@ export default function TransactionList({ items, onEdit, onDelete }: Props) {
       actions: (
         <>
           <IconButton aria-label={t('actions.edit', { name })} onClick={() => onEdit(transaction)}>
-            <EditIcon />
+            <Pencil size={16} strokeWidth={1.75} aria-hidden />
           </IconButton>
           <IconButton aria-label={t('actions.delete', { name })} onClick={() => onDelete(transaction)}>
-            <DeleteIcon />
+            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
           </IconButton>
         </>
       ),
@@ -79,7 +75,7 @@ export default function TransactionList({ items, onEdit, onDelete }: Props) {
         <List aria-label={t('listLabel')}>
           {rows.map((row) => (
             <ListItem key={row.transaction.id} secondaryAction={row.actions} sx={{ pr: 13 }}>
-              <ListItemAvatar>{row.avatar}</ListItemAvatar>
+              <ListItemAvatar sx={{ minWidth: 24 }}>{row.avatar}</ListItemAvatar>
               <ListItemText
                 primary={
                   <>

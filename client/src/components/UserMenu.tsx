@@ -1,9 +1,8 @@
-import LogoutIcon from '@mui/icons-material/Logout';
-import SettingsIcon from '@mui/icons-material/Settings';
 import { Avatar, Divider, IconButton, ListItemIcon, Menu, MenuItem, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { LogOut, Settings } from '@/components/icons';
 import { useAuth } from '@/auth/useAuth';
 
 // Avatar button in the app bar → account menu with Settings and Log out.
@@ -23,7 +22,7 @@ export default function UserMenu() {
         aria-expanded={Boolean(anchor)}
         onClick={(event) => setAnchor(event.currentTarget)}
       >
-        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+        <Avatar variant="rounded" sx={{ width: 30, height: 30, borderRadius: '4px', fontSize: 12, bgcolor: 'panel2', color: 'text.primary', border: 1, borderColor: 'divider' }}>
           {user?.name.charAt(0).toUpperCase()}
         </Avatar>
       </IconButton>
@@ -37,7 +36,7 @@ export default function UserMenu() {
         <Divider />
         <MenuItem component={Link} to="/settings" onClick={close}>
           <ListItemIcon>
-            <SettingsIcon fontSize="small" />
+            <Settings size={16} strokeWidth={1.75} aria-hidden />
           </ListItemIcon>
           {t('account.settings')}
         </MenuItem>
@@ -48,7 +47,7 @@ export default function UserMenu() {
           }}
         >
           <ListItemIcon>
-            <LogoutIcon fontSize="small" />
+            <LogOut size={16} strokeWidth={1.75} aria-hidden />
           </ListItemIcon>
           {t('account.logout')}
         </MenuItem>

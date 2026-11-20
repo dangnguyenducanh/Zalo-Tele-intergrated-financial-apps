@@ -85,7 +85,7 @@ export default function LinkCard() {
             </>
           )}
           <Typography>{t('link.zalo')}</Typography>
-          <Box component="code" sx={{ px: 1, py: 0.5, borderRadius: 1, bgcolor: 'action.hover', fontSize: '1.1rem' }}>
+          <Box component="code" sx={{ px: 1.25, py: 0.75, borderRadius: '4px', bgcolor: 'action.hover', fontFamily: 'var(--font-mono)', fontSize: '1.1rem' }}>
             /link {code.code}
           </Box>
         </Stack>

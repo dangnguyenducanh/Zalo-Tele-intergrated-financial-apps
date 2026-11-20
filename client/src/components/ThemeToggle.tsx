@@ -1,12 +1,11 @@
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
 import { IconButton, Tooltip } from '@mui/material';
+import { Moon, Sun } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '@/app/hooks';
 import { applyThemeMode, showSnackbar } from '@/app/uiSlice';
 import { useAuth } from '@/auth/useAuth';
 import { useUpdateMeMutation } from '@/auth/usersApi';
-import { useColorScheme } from '@/theme/theme';
+import { squareButtonSx, useColorScheme } from '@/theme/theme';
 import type { ThemeMode } from '@/types/api';
 
 // Two-state toggle (modern-web-guidance `dark-mode-toggle`): it always switches to the opposite of
@@ -33,8 +32,8 @@ export default function ThemeToggle() {
 
   return (
     <Tooltip title={label}>
-      <IconButton color="inherit" aria-label={label} onClick={toggle}>
-        {target === 'dark' ? <DarkModeIcon /> : <LightModeIcon />}
+      <IconButton color="inherit" aria-label={label} onClick={toggle} sx={squareButtonSx}>
+        {target === 'dark' ? <Moon size={17} strokeWidth={1.75} aria-hidden /> : <Sun size={17} strokeWidth={1.75} aria-hidden />}
       </IconButton>
     </Tooltip>
   );
