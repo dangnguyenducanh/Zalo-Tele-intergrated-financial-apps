@@ -70,7 +70,7 @@ function findDate(keys, used, now) {
 }
 
 // `now` moved to another Vietnamese calendar day, keeping its clock time; null for a day that doesn't exist (31/02).
-function onDay(now, year, month, day) {
+export function onDay(now, year, month, day) {
   const start = vnDate(year, month, day);
   const real = vnParts(start);
   if (real.month !== month || real.day !== day) return null;
@@ -126,7 +126,7 @@ function checked(value, guessed = false) {
 }
 
 // The category whose keyword is the longest whole-word match in the text, or null.
-function bestCategory(categories, text) {
+export function bestCategory(categories, text) {
   let best = null;
   let bestLength = 0;
   for (const category of categories) {

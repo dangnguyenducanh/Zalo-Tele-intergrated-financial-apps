@@ -7,6 +7,11 @@ import users from './users.js';
 import wallets from './wallets.js';
 import categories from './categories.js';
 import transactions from './transactions.js';
+import budgets from './budgets.js';
+import stats from './stats.js';
+import chatLinks from './chatLinks.js';
+import receipts from './receipts.js';
+import webhooks from './webhooks.js';
 
 const router = Router();
 
@@ -21,5 +26,10 @@ router.use('/users', users);
 router.use('/wallets', wallets);
 router.use('/categories', categories);
 router.use('/transactions', transactions);
+router.use('/budgets', budgets);
+router.use('/stats', stats);
+router.use('/chat-links', chatLinks);
+router.use('/receipts', receipts);
+router.use('/webhooks', webhooks); // checks the platform's secret header instead of a JWT
 
 export default router;
