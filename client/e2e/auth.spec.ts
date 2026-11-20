@@ -55,6 +55,7 @@ test('TC-F1-08 register, reload (still logged in), log out (back to /login)', as
   await expect(page).toHaveURL(/\/login$/);
 
   // The session was revoked on the server, so a protected page now sends the visitor to /login.
+  // The catalogue step opens /transactions; that route lands with T08, so "/" stands in for it until then.
   await page.goto('/');
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeVisible();

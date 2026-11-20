@@ -8,6 +8,13 @@ import { useAuth } from './useAuth';
 export default function AdminRoute() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  if (user?.role !== 'admin') return <EmptyState heading={t('forbidden.title')} description={t('forbidden.body')} />;
+  if (user?.role !== 'admin') {
+    return (
+      <>
+        <title>{`${t('forbidden.title')} · ${t('appName')}`}</title>
+        <EmptyState heading={t('forbidden.title')} description={t('forbidden.body')} />
+      </>
+    );
+  }
   return <Outlet />;
 }
