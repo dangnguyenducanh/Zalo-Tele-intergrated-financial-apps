@@ -6,7 +6,9 @@ import { env } from '../config/env.js';
 import { Session } from '../models/Session.js';
 import { User } from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
+import { copyDefaultCategories } from './categories.js';
 import { revokeAllSessions } from './sessions.js';
+import { createDefaultWallet } from './wallets.js';
 
 const BCRYPT_COST = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -24,8 +26,12 @@ export const checkPassword = (password, hash) => bcrypt.compare(password, hash ?
 // Refresh tokens are stored only as this hash, so a database leak does not hand out working tokens.
 const hashToken = (token) => createHash('sha256').update(token).digest('hex');
 
-// Called once for every new account. T05 fills it with the default wallet and categories.
-export async function onUserRegistered(_user) {}
+// Called for every new account: the "Tiền mặt / Cash" default wallet and a copy of every category template.
+// Both steps skip users who already have that data, so `npm run seed` can also run it for older accounts.
+export async function onUserRegistered(user) {
+  await createDefaultWallet(user);
+  await copyDefaultCategories(user);
+}
 
 // Creates a session row (one per device) and returns the tokens the client gets:
 // a 15-minute JWT access token and a 7-day random refresh token for the `rt` cookie.

@@ -4,6 +4,8 @@ import health from './health.js';
 import auth from './auth.js';
 import sessions from './sessions.js';
 import users from './users.js';
+import wallets from './wallets.js';
+import categories from './categories.js';
 
 const router = Router();
 
@@ -15,5 +17,7 @@ router.use(connectDbMiddleware); // every router below gets a connected database
 router.use('/auth', auth);
 router.use('/sessions', sessions);
 router.use('/users', users);
+router.use('/wallets', wallets);
+router.use('/categories', categories);
 
 export default router;
