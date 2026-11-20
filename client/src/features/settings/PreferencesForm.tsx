@@ -17,6 +17,7 @@ const LANGUAGE_NAMES: Record<Language, string> = { vi: 'Tiếng Việt', en: 'En
 export default function PreferencesForm() {
   const { t } = useTranslation('settings');
   const titleId = useId();
+  const languageHelpId = useId();
   const dispatch = useAppDispatch();
   const [save, busy] = useSaveProfile();
   const current = useAppSelector((s) => s.ui);
@@ -43,14 +44,14 @@ export default function PreferencesForm() {
         {t('preferences.title')}
       </Typography>
       <form noValidate aria-labelledby={titleId} onSubmit={(event) => void submit(event)}>
-        <FormControl component="fieldset" margin="normal" sx={{ display: 'flex' }}>
+        <FormControl component="fieldset" margin="normal" aria-describedby={languageHelpId} sx={{ display: 'flex' }}>
           <FormLabel component="legend">{t('preferences.language')}</FormLabel>
           <RadioGroup row name="language" value={language} onChange={(event) => setPicked({ ...picked, language: event.target.value as Language })}>
             {LANGUAGES.map((value) => (
               <FormControlLabel key={value} value={value} control={<Radio />} label={<span lang={value}>{LANGUAGE_NAMES[value]}</span>} />
             ))}
           </RadioGroup>
-          <FormHelperText sx={{ mx: 0 }}>{t('preferences.languageHelp')}</FormHelperText>
+          <FormHelperText id={languageHelpId} sx={{ mx: 0 }}>{t('preferences.languageHelp')}</FormHelperText>
         </FormControl>
         <FormControl component="fieldset" margin="normal" sx={{ display: 'flex' }}>
           <FormLabel component="legend">{t('preferences.theme')}</FormLabel>

@@ -104,6 +104,20 @@ test('TC-F1-10 a device list that fails to load shows the error and Try again lo
   expect(await within(section).findAllByRole('listitem')).toHaveLength(3);
 });
 
+test('TC-F1-10 a device already logged out elsewhere: the error shows and the list drops it', async () => {
+  const user = userEvent.setup();
+  server.use(http.delete('*/api/sessions/:id', () => HttpResponse.json({ error: { code: 'NOT_FOUND', message: 'x' } }, { status: 404 })));
+  renderApp('/settings');
+
+  const section = await screen.findByRole('region', { name: 'Thiết bị đang đăng nhập' });
+  expect(await within(section).findAllByRole('listitem')).toHaveLength(3);
+  sessions = sessions.filter((s) => s.id !== 's2'); // revoked from another device meanwhile
+  await user.click(within(section).getByRole('button', { name: 'Đăng xuất Safari · iOS' }));
+  await user.click(within(await screen.findByRole('dialog', { name: 'Đăng xuất thiết bị?' })).getByRole('button', { name: 'Đăng xuất' }));
+  expect(await screen.findByText('Không tìm thấy dữ liệu.')).toBeInTheDocument();
+  await waitFor(() => expect(within(section).getAllByRole('listitem')).toHaveLength(2));
+});
+
 test('TC-F1-18 device names come from the user agent', () => {
   expect(describeDevice(CHROME_WINDOWS)).toBe('Chrome · Windows');
   expect(describeDevice(SAFARI_IPHONE)).toBe('Safari · iOS');
@@ -214,7 +228,9 @@ test('TC-F12-02 settings: English translates the page on Save and saves the lang
   renderApp('/settings');
 
   const form = await screen.findByRole('form', { name: 'Tuỳ chọn' });
-  await user.click(within(within(form).getByRole('group', { name: 'Ngôn ngữ' })).getByRole('radio', { name: 'English' }));
+  const languages = within(form).getByRole('group', { name: 'Ngôn ngữ' });
+  expect(languages).toHaveAccessibleDescription('Bot Telegram và Zalo cũng trả lời bằng ngôn ngữ này');
+  await user.click(within(languages).getByRole('radio', { name: 'English' }));
   await user.click(within(form).getByRole('button', { name: 'Lưu tuỳ chọn' }));
 
   expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();

@@ -5,7 +5,7 @@ import { PASSWORD } from './helpers';
 // The feature specs test one screen each; these check that the screens agree with each other.
 test.use({ locale: 'vi-VN', reducedMotion: 'reduce' });
 
-test('TC-F13-02 journey, web only (MT-01 steps): register, quick add three lines, dashboard totals, edit, delete with Undo, log out', async ({ page }, testInfo) => {
+test('TC-F13-03 journey, web only (MT-01 steps): register, quick add three lines, dashboard totals, edit, delete with Undo, log out', async ({ page }, testInfo) => {
   const email = `journey-${Date.now()}@example.com`;
   await page.goto('/register');
   await page.getByRole('textbox', { name: 'Họ tên' }).fill('An');
