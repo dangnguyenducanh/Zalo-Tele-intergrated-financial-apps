@@ -4,6 +4,7 @@ import ProtectedRoute from './auth/ProtectedRoute';
 import AppLayout from './components/AppLayout';
 import RouteError from './components/RouteError';
 import Splash from './components/Splash';
+import { adminRoutes } from './features/admin/routes';
 import { authRoutes } from './features/auth/routes';
 import { categoriesRoutes } from './features/categories/routes';
 import { notFoundRoutes } from './features/notFound/routes';
@@ -30,7 +31,7 @@ export const routes: RouteObject[] = [
               ...categoriesRoutes, // /categories
               {
                 element: <AdminRoute />,
-                children: [], // T15: ...adminRoutes (/admin/users, /admin/categories)
+                children: [...adminRoutes], // /admin/users, /admin/categories
               },
             ],
           },
