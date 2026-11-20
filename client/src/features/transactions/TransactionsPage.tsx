@@ -1,6 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
 import { Alert, Button, CircularProgress, Pagination, Snackbar, Stack, Typography } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { useAppDispatch } from '@/app/hooks';
@@ -32,13 +32,34 @@ export default function TransactionsPage() {
   const filters: Filters = Object.fromEntries(FILTER_KEYS.flatMap((key) => (params.get(key) ? [[key, params.get(key)]] : [])));
   const page = Number(params.get('page')) || 1;
   const q = useDebounced(filters.q, 300); // search after a typing pause, not on every key
-  const { data, isLoading, isError, refetch } = useGetTransactionsQuery({ ...filters, q, page });
+  const { data, currentData, isLoading, isError, refetch } = useGetTransactionsQuery({ ...filters, q, page });
   const [createTransaction] = useCreateTransactionMutation();
   const [updateTransaction] = useUpdateTransactionMutation();
   const [deleteTransaction] = useDeleteTransactionMutation();
   const [restoreTransaction] = useRestoreTransactionMutation();
   const [editing, setEditing] = useState<Transaction | 'new' | null>(null); // which dialog is open
   const [undoable, setUndoable] = useState<Transaction | null>(null); // the last deleted one, while Undo is offered
+  const heading = useRef<HTMLHeadingElement>(null);
+  const undoButton = useRef<HTMLButtonElement>(null);
+
+  // Deleting the last rows of the last page (or an old link) leaves a page past the end: go to the last one.
+  // currentData, not data: data can still be the previous filter's answer while this one loads.
+  const lastPage = currentData ? Math.max(1, Math.ceil(currentData.total / currentData.limit)) : page;
+  useEffect(() => {
+    if (page > lastPage) setParams((old) => new URLSearchParams({ ...Object.fromEntries(old), page: String(lastPage) }), { replace: true });
+  }, [page, lastPage, setParams]);
+
+  // The delete button leaves with its row, so focus goes to Undo (the only way back) instead of <body>.
+  // While focused, the snackbar does not hide itself (MUI), so keyboard users have all the time they need.
+  useEffect(() => {
+    if (undoable) undoButton.current?.focus();
+  }, [undoable]);
+
+  // Closing the snackbar removes Undo; if it had focus, put it on the page heading rather than lose it.
+  function closeUndo() {
+    if (document.activeElement === undoButton.current) heading.current?.focus();
+    setUndoable(null);
+  }
 
   // A filter change replaces the history entry (typing in search must not add one per key) and goes back to page 1.
   function setFilter(key: FilterKey, value: string) {
@@ -81,7 +102,7 @@ export default function TransactionsPage() {
 
   async function undo() {
     const transaction = undoable;
-    setUndoable(null);
+    closeUndo();
     if (!transaction) return;
     try {
       await restoreTransaction(transaction.id).unwrap();
@@ -98,7 +119,7 @@ export default function TransactionsPage() {
     <>
       <title>{`${t('title')} · ${t('common:appName')}`}</title>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ typography: { xs: 'h5', sm: 'h4' } }}>
+        <Typography ref={heading} tabIndex={-1} variant="h4" component="h1" sx={{ typography: { xs: 'h5', sm: 'h4' }, outline: 'none' }}>
           {t('title')}
         </Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing('new')}>
@@ -144,15 +165,14 @@ export default function TransactionsPage() {
           onClose={() => setEditing(null)}
         />
       )}
-      {/* Paused while hovered or focused (MUI), so there is time to reach Undo with the keyboard. */}
       <Snackbar
         key={undoable?.id}
         open={undoable !== null}
         autoHideDuration={8000}
-        onClose={(_event, reason) => reason !== 'clickaway' && setUndoable(null)}
+        onClose={(_event, reason) => reason !== 'clickaway' && closeUndo()}
         message={t('deleted')}
         action={
-          <Button color="inherit" size="small" onClick={() => void undo()}>
+          <Button ref={undoButton} color="inherit" size="small" onClick={() => void undo()}>
             {t('undo')}
           </Button>
         }
