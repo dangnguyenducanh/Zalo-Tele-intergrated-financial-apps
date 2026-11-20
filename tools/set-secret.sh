@@ -62,8 +62,14 @@ for key in "$@"; do
       # so such a value would differ between the local server and Vercel.
       *'#'* | \'* | \"* | \`*) echo "  rejected: a value with '#' or a leading quote can't be stored in server/.env; use another value" >&2; continue ;;
     esac
-    # Same pattern tools/vercel-env-push.sh skips as an unfilled .env.example placeholder.
-    if [[ "$value" =~ \<[[:lower:][:digit:]_\ -]+\> ]]; then echo "  rejected: that looks like a <placeholder> from .env.example; paste the real value" >&2; continue; fi
+    # tools/vercel-env-push.sh skips values holding an .env.example-style <placeholder>, so refuse those for keys it
+    # pushes as typed. MONGODB_PASSWORD is pushed percent-encoded (it can't match), and SEED_/TEST_USER_/VERCEL_
+    # keys stay local, so for those only a whole-value placeholder is refused.
+    case "$key" in
+      MONGODB_PASSWORD | SEED_* | TEST_USER_* | VERCEL_*) ph='^<[[:lower:][:digit:]_ -]+>$' ;;
+      *) ph='<[[:lower:][:digit:]_ -]+>' ;;
+    esac
+    if [[ "$value" =~ $ph ]]; then echo "  rejected: that looks like a <placeholder> from .env.example; paste the real value" >&2; continue; fi
     break
   done
   if [ "$value" = "-" ]; then echo "  skipped $key"; continue; fi

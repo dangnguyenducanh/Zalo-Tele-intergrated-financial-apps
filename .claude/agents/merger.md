@@ -21,7 +21,7 @@ You are the **merger agent**. The orchestrator gives you `PR` (the number), `USE
    - a commit status `agent-review` = **success** on `$SHA` (`gh api repos/{owner}/{repo}/commits/<sha>/status`)
    - the `ci` check = **success** on the same SHA. The installed `gh` is 2.4 and has no `checks --watch`. If CI is still running:
      - `RUN=$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$SHA" --jq '[.workflow_runs[] | select(.name=="CI")][0].id // empty')`
-     - if `RUN` is empty the run hasn't been created yet: wait 30 s (`timeout 30 tail -f /dev/null`) and look again, up to 10 times, then stop with `MERGE: CI_FAILED PR=<n> (no CI run)`
+     - if `RUN` is empty the run hasn't been created yet: wait 30 s (`timeout 30 tail -f /dev/null`) and look again, up to 10 times. Still none: if `mergeStateStatus` is `DIRTY`, the conflict is why (GitHub doesn't run `pull_request` CI on a conflicting PR), so handle it as `NEEDS_UPDATE` below; otherwise stop with `MERGE: CI_FAILED PR=<n> (no CI run)`
      - `timeout 900 gh run watch "$RUN" --exit-status`
      - read the result with `gh api "repos/{owner}/{repo}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.name=="ci") | .conclusion'`
    - `mergeStateStatus` = `CLEAN`, read again **after** the CI wait. GitHub computes it lazily: if it is `UNKNOWN` (or `UNSTABLE` while checks finish), re-read it every 20 s, up to 10 times, before deciding. If it is `BEHIND` or `DIRTY`: `echo '{"labels":["needs-update"]}' | gh api -X POST repos/{owner}/{repo}/issues/$PR/labels --input -`, `gh pr comment $PR --body` with "please merge main and re-run gates", output `MERGE: NEEDS_UPDATE PR=<n>`, and stop.
