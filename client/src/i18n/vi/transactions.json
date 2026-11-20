@@ -1,0 +1,91 @@
+{
+  "title": "Giao dịch",
+  "add": "Thêm giao dịch",
+  "saved": "Đã lưu giao dịch",
+  "deleted": "Đã xoá giao dịch",
+  "undo": "Hoàn tác",
+  "restored": "Đã khôi phục giao dịch",
+  "retry": "Thử lại",
+  "loadError": "Không tải được danh sách giao dịch.",
+  "empty": "Chưa có giao dịch nào",
+  "emptyHint": "Gõ vào ô Thêm nhanh, ví dụ \"phở 45k\", rồi nhấn Enter.",
+  "noMatch": "Không có giao dịch nào khớp bộ lọc",
+  "total": "Tổng: {{count}} giao dịch",
+  "listLabel": "Danh sách giao dịch",
+  "pagination": "Chọn trang",
+  "pages": {
+    "page": "Trang {{page}}",
+    "first": "Trang đầu",
+    "last": "Trang cuối",
+    "previous": "Trang trước",
+    "next": "Trang sau"
+  },
+  "draft": "Nháp",
+  "noNote": "(không ghi chú)",
+  "types": {
+    "expense": "Chi",
+    "income": "Thu"
+  },
+  "statuses": {
+    "confirmed": "Đã xác nhận",
+    "draft": "Nháp"
+  },
+  "columns": {
+    "date": "Ngày",
+    "description": "Mô tả",
+    "wallet": "Ví",
+    "amount": "Số tiền",
+    "actions": "Thao tác"
+  },
+  "actions": {
+    "edit": "Sửa giao dịch {{name}}",
+    "delete": "Xoá giao dịch {{name}}"
+  },
+  "filters": {
+    "label": "Bộ lọc giao dịch",
+    "q": "Tìm theo ghi chú",
+    "from": "Từ ngày",
+    "to": "Đến ngày",
+    "type": "Loại",
+    "wallet": "Ví",
+    "category": "Danh mục",
+    "status": "Trạng thái",
+    "all": "Tất cả",
+    "clear": "Xoá bộ lọc"
+  },
+  "dialog": {
+    "addTitle": "Thêm giao dịch",
+    "editTitle": "Sửa giao dịch",
+    "draftTitle": "Sửa dòng thêm nhanh",
+    "save": "Lưu",
+    "apply": "Áp dụng"
+  },
+  "fields": {
+    "type": "Loại",
+    "amount": "Số tiền (₫)",
+    "amountHelp": "Ví dụ: 45000, 45k, 1.5tr",
+    "category": "Danh mục",
+    "wallet": "Ví",
+    "occurredAt": "Thời gian",
+    "note": "Ghi chú"
+  },
+  "validation": {
+    "amount": "Nhập số tiền lớn hơn 0, ví dụ 45000 hoặc 45k",
+    "category": "Chọn danh mục",
+    "wallet": "Chọn ví",
+    "occurredAt": "Chọn thời gian"
+  },
+  "quickAdd": {
+    "label": "Thêm nhanh",
+    "placeholder": "Bạn vừa chi gì? — ví dụ: phở 45k",
+    "hint": "Enter để lưu, Shift+Enter mở form đầy đủ. Mỗi dòng là một giao dịch.",
+    "save": "Lưu",
+    "fullForm": "Mở form đầy đủ",
+    "preview": "Xem trước",
+    "change": "Đổi {{value}}",
+    "noCategory": "Chưa có danh mục",
+    "noWallet": "Chưa có ví",
+    "incomplete": "Hãy chọn ví và danh mục: bấm vào thẻ xem trước để đổi.",
+    "saved": "Đã lưu giao dịch: {{count}}"
+  }
+}
