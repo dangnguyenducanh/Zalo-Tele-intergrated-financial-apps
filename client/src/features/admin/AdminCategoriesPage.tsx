@@ -45,9 +45,16 @@ export default function AdminCategoriesPage() {
       <Typography sx={{ color: 'text.secondary', mb: 2 }}>{t('categories.intro')}</Typography>
 
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-        <Tabs value={type} onChange={(_event, next: CategoryType) => setType(next)} aria-label={t('categories.typeTabs')}>
+        {/* modern-web-guidance `tabs`: no aria-controls (no screen reader uses it); the indicator also gets a
+            border, because forced-colors mode drops its background and would leave no visible selection. */}
+        <Tabs
+          value={type}
+          onChange={(_event, next: CategoryType) => setType(next)}
+          aria-label={t('categories.typeTabs')}
+          sx={{ '& .MuiTabs-indicator': { borderBottom: 2, borderColor: 'primary.main', boxSizing: 'border-box' } }}
+        >
           {TYPES.map((value) => (
-            <Tab key={value} value={value} label={t(`categories.types.${value}`)} id={`${id}-tab-${value}`} aria-controls={`${id}-panel`} />
+            <Tab key={value} value={value} label={t(`categories.types.${value}`)} id={`${id}-tab-${value}`} />
           ))}
         </Tabs>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing('new')}>
@@ -55,7 +62,7 @@ export default function AdminCategoriesPage() {
         </Button>
       </Stack>
 
-      <Box role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${type}`}>
+      <Box role="tabpanel" aria-labelledby={`${id}-tab-${type}`}>
         {isError && <Alert severity="error">{errorMessage('GENERIC')}</Alert>}
         <Box role="region" aria-labelledby={`${id}-caption`} tabIndex={0} sx={tableWrapperSx}>
           <Table size="small">
