@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { connectDbMiddleware } from '../middleware/connectDb.js';
 import health from './health.js';
+import auth from './auth.js';
+import sessions from './sessions.js';
+import users from './users.js';
 
 const router = Router();
 
@@ -8,5 +11,9 @@ router.use('/health', health); // checks the database itself and answers 503 whe
 router.use(connectDbMiddleware); // every router below gets a connected database
 
 // Feature routers go below, one line per feature, each added by its own task (docs/08 §8.5).
+// Protected routers apply requireAuth themselves, so unknown paths still answer 404.
+router.use('/auth', auth);
+router.use('/sessions', sessions);
+router.use('/users', users);
 
 export default router;
