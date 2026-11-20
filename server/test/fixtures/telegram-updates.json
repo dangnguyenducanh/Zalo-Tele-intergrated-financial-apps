@@ -1,0 +1,46 @@
+{
+  "_comment": "Telegram Bot API updates in the exact shape Telegram POSTs to the webhook (private chat). Tests copy them and change text, ids and callback data.",
+  "text": {
+    "update_id": 731406001,
+    "message": {
+      "message_id": 7,
+      "from": { "id": 5550001111, "is_bot": false, "first_name": "Anh", "last_name": "Nguyen", "username": "anh_ng", "language_code": "vi" },
+      "chat": { "id": 5550001111, "first_name": "Anh", "last_name": "Nguyen", "username": "anh_ng", "type": "private" },
+      "date": 1763620200,
+      "text": "phở 45k"
+    }
+  },
+  "start": {
+    "update_id": 731406002,
+    "message": {
+      "message_id": 6,
+      "from": { "id": 5550001111, "is_bot": false, "first_name": "Anh", "last_name": "Nguyen", "username": "anh_ng", "language_code": "vi" },
+      "chat": { "id": 5550001111, "first_name": "Anh", "last_name": "Nguyen", "username": "anh_ng", "type": "private" },
+      "date": 1763620100,
+      "text": "/start ABC234",
+      "entities": [{ "offset": 0, "length": 6, "type": "bot_command" }]
+    }
+  },
+  "callback": {
+    "update_id": 731406003,
+    "callback_query": {
+      "id": "4382bfdwdsb323b2d9",
+      "from": { "id": 5550001111, "is_bot": false, "first_name": "Anh", "last_name": "Nguyen", "username": "anh_ng", "language_code": "vi" },
+      "message": {
+        "message_id": 8,
+        "from": { "id": 7000000001, "is_bot": true, "first_name": "Sổ chi tiêu", "username": "test_bot" },
+        "chat": { "id": 5550001111, "first_name": "Anh", "last_name": "Nguyen", "username": "anh_ng", "type": "private" },
+        "date": 1763620201,
+        "text": "📝 Chi 45.000 ₫ · Ăn uống · Tiền mặt · 20/11/2026 · phở",
+        "reply_markup": {
+          "inline_keyboard": [[
+            { "text": "✅ Lưu", "callback_data": "c:000000000000000000000000" },
+            { "text": "❌ Huỷ", "callback_data": "x:000000000000000000000000" }
+          ]]
+        }
+      },
+      "chat_instance": "-3801416457712831236",
+      "data": "c:000000000000000000000000"
+    }
+  }
+}
