@@ -127,6 +127,10 @@ for (const scheme of ['light', 'dark'] as const) {
       await logIn(page, email);
       await expect(page.getByRole('heading', { level: 1, name: 'Xin chào, Lan' })).toBeVisible();
       const nav = page.getByRole('navigation', { name: 'Điều hướng chính' });
+      // The current page is marked by bold text, not by colour alone (WCAG 1.4.1).
+      const current = nav.getByRole('link', { name: 'Tổng quan' });
+      await expect(current).toHaveAttribute('aria-current', 'page');
+      await expect(current.getByText('Tổng quan')).toHaveCSS('font-weight', '700');
       if (viewport.desktop) {
         await expect(nav.getByRole('link', { name: 'Ví' })).toBeVisible(); // every page in the drawer
         await expect(page.getByRole('button', { name: 'Thêm' })).toHaveCount(0);

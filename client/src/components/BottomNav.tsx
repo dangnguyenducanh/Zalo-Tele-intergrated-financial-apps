@@ -1,6 +1,6 @@
 import CloseIcon from '@mui/icons-material/Close';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
-import { BottomNavigation, BottomNavigationAction, Box, Drawer, IconButton, Paper, Toolbar, Typography } from '@mui/material';
+import { BottomNavigation, BottomNavigationAction, Box, Drawer, IconButton, Paper, Toolbar, Typography, type Theme } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, matchPath, useLocation } from 'react-router';
@@ -78,8 +78,15 @@ export default function BottomNav() {
 }
 
 // Five tabs fit a 320 px phone: labels stay on one line and shrink instead of wrapping.
+// The current tab (.Mui-selected, also on "More" for its pages) gets bold text and a top bar in
+// primary.main, not colour alone (modern-web-guidance `navbar`, WCAG 1.4.1).
 const actionSx = {
   minWidth: 0,
   px: 0.5,
-  '& .MuiBottomNavigationAction-label': { fontSize: '0.7rem', whiteSpace: 'nowrap', '&.Mui-selected': { fontSize: '0.75rem' } },
+  '&.Mui-selected': { boxShadow: (theme: Theme) => `inset 0 3px 0 ${theme.palette.primary.main}` },
+  '& .MuiBottomNavigationAction-label': {
+    fontSize: '0.7rem',
+    whiteSpace: 'nowrap',
+    '&.Mui-selected': { fontSize: '0.7rem', fontWeight: 700 },
+  },
 } as const;
