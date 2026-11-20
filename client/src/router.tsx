@@ -7,6 +7,7 @@ import Splash from './components/Splash';
 import { authRoutes } from './features/auth/routes';
 import { categoriesRoutes } from './features/categories/routes';
 import { notFoundRoutes } from './features/notFound/routes';
+import { transactionsRoutes } from './features/transactions/routes';
 import { walletsRoutes } from './features/wallets/routes';
 
 // Route table (docs/05 §5.2). Each feature exports its routes from features/<x>/routes.tsx and adds
@@ -26,6 +27,7 @@ export const routes: RouteObject[] = [
             children: [
               // T10 replaces this line with ...dashboardRoutes
               { index: true, lazy: async () => ({ Component: (await import('./components/HomePlaceholder')).default }) },
+              ...transactionsRoutes, // /transactions
               ...walletsRoutes, // /wallets
               ...categoriesRoutes, // /categories
               {
