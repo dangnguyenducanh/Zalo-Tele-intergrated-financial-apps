@@ -35,6 +35,10 @@ export default function AdminUsersPage() {
   const { data, isError } = useGetAdminUsersQuery({ ...filters, page, limit: PAGE_SIZE });
   const [updateUser] = useUpdateAdminUserMutation();
   const pageCount = Math.ceil((data?.total ?? 0) / PAGE_SIZE);
+  // An action can shrink the filtered list (e.g. locking the last user on page 2 of "active"):
+  // go back to the last page that still exists instead of showing "no users".
+  const lastPage = Math.max(pageCount, 1);
+  if (data && page > lastPage) setPage(lastPage);
 
   // Filters apply when the form is submitted (Enter or the Search button), not on every keystroke.
   function search(event: FormEvent<HTMLFormElement>) {

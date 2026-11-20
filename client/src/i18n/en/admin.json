@@ -20,7 +20,7 @@
     "confirm": {
       "lock": { "title": "Lock this account?", "message": "{{name}} ({{email}}) will be logged out on every device and cannot log in until the account is unlocked." },
       "unlock": { "title": "Unlock this account?", "message": "{{name}} ({{email}}) will be able to log in again." },
-      "makeAdmin": { "title": "Make this user an administrator?", "message": "{{name}} ({{email}}) will be able to manage users and default categories after their next login." },
+      "makeAdmin": { "title": "Make this user an administrator?", "message": "{{name}} ({{email}}) will be able to manage users and default categories. The change applies within 15 minutes." },
       "removeAdmin": { "title": "Remove administrator rights?", "message": "{{name}} ({{email}}) becomes a normal user. The change applies within 15 minutes." }
     },
     "done": {
@@ -55,7 +55,8 @@
     "nameVi": "Vietnamese name",
     "nameEn": "English name",
     "keywords": "Bot keywords",
-    "keywordsHelp": "Separated by commas, e.g. pho, bun bo, cafe",
+    "keywordsHelp": "Separated by commas, up to 50 keywords of 40 characters each, e.g. pho, bun bo, cafe",
+    "keywordsTooLong": "Up to 50 keywords, each at most 40 characters.",
     "icon": "Icon",
     "iconHelp": "Material icon name, e.g. Restaurant",
     "color": "Colour",

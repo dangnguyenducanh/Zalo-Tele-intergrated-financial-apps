@@ -14,6 +14,11 @@ type Props = {
 
 // "phở, Bún bò ,, cafe" → ["phở", "Bún bò", "cafe"]. The server lower-cases and strips the diacritics.
 const splitKeywords = (text: string) => text.split(',').map((word) => word.trim()).filter(Boolean);
+// The server's limits (keywordList in server/src/routes/categories.js): at most 50 keywords of 40 characters.
+const keywordsTooLong = (text: string) => {
+  const words = splitKeywords(text);
+  return words.length > 50 || words.some((word) => word.length > 40);
+};
 
 // Add or edit a default category. Mount it only while open, so every opening starts from fresh values.
 // The browser checks the required fields and lengths itself (native constraints) before submit runs.
@@ -72,6 +77,8 @@ export default function TemplateDialog({ type, template, onClose }: Props) {
             label={t('categories.keywords')}
             helperText={t('categories.keywordsHelp')}
             defaultValue={template?.keywords.join(', ')}
+            // A native custom error: the browser blocks the submit and shows it on the field.
+            onChange={(event) => (event.target as HTMLInputElement).setCustomValidity(keywordsTooLong(event.target.value) ? t('categories.keywordsTooLong') : '')}
             slotProps={{ htmlInput: { autoCapitalize: 'none', spellCheck: false } }}
           />
           <TextField {...field} name="icon" label={t('categories.icon')} helperText={t('categories.iconHelp')} defaultValue={template?.icon} />

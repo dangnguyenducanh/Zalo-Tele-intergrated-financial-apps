@@ -119,6 +119,31 @@ test('TC-F11-08 users page: stats, search, lock behind a confirm dialog, and LAS
   expect(await screen.findByText('Không thể khoá hoặc hạ quyền quản trị viên cuối cùng.')).toBeInTheDocument();
 });
 
+test('TC-F11-08 users page: an action that empties the current page goes back to the last page', async () => {
+  const user = userEvent.setup();
+  // 20 other active users fill page 1, so Minh is alone on page 2 of the "active" list.
+  const others = Array.from({ length: 20 }, (_, i): User => ({ ...MINH, id: `x${i}`, name: `Người ${i}` }));
+  server.use(
+    http.get('*/api/admin/users', ({ request }) => {
+      requests.push({ method: 'GET', url: new URL(request.url) });
+      const page = Number(new URL(request.url).searchParams.get('page'));
+      const active = [...others, ...users.filter((u) => u.id === MINH.id && u.status === 'active')];
+      return HttpResponse.json({ items: active.slice((page - 1) * 20, page * 20), total: active.length });
+    }),
+  );
+  renderApp('/admin/users');
+
+  await screen.findByRole('region', { name: 'Số người dùng tìm thấy: 21' });
+  await user.click(screen.getByRole('button', { name: 'Trang 2' }));
+  await user.click(await screen.findByRole('button', { name: 'Khoá Minh' }));
+  await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Khoá' }));
+
+  // Locking Minh leaves 20 active users, one page: the page shows page 1, not "no users".
+  expect(await screen.findByRole('rowheader', { name: /Người 0/ })).toBeInTheDocument();
+  expect(sent('GET').at(-1)!.url.searchParams.get('page')).toBe('1');
+  expect(screen.queryByRole('button', { name: 'Trang 2' })).not.toBeInTheDocument();
+});
+
 test('TC-F11-08 default categories page: tabs, add, edit and delete; the fallback has no delete button', async () => {
   const user = userEvent.setup();
   renderApp('/admin/categories');
@@ -135,7 +160,16 @@ test('TC-F11-08 default categories page: tabs, add, edit and delete; the fallbac
   expect(within(add).getByRole('textbox', { name: 'Tên tiếng Việt' })).toHaveFocus();
   await user.type(within(add).getByRole('textbox', { name: 'Tên tiếng Việt' }), 'Thú cưng');
   await user.type(within(add).getByRole('textbox', { name: 'Tên tiếng Anh' }), 'Pets');
-  await user.type(within(add).getByRole('textbox', { name: 'Từ khoá cho bot' }), 'Pate, hạt ,, cát');
+  // A keyword longer than the server's 40 characters is stopped in the browser with a translated message.
+  const keywords = within(add).getByRole('textbox', { name: 'Từ khoá cho bot' });
+  await user.type(keywords, `pate, ${'x'.repeat(41)}`);
+  await user.click(within(add).getByRole('button', { name: 'Lưu' }));
+  expect(keywords).toBeInvalid();
+  expect((keywords as HTMLInputElement).validationMessage).toBe('Tối đa 50 từ khoá, mỗi từ khoá tối đa 40 ký tự.');
+  expect(sent('POST')).toHaveLength(0);
+  await user.clear(keywords);
+  await user.type(keywords, 'Pate, hạt ,, cát');
+  expect(keywords).toBeValid();
   await user.click(within(add).getByRole('button', { name: 'Lưu' }));
   expect(await screen.findByRole('rowheader', { name: /Thú cưng/ })).toBeInTheDocument();
   expect(sent('POST')[0]!.body).toEqual({

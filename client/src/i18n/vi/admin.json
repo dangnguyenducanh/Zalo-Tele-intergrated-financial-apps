@@ -20,7 +20,7 @@
     "confirm": {
       "lock": { "title": "Khoá tài khoản này?", "message": "{{name}} ({{email}}) sẽ bị đăng xuất trên mọi thiết bị và không đăng nhập được cho tới khi được mở khoá." },
       "unlock": { "title": "Mở khoá tài khoản này?", "message": "{{name}} ({{email}}) sẽ đăng nhập lại được." },
-      "makeAdmin": { "title": "Cấp quyền quản trị cho người này?", "message": "{{name}} ({{email}}) sẽ quản lý được người dùng và danh mục mặc định từ lần đăng nhập tới." },
+      "makeAdmin": { "title": "Cấp quyền quản trị cho người này?", "message": "{{name}} ({{email}}) sẽ quản lý được người dùng và danh mục mặc định. Thay đổi có hiệu lực trong vòng 15 phút." },
       "removeAdmin": { "title": "Bỏ quyền quản trị?", "message": "{{name}} ({{email}}) trở thành người dùng thường. Thay đổi có hiệu lực trong vòng 15 phút." }
     },
     "done": {
@@ -55,7 +55,8 @@
     "nameVi": "Tên tiếng Việt",
     "nameEn": "Tên tiếng Anh",
     "keywords": "Từ khoá cho bot",
-    "keywordsHelp": "Cách nhau bằng dấu phẩy, ví dụ: pho, bun bo, cafe",
+    "keywordsHelp": "Cách nhau bằng dấu phẩy, tối đa 50 từ khoá, mỗi từ khoá tối đa 40 ký tự, ví dụ: pho, bun bo, cafe",
+    "keywordsTooLong": "Tối đa 50 từ khoá, mỗi từ khoá tối đa 40 ký tự.",
     "icon": "Biểu tượng",
     "iconHelp": "Tên biểu tượng Material, ví dụ: Restaurant",
     "color": "Màu",
