@@ -46,8 +46,10 @@ export const transactionsApi = api.injectEndpoints({
       providesTags: ['Transaction'],
     }),
     // Read-only preview for the quick-add box: a query (cached per text), even though it is a POST.
+    // The result holds wallet/category ids found by alias and keyword, so a change to either re-parses.
     parseTransactions: builder.query<{ drafts: ParsedDraft[] }, string>({
       query: (text) => ({ url: '/transactions/parse', method: 'POST', body: { text } }),
+      providesTags: ['Wallet', 'Category'],
     }),
     createTransaction: builder.mutation<Transaction, TransactionInput>({
       query: (body) => ({ url: '/transactions', method: 'POST', body }),

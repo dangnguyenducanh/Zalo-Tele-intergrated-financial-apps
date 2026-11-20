@@ -1,5 +1,5 @@
 import { Box, Button, Chip, Paper, Stack, TextField } from '@mui/material';
-import { useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { showSnackbar } from '@/app/uiSlice';
@@ -41,6 +41,9 @@ export default function QuickAdd() {
   const [edits, setEdits] = useState<{ text: string; drafts: Record<number, ParsedDraft> }>({ text: '', drafts: {} });
   const [error, setError] = useState<string | null>(null); // from the last Enter; cleared when typing
   const [form, setForm] = useState<OpenForm | null>(null);
+  // Set before the parse request, not when the save starts, so a second Enter or click during the parse
+  // cannot save the same lines twice. A ref, because it must change at once, not on the next render.
+  const busy = useRef(false);
 
   const withEdits = (drafts: ParsedDraft[], forText: string) =>
     drafts.map((draft, i) => (edits.text === forText && edits.drafts[i]) || draft);
@@ -52,9 +55,20 @@ export default function QuickAdd() {
     dispatch(showSnackbar({ message: t('quickAdd.saved', { count }), severity: 'success' }));
   }
 
+  // Runs one Enter / Shift+Enter at a time; a press while one is still running is ignored.
+  async function once(work: () => Promise<void>) {
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      await work();
+    } finally {
+      busy.current = false;
+    }
+  }
+
   // Enter: parse (from the cache when the preview already did) and save each line in order.
   async function saveAll() {
-    if (!value || saving) return;
+    if (!value) return;
     try {
       const drafts = withEdits((await parse(value, true).unwrap()).drafts, value);
       if (!drafts.every(isComplete)) return setError(t('quickAdd.incomplete'));
@@ -83,12 +97,12 @@ export default function QuickAdd() {
     if (event.key !== 'Enter') return;
     event.preventDefault(); // no new line; pasted text keeps its lines
     if (event.nativeEvent.isComposing || event.keyCode === 229) return; // an IME is confirming a word
-    void (event.shiftKey ? openFullForm() : saveAll());
+    void once(event.shiftKey ? openFullForm : saveAll);
   }
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    void saveAll();
+    void once(saveAll);
   }
 
   async function onFormSubmit(fields: TransactionInput) {
@@ -134,7 +148,7 @@ export default function QuickAdd() {
             <Button type="submit" variant="contained" loading={saving}>
               {t('quickAdd.save')}
             </Button>
-            <Button type="button" onClick={() => void openFullForm()}>
+            <Button type="button" onClick={() => void once(openFullForm)}>
               {t('quickAdd.fullForm')}
             </Button>
           </Stack>
