@@ -1,0 +1,12 @@
+{
+  "name": "test-report",
+  "private": true,
+  "type": "module",
+  "description": "Builds docs/testing/test-report.xlsx from the test catalogue, bug log, run history and JUnit results",
+  "scripts": {
+    "report": "node build-report.mjs"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0"
+  }
+}

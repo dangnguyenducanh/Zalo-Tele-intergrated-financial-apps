@@ -1,0 +1,3 @@
+# Git-ignored files treehouse copies from the main checkout into every leased worktree.
+# Keeps secrets out of git while every agent's worktree can still run the app and tests.
+server/.env

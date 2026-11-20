@@ -1,0 +1,20 @@
+# dependencies and builds
+node_modules/
+dist/
+.vercel/
+
+# secrets: never commit real env files
+.env
+.env.*
+!.env.example
+
+# test output
+coverage/
+playwright-report/
+test-results/
+docs/testing/recordings/*.webm
+docs/testing/recordings/*.mp4
+
+# OS / editor
+.DS_Store
+*.log
