@@ -1,6 +1,6 @@
 import TelegramIcon from '@mui/icons-material/Telegram';
 import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '@/features/categories/helpers';
 import { useCreateLinkCodeMutation, useGetChatLinksQuery, type LinkCode } from './botApi';
@@ -17,6 +17,7 @@ export default function LinkCard() {
   const [code, setCode] = useState<LinkCode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const codeBox = useRef<HTMLDivElement>(null);
 
   const secondsLeft = code ? Math.max(0, Math.round((Date.parse(code.expiresAt) - now) / 1000)) : 0;
   const live = secondsLeft > 0;
@@ -28,6 +29,11 @@ export default function LinkCard() {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [live]);
+
+  // The Generate button is replaced by the code, so focus goes to the code instead of <body>.
+  useEffect(() => {
+    if (code) codeBox.current?.focus();
+  }, [code]);
 
   async function generate() {
     setError(null);
@@ -57,7 +63,7 @@ export default function LinkCard() {
 
       {code && live ? (
         <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
-          <div>
+          <div ref={codeBox} tabIndex={-1}>
             <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
               {t('link.code')}
             </Typography>

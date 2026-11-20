@@ -1,6 +1,7 @@
 {
   "title": "Hộp thư bot",
   "intro": "Ghi chi tiêu qua Telegram, Zalo hoặc ảnh hoá đơn. Những gì bot đọc được nằm ở đây dưới dạng bản nháp để bạn kiểm tra trước khi lưu.",
+  "retry": "Thử lại",
   "sources": {
     "telegram": "Telegram",
     "zalo": "Zalo",
@@ -23,6 +24,7 @@
   "accounts": {
     "title": "Tài khoản đã liên kết",
     "empty": "Chưa liên kết tài khoản chat nào.",
+    "loadError": "Không tải được danh sách tài khoản.",
     "linkedOn": "Liên kết ngày {{date}}",
     "unlink": "Huỷ liên kết {{name}}",
     "unlinkTitle": "Huỷ liên kết?",
@@ -41,7 +43,6 @@
     "title": "Bản nháp chờ duyệt",
     "empty": "Không có bản nháp nào. Gửi \"phở 45k\" cho bot hoặc tải ảnh hoá đơn lên, bản nháp sẽ hiện ở đây.",
     "loadError": "Không tải được bản nháp.",
-    "retry": "Thử lại",
     "confirm": "Xác nhận",
     "discard": "Bỏ",
     "discardTitle": "Bỏ bản nháp?",

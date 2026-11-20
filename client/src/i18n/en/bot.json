@@ -1,6 +1,7 @@
 {
   "title": "Bot inbox",
   "intro": "Record spending through Telegram, Zalo or a receipt photo. What the bot read waits here as a draft for you to check before it is saved.",
+  "retry": "Retry",
   "sources": {
     "telegram": "Telegram",
     "zalo": "Zalo",
@@ -23,6 +24,7 @@
   "accounts": {
     "title": "Linked accounts",
     "empty": "No chat account is linked yet.",
+    "loadError": "Could not load the linked accounts.",
     "linkedOn": "Linked on {{date}}",
     "unlink": "Unlink {{name}}",
     "unlinkTitle": "Unlink?",
@@ -41,7 +43,6 @@
     "title": "Drafts to review",
     "empty": "No drafts. Send \"phở 45k\" to the bot or upload a receipt, and the draft shows up here.",
     "loadError": "Could not load the drafts.",
-    "retry": "Retry",
     "confirm": "Confirm",
     "discard": "Discard",
     "discardTitle": "Discard the draft?",

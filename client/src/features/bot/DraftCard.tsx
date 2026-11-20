@@ -20,8 +20,9 @@ import { sourceIcon } from './sourceIcon';
 
 // One draft as a small inline form (docs/05 §5.7): the parsed fields can be corrected in place.
 // Confirm = PATCH /transactions/:id (only if something changed) then POST /transactions/:id/confirm.
-// Discard = DELETE /transactions/:id. Either way the list refetches and the card goes away.
-export default function DraftCard({ draft }: { draft: Draft }) {
+// Discard = DELETE /transactions/:id. Either way the list refetches and the card goes away, so onGone()
+// moves focus out of it first.
+export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () => void }) {
   const { t } = useTranslation('bot');
   const titleId = useId();
   const dispatch = useAppDispatch();
@@ -80,9 +81,13 @@ export default function DraftCard({ draft }: { draft: Draft }) {
       const { budgetWarning } = await confirmDraft(draft.id).unwrap();
       if (budgetWarning) say(t('drafts.budgetWarning', { percent: budgetWarning.percent }), 'warning');
       else say(t('drafts.confirmed'), 'success');
+      onGone();
     } catch (error) {
-      say(apiErrorMessage(error), 'error'); // e.g. 409 ALREADY_CONFIRMED: it was confirmed in the chat meanwhile
+      say(apiErrorMessage(error), 'error');
       setBusy(false);
+      // 409 ALREADY_CONFIRMED (confirmed in the chat meanwhile) or 404 (deleted): the card leaves the list too.
+      const { status } = error as { status?: unknown };
+      if (status === 404 || status === 409) onGone();
     }
   }
 
@@ -91,6 +96,7 @@ export default function DraftCard({ draft }: { draft: Draft }) {
     try {
       await deleteTransaction(draft.id).unwrap();
       say(t('drafts.discarded'), 'success');
+      onGone();
     } catch (error) {
       say(apiErrorMessage(error), 'error');
     }

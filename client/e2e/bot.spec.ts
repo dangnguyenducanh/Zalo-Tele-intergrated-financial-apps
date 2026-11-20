@@ -44,10 +44,11 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
   await expect(page.getByText('Không có bản nháp nào.', { exact: false })).toBeVisible();
 
   // The code shown on the page, sent from a Telegram chat as "/start CODE" (what the deep link does).
-  await page.getByRole('button', { name: 'Tạo mã liên kết' }).click();
+  await page.getByRole('button', { name: 'Tạo mã liên kết' }).press('Enter'); // keyboard: focus must follow the code
   const linkCard = page.getByRole('region', { name: 'Liên kết Telegram / Zalo' });
   await expect(linkCard.getByRole('img', { name: 'Mã QR mở bot Telegram với mã liên kết' })).toBeVisible();
   const code = (await linkCard.getByText(/^[A-Z2-9]{6}$/).textContent())!;
+  await expect(page.locator(':focus')).toContainText(code);
   await expect(linkCard.getByRole('link', { name: 'Mở Telegram' })).toHaveAttribute('href', new RegExp(`\\?start=${code}$`));
   await linkCard.screenshot({ path: testInfo.outputPath('bot-link-code.png'), animations: 'disabled' });
   const chatId = Math.floor(Math.random() * 1e9);
@@ -66,8 +67,9 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
   await card.getByRole('textbox', { name: 'Số tiền (₫)' }).fill('50k');
   expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'no sideways scroll on a phone').toBe(true);
   await page.screenshot({ path: testInfo.outputPath('bot-inbox-phone.png'), fullPage: true, animations: 'disabled' });
-  await card.getByRole('button', { name: 'Xác nhận' }).click();
+  await card.getByRole('button', { name: 'Xác nhận' }).press('Enter');
   await expect(card).toBeHidden();
+  await expect(page.getByRole('heading', { level: 2, name: /^Bản nháp chờ duyệt/ })).toBeFocused(); // not lost to <body>
   await expect(page.getByText('Đã lưu giao dịch')).toBeVisible();
   expect((await drafts(request, headers)).total).toBe(0);
 

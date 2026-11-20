@@ -152,7 +152,8 @@ test('TC-F9-03 drafts from every source: edit the amount inline, Confirm saves t
   await waitFor(() => expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument());
   expect(writes()).toEqual(['PATCH /transactions/d1', 'POST /transactions/d1/confirm']); // the edit first, then confirm
   expect(sent[0]?.body).toEqual({ type: 'expense', amount: 50000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'phở' });
-  expect(screen.getByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toBeInTheDocument();
+  // The Confirm button left with its card: focus is on the list heading, not lost to <body>.
+  expect(screen.getByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toHaveFocus();
 });
 
 test('TC-F9-03 receipt line items expand; an unchanged draft confirms without a PATCH; Discard asks first', async () => {
@@ -170,6 +171,7 @@ test('TC-F9-03 receipt line items expand; an unchanged draft confirms without a 
   await user.click(within(await card('lương')).getByRole('button', { name: 'Xác nhận' }));
   expect(await screen.findByText('Đã lưu. Bạn đã dùng 85% ngân sách tháng này.')).toBeInTheDocument();
   expect(writes()).toEqual(['POST /transactions/d3/confirm']);
+  expect(screen.getByRole('heading', { level: 2, name: /^Bản nháp chờ duyệt/ })).toHaveFocus();
 
   await user.click(within(receipt).getByRole('button', { name: 'Bỏ' }));
   const dialog = await screen.findByRole('dialog', { name: 'Bỏ bản nháp?' });
@@ -178,6 +180,8 @@ test('TC-F9-03 receipt line items expand; an unchanged draft confirms without a 
   await waitFor(() => expect(screen.queryByRole('form', { name: 'Bách Hoá Xanh' })).not.toBeInTheDocument());
   expect(writes()).toEqual(['POST /transactions/d3/confirm', 'DELETE /transactions/d2']);
   expect(await screen.findByText('Đã bỏ bản nháp')).toBeInTheDocument();
+  // The page is aria-hidden until the dialog's closing animation ends, hence waitFor.
+  await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (1)' })).toHaveFocus());
 });
 
 test('TC-F9-02 a draft already confirmed in the chat: Confirm shows the translated 409 and the draft leaves the list', async () => {
@@ -191,6 +195,7 @@ test('TC-F9-02 a draft already confirmed in the chat: Confirm shows the translat
   expect(await screen.findByText('Giao dịch này đã được xác nhận.')).toBeInTheDocument();
   await waitFor(() => expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument());
   expect(writes()).toEqual(['POST /transactions/d1/confirm']);
+  expect(screen.getByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toHaveFocus();
 });
 
 test('TC-F7-06 link card: the code with a countdown, the Telegram link + QR and the Zalo command; unlink an account', async () => {
@@ -206,6 +211,7 @@ test('TC-F7-06 link card: the code with a countdown, the Telegram link + QR and 
   await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
   const linkCard = screen.getByRole('region', { name: 'Liên kết Telegram / Zalo' });
   expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+  expect(document.activeElement).toHaveTextContent(/^Mã liên kếtABC234Hết hạn sau/); // the code replaced the button and has focus
   expect(within(linkCard).getByRole('timer')).toHaveTextContent(/Hết hạn sau (10:00|9:5\d)/);
   expect(within(linkCard).getByRole('link', { name: 'Mở Telegram' })).toHaveAttribute('href', 'https://t.me/test_bot?start=ABC234');
   expect(within(linkCard).getByRole('img', { name: 'Mã QR mở bot Telegram với mã liên kết' })).toBeInTheDocument();
@@ -215,12 +221,20 @@ test('TC-F7-06 link card: the code with a countdown, the Telegram link + QR and 
   await user.click(within(await screen.findByRole('dialog', { name: 'Huỷ liên kết?' })).getByRole('button', { name: 'Huỷ liên kết' }));
   expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
   expect(writes()).toEqual(['DELETE /chat-links/l1']);
+  await waitFor(() => expect(within(linked).getByRole('heading', { name: 'Tài khoản đã liên kết' })).toHaveFocus());
 });
 
 test('TC-F7-06 link card: an expired code offers a new one; no Telegram link without a bot name; 429 is translated', async () => {
   const user = userEvent.setup();
   codeAnswer = () => HttpResponse.json({ code: 'XYZ789', expiresAt: new Date(Date.now() + 1200).toISOString(), telegramDeepLink: null }, { status: 201 });
+  server.use(http.get('*/api/chat-links', () => fail(500, 'INTERNAL'), { once: true }));
   renderApp('/bot');
+
+  const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+  expect(await within(linked).findByText('Không tải được danh sách tài khoản.')).toBeInTheDocument();
+  await user.click(within(linked).getByRole('button', { name: 'Thử lại' }));
+  expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+  expect(within(linked).queryByText('Không tải được danh sách tài khoản.')).not.toBeInTheDocument();
 
   await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
   expect(await screen.findByText('XYZ789')).toBeInTheDocument();
