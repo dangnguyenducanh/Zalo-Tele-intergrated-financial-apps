@@ -24,9 +24,11 @@ export default function LanguageSwitch() {
     }
   }
 
+  const label = next.toUpperCase();
+  // WCAG 2.5.3 Label in Name: the accessible name starts with the visible text, so "click EN" works by voice.
   return (
-    <Button color="inherit" aria-label={t('language.switch')} onClick={change} sx={{ minWidth: 48 }}>
-      {next.toUpperCase()}
+    <Button color="inherit" aria-label={`${label} – ${t('language.switch')}`} onClick={change} sx={{ minWidth: 48 }}>
+      {label}
     </Button>
   );
 }

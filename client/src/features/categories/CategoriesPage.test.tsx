@@ -94,7 +94,7 @@ test('TC-F3-06 tabs split expense and income; defaults show names in the UI lang
   expect(await screen.findByRole('listitem', { name: 'Lương' })).toBeInTheDocument();
   expect(screen.queryByRole('listitem', { name: 'Ăn uống' })).not.toBeInTheDocument();
 
-  await user.click(screen.getByRole('button', { name: 'Đổi ngôn ngữ sang English' }));
+  await user.click(screen.getByRole('button', { name: /Đổi ngôn ngữ sang English/ }));
   expect(await screen.findByRole('listitem', { name: 'Salary' })).toBeInTheDocument();
 });
 
