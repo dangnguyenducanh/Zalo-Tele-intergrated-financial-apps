@@ -1,0 +1,56 @@
+{
+  "title": "Settings",
+  "profile": {
+    "title": "Profile",
+    "email": "Signed in as {{email}}",
+    "name": "Name",
+    "nameError": "Name must be 1 to 60 characters",
+    "defaultWallet": "Default wallet",
+    "defaultWalletHelp": "The bots and quick add use this wallet when you don't name one",
+    "noWallet": "None",
+    "save": "Save profile",
+    "saved": "Profile saved"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "language": "Language",
+    "languageHelp": "The Telegram and Zalo bots reply in this language too",
+    "theme": "Theme",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "Same as system"
+    },
+    "save": "Save preferences",
+    "saved": "Preferences saved"
+  },
+  "password": {
+    "title": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirm": "Repeat new password",
+    "hint": "8 to 72 characters. Your other devices will be logged out.",
+    "length": "The new password must be 8 to 72 characters",
+    "wrongCurrent": "The current password is wrong",
+    "submit": "Change password",
+    "changed": "Password changed. Your other devices were logged out."
+  },
+  "sessions": {
+    "title": "Logged-in devices",
+    "thisDevice": "This device",
+    "lastUsed": "last used {{date}}",
+    "unknownDevice": "Unknown device",
+    "revoke": "Log out {{device}}",
+    "revokeTitle": "Log out device?",
+    "revokeMessage": "{{device}} will have to log in again.",
+    "revoked": "Logged out {{device}}",
+    "logoutOthers": "Log out other devices",
+    "logoutOthersTitle": "Log out other devices?",
+    "logoutOthersMessage": "Every device except this one will have to log in again.",
+    "loggedOutOthers": "Other devices logged out",
+    "confirm": "Log out",
+    "onlyThisDevice": "Only this device is logged in.",
+    "loadError": "Could not load the device list.",
+    "retry": "Try again"
+  }
+}

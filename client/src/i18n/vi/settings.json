@@ -1,0 +1,56 @@
+{
+  "title": "Cài đặt",
+  "profile": {
+    "title": "Hồ sơ",
+    "email": "Đăng nhập bằng {{email}}",
+    "name": "Họ tên",
+    "nameError": "Họ tên từ 1 đến 60 ký tự",
+    "defaultWallet": "Ví mặc định",
+    "defaultWalletHelp": "Bot và thêm nhanh dùng ví này khi bạn không ghi tên ví",
+    "noWallet": "Không chọn",
+    "save": "Lưu hồ sơ",
+    "saved": "Đã lưu hồ sơ"
+  },
+  "preferences": {
+    "title": "Tuỳ chọn",
+    "language": "Ngôn ngữ",
+    "languageHelp": "Bot Telegram và Zalo cũng trả lời bằng ngôn ngữ này",
+    "theme": "Giao diện",
+    "themes": {
+      "light": "Sáng",
+      "dark": "Tối",
+      "system": "Theo hệ thống"
+    },
+    "save": "Lưu tuỳ chọn",
+    "saved": "Đã lưu tuỳ chọn"
+  },
+  "password": {
+    "title": "Đổi mật khẩu",
+    "currentPassword": "Mật khẩu hiện tại",
+    "newPassword": "Mật khẩu mới",
+    "confirm": "Nhập lại mật khẩu mới",
+    "hint": "8 đến 72 ký tự. Các thiết bị khác sẽ bị đăng xuất.",
+    "length": "Mật khẩu mới cần từ 8 đến 72 ký tự",
+    "wrongCurrent": "Mật khẩu hiện tại không đúng",
+    "submit": "Đổi mật khẩu",
+    "changed": "Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất."
+  },
+  "sessions": {
+    "title": "Thiết bị đang đăng nhập",
+    "thisDevice": "Thiết bị này",
+    "lastUsed": "dùng lần cuối {{date}}",
+    "unknownDevice": "Thiết bị không rõ",
+    "revoke": "Đăng xuất {{device}}",
+    "revokeTitle": "Đăng xuất thiết bị?",
+    "revokeMessage": "{{device}} sẽ phải đăng nhập lại.",
+    "revoked": "Đã đăng xuất {{device}}",
+    "logoutOthers": "Đăng xuất các thiết bị khác",
+    "logoutOthersTitle": "Đăng xuất các thiết bị khác?",
+    "logoutOthersMessage": "Mọi thiết bị trừ thiết bị này sẽ phải đăng nhập lại.",
+    "loggedOutOthers": "Đã đăng xuất các thiết bị khác",
+    "confirm": "Đăng xuất",
+    "onlyThisDevice": "Chỉ có thiết bị này đang đăng nhập.",
+    "loadError": "Không tải được danh sách thiết bị.",
+    "retry": "Thử lại"
+  }
+}

@@ -11,6 +11,7 @@ import { budgetsRoutes } from './features/budgets/routes';
 import { categoriesRoutes } from './features/categories/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
 import { notFoundRoutes } from './features/notFound/routes';
+import { settingsRoutes } from './features/settings/routes';
 import { transactionsRoutes } from './features/transactions/routes';
 import { walletsRoutes } from './features/wallets/routes';
 
@@ -35,6 +36,7 @@ export const routes: RouteObject[] = [
               ...categoriesRoutes, // /categories
               ...budgetsRoutes, // /budgets
               ...botRoutes, // /bot
+              ...settingsRoutes, // /settings
               {
                 element: <AdminRoute />,
                 children: [...adminRoutes], // /admin/users, /admin/categories
