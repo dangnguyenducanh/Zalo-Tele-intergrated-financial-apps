@@ -1,0 +1,45 @@
+{
+  "title": "Ví",
+  "add": "Thêm ví",
+  "save": "Lưu",
+  "saved": "Đã lưu ví",
+  "deleted": "Đã xoá ví",
+  "retry": "Thử lại",
+  "loadError": "Không tải được danh sách ví.",
+  "empty": "Bạn chưa có ví nào",
+  "archived": "Đã lưu trữ",
+  "archivedTitle": "Ví đã lưu trữ",
+  "types": {
+    "cash": "Tiền mặt",
+    "bank": "Ngân hàng",
+    "ewallet": "Ví điện tử",
+    "credit": "Thẻ tín dụng"
+  },
+  "actions": {
+    "edit": "Sửa ví {{name}}",
+    "archive": "Lưu trữ ví {{name}}",
+    "unarchive": "Bỏ lưu trữ ví {{name}}",
+    "delete": "Xoá ví {{name}}"
+  },
+  "dialog": {
+    "addTitle": "Thêm ví",
+    "editTitle": "Sửa ví"
+  },
+  "fields": {
+    "name": "Tên ví",
+    "type": "Loại ví",
+    "initialBalance": "Số dư ban đầu (₫)",
+    "initialBalanceHelp": "Số tiền trong ví lúc bắt đầu ghi chép. Thẻ tín dụng có thể âm.",
+    "aliases": "Tên gọi tắt cho bot",
+    "aliasesHelp": "Ví dụ: mm, momo. Nhấn Enter để thêm; dấu phẩy tách nhiều từ."
+  },
+  "validation": {
+    "name": "Tên ví từ 1 đến 40 ký tự",
+    "initialBalance": "Nhập số tiền nguyên, ví dụ 200000"
+  },
+  "deleteConfirm": {
+    "title": "Xoá ví?",
+    "message": "Ví \"{{name}}\" sẽ bị xoá. Ví đang có giao dịch thì không xoá được, khi đó hãy lưu trữ ví.",
+    "confirm": "Xoá"
+  }
+}

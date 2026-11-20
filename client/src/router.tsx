@@ -5,7 +5,9 @@ import AppLayout from './components/AppLayout';
 import RouteError from './components/RouteError';
 import Splash from './components/Splash';
 import { authRoutes } from './features/auth/routes';
+import { categoriesRoutes } from './features/categories/routes';
 import { notFoundRoutes } from './features/notFound/routes';
+import { walletsRoutes } from './features/wallets/routes';
 
 // Route table (docs/05 §5.2). Each feature exports its routes from features/<x>/routes.tsx and adds
 // ONE line here (docs/08 §8.5). Pages use the route `lazy` option, so each page's code is downloaded
@@ -24,6 +26,8 @@ export const routes: RouteObject[] = [
             children: [
               // T10 replaces this line with ...dashboardRoutes
               { index: true, lazy: async () => ({ Component: (await import('./components/HomePlaceholder')).default }) },
+              ...walletsRoutes, // /wallets
+              ...categoriesRoutes, // /categories
               {
                 element: <AdminRoute />,
                 children: [], // T15: ...adminRoutes (/admin/users, /admin/categories)
