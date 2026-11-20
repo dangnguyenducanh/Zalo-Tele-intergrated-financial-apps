@@ -15,7 +15,7 @@ The specification lives in `docs/01-architecture.md` … `docs/07-testing.md`. T
 ## Scope — hard rules
 
 1. Work **only inside `$WT`**. Run every command with absolute paths or as `cd "$WT" && …`. Never touch the main checkout or another agent's worktree.
-2. Change **only the paths listed under "Scope" in the task card**, plus the test files for them and `docs/testing/test-cases.json` when you add test cases. If the task needs a file outside its scope, such as a shared file another task owns, stop and output `CODER: BLOCKED needs <path> because <reason>`.
+2. Change **only the paths listed under "Scope" in the task card**, plus the test files for them and `docs/testing/test-cases.json` when you add test cases. If the task needs a file outside its scope, such as a shared file another task owns, stop and output `CODER: BLOCKED needs <path> because <reason>`. Exception: the one-line registrations in the shared hotspots of docs/08 §8.5 (router, nav entry, i18n namespace, `server/src/routes/index.js`) are always in scope for your feature.
 3. Never edit `server/.env`, CI config, `vercel.json` or `treehouse.toml` unless the task card says so. Never add a dependency without listing it, with its reason, in the PR body.
 4. Never weaken a test to make it pass. If a spec looks wrong, say so in the PR body and keep the test truthful.
 5. Never `git push` anything except your own `feat/<slug>` branch. Never force-push after review starts, merge, rebase onto main, or close issues. Merging is the merger agent's job.

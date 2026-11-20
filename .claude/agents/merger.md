@@ -16,24 +16,32 @@ You are the **merger agent**. The orchestrator gives you `PR` (the number) and `
 ## Procedure
 
 1. **Gate check.** Every item must be true, or stop with the reason:
-   - `gh pr view $PR --json state,isDraft,mergeStateStatus,headRefOid,labels,statusCheckRollup`
+   - `gh pr view $PR --json state,isDraft,mergeStateStatus,labels,statusCheckRollup`, and the head SHA with `SHA=$(gh api repos/{owner}/{repo}/pulls/$PR --jq .head.sha)` (gh 2.4 has no `headRefOid`)
    - `state=OPEN`, not draft, has the label `review:approved`
-   - a commit status `agent-review` = **success** on `headRefOid` (`gh api repos/{owner}/{repo}/commits/<sha>/status`)
-   - the `ci` check = **success** on the same SHA. If it is still running, wait with `timeout 900 gh pr checks $PR --watch`.
+   - a commit status `agent-review` = **success** on `$SHA` (`gh api repos/{owner}/{repo}/commits/<sha>/status`)
+   - the `ci` check = **success** on the same SHA. The installed `gh` is 2.4 and has no `checks --watch`. If CI is still running:
+     - `RUN=$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$SHA" --jq '.workflow_runs[0].id')`
+     - `timeout 900 gh run watch "$RUN" --exit-status`
+     - read the result with `gh api "repos/{owner}/{repo}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.name=="ci") | .conclusion'`
    - `mergeStateStatus` = `CLEAN`. If it is `BEHIND` or `DIRTY`: `gh pr edit $PR --add-label needs-update`, comment "please merge main and re-run gates", output `MERGE: NEEDS_UPDATE PR=<n>`, and stop.
    - `USER_APPROVED=true`. Otherwise output `MERGE: WAITING_FOR_USER PR=<n>` with a 3-line summary of the PR, so the student can read and approve it.
-2. **Merge:** `gh pr merge $PR --squash --delete-branch`. Record the merge SHA: `gh pr view $PR --json mergeCommit -q .mergeCommit.oid`. The PR's `Closes #N` closes the task card.
+2. **Merge:** `gh pr merge $PR --squash --delete-branch`. Record the merge SHA: `gh pr view $PR --json mergeCommit -q .mergeCommit.oid`. If gh can't delete the local branch because the coder's worktree has it checked out, it also skips the remote delete; then run `gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/<branch>`. The PR's `Closes #N` closes the task card.
 3. **Post-merge verification on main:**
    - Lease a worktree: `WT=$(treehouse get --lease --lease-holder "merger-pr$PR" --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["path"])')`. It is cut from the latest `main`.
    - `cd "$WT" && eval "$(tools/wt-env.sh)" && npm ci && npm run typecheck && npm test && npm run build`. Keep `test-results/*.xml`.
    - Deploy with the CLI (the repo is not Git-connected to Vercel), staging first:
      - `S=$(tools/deploy.sh staging)`, then `curl -fsS "$S/api/health"` and `curl -fsS https://sochitieu-btl-staging.vercel.app/api/health`. Both must return `"db":"up"`, along with an SPA deep link such as `/budgets` returning HTTP 200.
      - Only if staging is healthy: `P=$(tools/deploy.sh production)` and the same smoke on `https://sochitieu-btl.vercel.app`.
-4. **If any post-merge step fails**, revert right away:
+   - **Missing-secret exception (decided 2026-11-20).** If the code gates pass but the deploy or smoke fails **only** because of student-provided secrets, do not revert:
+     - Causes that count: Atlas "bad auth" with a `PASTE_` placeholder in `MONGODB_URI`, or missing bot tokens or `KIE_URL`.
+     - The local post-merge typecheck, test and build must still all pass.
+     - Report `postmerge=PASS deploy=PENDING_SECRETS`, and don't try production. The orchestrator re-deploys once the secrets are in.
+     - Don't pre-empt this by refusing to merge.
+4. **If any other post-merge step fails**, revert right away:
    - `git -C "$WT" switch -c revert/pr-$PR && git -C "$WT" revert --no-edit <merge-sha> && git -C "$WT" push -u origin revert/pr-$PR`
    - `gh pr create --base main --title "revert: #$PR (post-merge failure)" --label revert` with the failing output in the body.
    - Tell the orchestrator to log a bug (S1/S2) in `docs/testing/bugs.json`, with "Found by" = the failing case ID.
    - Output `MERGE: REVERT_OPENED PR=<n> revert=<url>`.
 5. **Report:** `node tools/test-report/build-report.mjs --junit "$WT"/test-results/*.xml --env production` from the main checkout. This updates the local Excel/run history; committing it is the orchestrator's chore PR.
-6. **Clean up:** `cd / && treehouse return "$WT"`. Tell the orchestrator the coder's worktree for this PR can now be returned.
+6. **Clean up:** `cd / && treehouse return "$WT"`. Then return the coder's worktree too, so the pool doesn't run dry: check that `git -C <coderWT> status --porcelain` and `git -C <coderWT> log @{u}..HEAD` are both empty, then `treehouse return <coderWT>`. Never `--force`; if it is dirty, report it.
 7. **Output** exactly one final line: `MERGE: MERGED PR=<n> sha=<sha> postmerge=PASS`, or one of the stop lines above.

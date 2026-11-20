@@ -19,7 +19,7 @@ skip='^(VERCEL_|SEED_|TEST_USER_|PROD_URL|STAGING_URL|APP_URL|MONGODB_DB|PORT|VI
 
 push() { # key value
   [ -n "$2" ] || { echo "  skip $1 (empty)"; return; }
-  case "$2" in PASTE_*) echo "  skip $1 (not filled in yet)"; return ;; esac
+  case "$2" in *PASTE_*) echo "  skip $1 (not filled in yet)"; return ;; esac
   npx -y vercel@latest env rm "$1" production --yes >/dev/null 2>&1 || true
   printf '%s' "$2" | npx -y vercel@latest env add "$1" production >/dev/null 2>&1
   echo "  set  $1"

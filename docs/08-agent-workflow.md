@@ -95,6 +95,8 @@ sequenceDiagram
 | `package.json` dependencies | Added only by T01, unless a card lists the dependency |
 | `docs/testing/test-cases.json` | Append-only; new IDs use the card's feature prefix |
 
+These one-line registrations count as in scope for every card, so a coder never stops with `BLOCKED` for them (orchestrator decision, 2026-11-20). When merging `main`, a conflict on these lines is resolved by keeping both sides.
+
 ## 8.6 PR template (filled in by the coder)
 
 ```markdown
