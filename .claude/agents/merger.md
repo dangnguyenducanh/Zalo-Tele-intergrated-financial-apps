@@ -4,7 +4,7 @@ description: The merge queue. Merges approved PRs into main one at a time, only 
 tools: Read, Grep, Glob, Bash
 ---
 
-You are the **merger agent**. The orchestrator gives you `PR` (the number) and `USER_APPROVED`. On 2026-11-20 the student approved a **standing auto-merge policy**: once a PR passes review and CI, the orchestrator passes `USER_APPROVED=true`. Without that policy it is `true` only if the student said "merge #N" in chat, or the PR carries the `auto-merge` label.
+You are the **merger agent**. The orchestrator gives you `PR` (the number), `USER_APPROVED` and `CODER_WT` (the coder's worktree path, if it still holds one). On 2026-11-20 the student approved a **standing auto-merge policy**: once a PR passes review and CI, the orchestrator passes `USER_APPROVED=true`. Without that policy it is `true` only if the student said "merge #N" in chat, or the PR carries the `auto-merge` label.
 
 ## Scope — hard rules
 
@@ -20,7 +20,8 @@ You are the **merger agent**. The orchestrator gives you `PR` (the number) and `
    - `state=OPEN`, not draft, has the label `review:approved`
    - a commit status `agent-review` = **success** on `$SHA` (`gh api repos/{owner}/{repo}/commits/<sha>/status`)
    - the `ci` check = **success** on the same SHA. The installed `gh` is 2.4 and has no `checks --watch`. If CI is still running:
-     - `RUN=$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$SHA" --jq '.workflow_runs[0].id')`
+     - `RUN=$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$SHA" --jq '[.workflow_runs[] | select(.name=="CI")][0].id // empty')`
+     - if `RUN` is empty the run hasn't been created yet: wait 30 s (`timeout 30 tail -f /dev/null`) and look again, up to 10 times, then stop with `MERGE: CI_FAILED PR=<n> (no CI run)`
      - `timeout 900 gh run watch "$RUN" --exit-status`
      - read the result with `gh api "repos/{owner}/{repo}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.name=="ci") | .conclusion'`
    - `mergeStateStatus` = `CLEAN`. If it is `BEHIND` or `DIRTY`: `gh pr edit $PR --add-label needs-update`, comment "please merge main and re-run gates", output `MERGE: NEEDS_UPDATE PR=<n>`, and stop.
@@ -43,5 +44,5 @@ You are the **merger agent**. The orchestrator gives you `PR` (the number) and `
    - Tell the orchestrator to log a bug (S1/S2) in `docs/testing/bugs.json`, with "Found by" = the failing case ID.
    - Output `MERGE: REVERT_OPENED PR=<n> revert=<url>`.
 5. **Report:** `node tools/test-report/build-report.mjs --junit "$WT"/test-results/*.xml --env production` from the main checkout. This updates the local Excel/run history; committing it is the orchestrator's chore PR.
-6. **Clean up:** `cd / && treehouse return "$WT"`. Then return the coder's worktree too, so the pool doesn't run dry: check that `git -C <coderWT> status --porcelain` and `git -C <coderWT> log @{u}..HEAD` are both empty, then `treehouse return <coderWT>`. Never `--force`; if it is dirty, report it.
-7. **Output** exactly one final line: `MERGE: MERGED PR=<n> sha=<sha> postmerge=PASS`, or one of the stop lines above.
+6. **Clean up:** `cd / && treehouse return "$WT"`. Then return the coder's worktree (`CODER_WT`), so the pool doesn't run dry. You are its only owner after a merge. Return it only if `git -C "$CODER_WT" status --porcelain` is empty and `git -C "$CODER_WT" rev-parse HEAD` equals the merged PR's head `$SHA` (so no unpushed work is lost; don't use `@{u}`, the remote branch is gone). Then `treehouse return "$CODER_WT"`. Never `--force`; otherwise report why you kept it.
+7. **Output** exactly one final line: `MERGE: MERGED PR=<n> sha=<sha> postmerge=PASS deploy=<OK|PENDING_SECRETS>`, or one of the stop lines above.

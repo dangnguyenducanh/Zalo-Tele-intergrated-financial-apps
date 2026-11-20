@@ -6,7 +6,7 @@ Several Claude agents build the app in parallel. Each works in its **own git wor
 
 | Agent | Who | Does | Never does | Definition |
 |---|---|---|---|---|
-| **Orchestrator** | the main Claude session, with you | Turns the plan into task cards (issues), leases worktrees, spawns agents, routes results, asks you to approve merges, runs recorded manual charters, logs bugs, returns worktrees | Write feature code itself | this document |
+| **Orchestrator** | the main Claude session, with you | Turns the plan into task cards (issues), leases worktrees, spawns agents, routes results, asks you to approve merges, runs recorded manual charters, logs bugs, returns the worktrees of abandoned tasks (the merger returns the coder's worktree after a merge) | Write feature code itself | this document |
 | **Coder** (up to 3 at once) | `coder` subagent | Implements ONE task card in its leased worktree: tests first, local gates, opens a PR to `main`, addresses review | Edit outside the card's scope, push anything but its own branch, merge, weaken tests | [`.claude/agents/coder.md`](../.claude/agents/coder.md) |
 | **Reviewer** | `reviewer` subagent | Leases its **own fresh worktree**, checks out the PR, re-runs every gate, reviews against spec + security + modern-web-guidance, posts the verdict and the `agent-review` status | Edit code, commit, push, merge | [`.claude/agents/reviewer.md`](../.claude/agents/reviewer.md) |
 | **Merger** (1, serial) | `merger` subagent | Merge queue: checks CI + `agent-review` + your approval, squash-merges, verifies `main` in a fresh worktree and on Vercel, opens a revert PR if `main` broke | Merge more than one PR at a time, resolve conflicts, push to `main` | [`.claude/agents/merger.md`](../.claude/agents/merger.md) |
@@ -17,7 +17,7 @@ Why the reviewer gets a separate worktree: it rebuilds from the pushed branch wi
 ## 8.2 Worktrees with treehouse
 
 One-time config (committed):
-- `treehouse.toml` sets `base_branch = "main"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 6`.
+- `treehouse.toml` sets `base_branch = "main"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 9` (3 coders, up to 3 reviewers, 1 merger, 2 spare).
 - `.worktreeinclude` lists `server/.env`, so each worktree gets the secrets copied in. They stay git-ignored.
 
 | Who | Command (run from the main checkout) | Lease holder | Released |
@@ -60,7 +60,7 @@ sequenceDiagram
     alt post-merge failure
         M->>G: revert PR + bug logged
     end
-    O->>O: treehouse return A
+    M->>M: treehouse return C and A (coder's worktree)
 ```
 
 **Labels** (created once): `status:ready`, `status:in-progress`, `status:in-review`, `status:changes-requested`, `review:approved`, `review:changes-requested`, `needs-update`, `auto-merge`, `revert`, `bug`.
@@ -78,8 +78,9 @@ sequenceDiagram
 4. **On `REVIEW: REQUEST_CHANGES`:** re-spawn the same coder with `MODE=address-review`, in the same worktree. **On `REVIEW: APPROVE`:** ask you to merge, quoting the PR's "How it works" and test results.
 5. **On your "merge #N":** spawn `merger` with `USER_APPROVED=true`. Handle the result:
    - `NEEDS_UPDATE` → coder `address-review` (merge `main` in), then review again.
-   - `MERGED` → `treehouse return` the coder's worktree and dispatch the next unblocked task.
+   - `MERGED` → the merger has already returned the coder's worktree (check `treehouse status`); dispatch the next unblocked task. With `deploy=PENDING_SECRETS` the code is on `main` but the deploy waits for the student's secrets: once they are in, run `tools/deploy.sh staging`, smoke it, then `tools/deploy.sh production`.
    - `REVERT_OPENED` → log the bug and send the task back to its coder.
+   - A task that is abandoned or closed without merging → the orchestrator returns its coder's worktree. Each worktree has exactly one owner that returns it, so a slot is never released after it has been leased again.
 6. **After each wave:** run the manual charters from [07-testing.md §7.4](07-testing.md) that the wave unlocked, recorded in your Chrome. Log any bugs in `docs/testing/bugs.json` and regenerate the Excel report. Report changes reach `main` through a small `chore(report)` PR (label `auto-merge` allowed, docs-only).
 7. **Never** leave a lease without an owner: `treehouse status` should match the open PRs.
 
@@ -91,11 +92,12 @@ sequenceDiagram
 | RTK Query | `app/api.ts` holds only the base API. Each feature adds endpoints in its own file with `api.injectEndpoints` |
 | i18n | One JSON file per feature and language: `client/src/i18n/{vi,en}/<feature>.json` |
 | Router | Feature routes live in `features/<x>/routes.tsx`; `router.tsx` imports them, one line per feature |
+| Navigation | `client/src/components/navItems.tsx` lists the pages; a feature card adds or edits only its own entry |
 | Mongoose models | One file per model; only the owning task edits it, and changes to another task's model go through that task's card |
 | `package.json` dependencies | Added only by T01, unless a card lists the dependency |
 | `docs/testing/test-cases.json` | Append-only; new IDs use the card's feature prefix |
 
-These one-line registrations count as in scope for every card, so a coder never stops with `BLOCKED` for them (orchestrator decision, 2026-11-20). When merging `main`, a conflict on these lines is resolved by keeping both sides.
+These one-line registrations (routes index, i18n namespace, router, navigation entry, test-case append) count as in scope for every card, so a coder never stops with `BLOCKED` for them (orchestrator decision, 2026-11-20). When merging `main`, a conflict on these lines is resolved by keeping both sides.
 
 ## 8.6 PR template (filled in by the coder)
 
@@ -160,7 +162,7 @@ Waves that follow from the dependencies: **W0** T01 → **W1** T02, T03, T04 →
 ## 8.9 One-time setup checklist
 
 - [ ] First commit on `main` and push. Treehouse needs a default branch to cut worktrees from.
-- [ ] Create the labels in §8.3: `gh label create …`.
+- [ ] Create the labels in §8.3. gh 2.4 has no `gh label`, so use the API: `gh api repos/{owner}/{repo}/labels -f name=<label> -f color=<hex>`.
 - [ ] Branch protection on `main` with required checks `ci` + `agent-review`. Do this after T01 merges, so the `ci` check exists.
 - [ ] Vercel project connected to the repo (production = `main`, previews for PRs).
 - [ ] Turn the task cards in §8.7 into issues (`gh issue create`, label `status:ready` for T01).

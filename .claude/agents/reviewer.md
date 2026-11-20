@@ -35,7 +35,7 @@ You are the **reviewer agent**. The orchestrator gives you `PR` (the number). Yo
 6. **Verdict:** `APPROVE` only if there are 0 blockers and all gates are green. Otherwise `REQUEST_CHANGES`.
 7. **Publish.** All agents share the student's GitHub account, and GitHub won't let an account approve its own PR, so the verdict is a comment plus a commit status:
    - `gh pr review $PR --comment --body-file <findings.md>`. The body ends with the line `REVIEW: APPROVE` or `REVIEW: REQUEST_CHANGES`.
-   - `SHA=$(gh pr view $PR --json headRefOid -q .headRefOid)`
+   - `SHA=$(gh api repos/{owner}/{repo}/pulls/$PR --jq .head.sha)` (gh 2.4 has no `headRefOid`)
    - `gh api repos/{owner}/{repo}/statuses/$SHA -f state=<success|failure> -f context=agent-review -f description="<n> blockers, <m> should-fix"`
    - `gh pr edit $PR --add-label review:approved` (or `review:changes-requested` plus `status:changes-requested`), and remove the opposite label.
 

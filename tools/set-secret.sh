@@ -1,37 +1,67 @@
 #!/usr/bin/env bash
-# Paste secrets without them ever being shown or logged.
-# Usage: tools/set-secret.sh KEY [KEY...]   e.g. tools/set-secret.sh TELEGRAM_BOT_TOKEN ZALO_BOT_TOKEN
-# For each KEY: hidden prompt → written to server/.env → pushed to both Vercel projects (staging + production).
+# Paste secrets without them ever being shown, logged or put on a command line.
+# Usage: tools/set-secret.sh KEY [KEY...]
+#   e.g. tools/set-secret.sh MONGODB_PASSWORD TELEGRAM_BOT_TOKEN ZALO_BOT_TOKEN
+# For each KEY: hidden prompt → saved in server/.env. Then the changed keys are pushed to both
+# Vercel projects through tools/vercel-env-push.sh, which owns the local-only list and the mappings.
+# MONGODB_PASSWORD is special: it is percent-encoded and put into MONGODB_URI.
+# Secret values only travel through the environment and stdin (never argv), and are never printed.
 set -euo pipefail
+[ $# -gt 0 ] || { echo "usage: tools/set-secret.sh KEY [KEY...]  (e.g. MONGODB_PASSWORD TELEGRAM_BOT_TOKEN ZALO_BOT_TOKEN)" >&2; exit 2; }
 root="$(git rev-parse --show-toplevel)"
 env_file="$root/server/.env"
-get() { grep -E "^$1=" "$env_file" | head -1 | cut -d= -f2-; }
+[ -f "$env_file" ] || { echo "server/.env not found" >&2; exit 1; }
+get() { grep -E "^$1=" "$env_file" | head -1 | cut -d= -f2- || true; }
 
+tmp=""
+trap '[ -z "$tmp" ] || rm -f "$tmp"' EXIT
+
+# Replace every KEY= line (or append one). Key and value reach awk through ENVIRON, not -v,
+# so they are not visible in `ps` and awk does not turn backslashes into escapes.
+set_key() { # key value
+  tmp="$(mktemp "$env_file.XXXXXX")" # server/.env.* is git-ignored; mktemp creates it with mode 600
+  K="$1" V="$2" awk 'BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"] }
+    index($0, k "=") == 1 { if (!done) print k "=" v; done = 1; next }
+    { print }
+    END { if (!done) print k "=" v }' "$env_file" > "$tmp"
+  cat "$tmp" > "$env_file" # keeps server/.env's own mode (600)
+  rm -f "$tmp"; tmp=""
+}
+
+changed=()
 for key in "$@"; do
+  [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || { echo "  bad key name: $key" >&2; exit 2; }
   printf '\nPaste %s (hidden, then Enter; empty = skip): ' "$key"
   IFS= read -rs value; echo
-  value="$(printf '%s' "$value" | tr -d '[:space:]')"
+  value="${value//$'\r'/}"
+  value="${value#"${value%%[![:space:]]*}"}" # trim leading whitespace
+  value="${value%"${value##*[![:space:]]}"}" # trim trailing whitespace
   if [ -z "$value" ]; then echo "  skipped $key"; continue; fi
+
   if [ "$key" = "MONGODB_PASSWORD" ]; then
-    # Put the (percent-encoded) password into MONGODB_URI instead of storing it separately.
-    enc="$(MONGO_PW="$value" python3 -I -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["MONGO_PW"],safe=""))')"
     uri="$(get MONGODB_URI)"
-    new_uri="$(URI="$uri" PW="$enc" python3 -I -c 'import os,re;print(re.sub(r"^(mongodb\+srv://[^:]+:)[^@]*(@)",lambda m:m.group(1)+os.environ["PW"]+m.group(2),os.environ["URI"],count=1))')"
-    key=MONGODB_URI; value="$new_uri"
+    [ -n "$uri" ] || { echo "  MONGODB_URI is missing from server/.env" >&2; exit 1; }
+    value="$(URI="$uri" PW="$value" python3 -I -c '
+import os, re, sys, urllib.parse
+pw = urllib.parse.quote(os.environ["PW"], safe="")
+uri, n = re.subn(r"^(mongodb(?:\+srv)?://[^:/@]+:)[^@]*(@)", lambda m: m.group(1) + pw + m.group(2), os.environ["URI"], count=1)
+sys.exit(3) if n != 1 else print(uri)')" || { echo "  MONGODB_URI is not mongodb+srv://<user>:<password>@<host>/...; nothing changed" >&2; exit 1; }
+    key=MONGODB_URI
   fi
-  tmp="$(mktemp)"; chmod 600 "$tmp"
-  if grep -qE "^$key=" "$env_file"; then
-    awk -v k="$key" -v v="$value" 'BEGIN{FS=OFS="="} $1==k {print k "=" v; next} {print}' "$env_file" > "$tmp"
-  else
-    cat "$env_file" > "$tmp"; printf '%s=%s\n' "$key" "$value" >> "$tmp"
-  fi
-  cat "$tmp" > "$env_file"; rm -f "$tmp"
+
+  set_key "$key" "$value"
   echo "  saved $key to server/.env (${#value} chars)"
-  for target in STAGING PROD; do
-    VERCEL_ORG_ID="$(get VERCEL_ORG_ID)" VERCEL_PROJECT_ID="$(get "VERCEL_PROJECT_ID_$target")" \
-      npx -y vercel@latest env rm "$key" production --yes >/dev/null 2>&1 || true
-    printf '%s' "$value" | VERCEL_ORG_ID="$(get VERCEL_ORG_ID)" VERCEL_PROJECT_ID="$(get "VERCEL_PROJECT_ID_$target")" \
-      npx -y vercel@latest env add "$key" production >/dev/null 2>&1 && echo "  pushed $key to Vercel ($target)"
-  done
+  changed+=("$key")
 done
-echo; echo "Done. You can close this tab."
+
+[ ${#changed[@]} -gt 0 ] || { echo; echo "Nothing changed."; exit 0; }
+failed=0
+for target in staging production; do
+  "$root/tools/vercel-env-push.sh" "$target" "${changed[@]}" || failed=1
+done
+echo
+if [ "$failed" -ne 0 ]; then
+  echo "Saved in server/.env, but some Vercel pushes FAILED. Retry: tools/vercel-env-push.sh staging|production ${changed[*]}" >&2
+  exit 1
+fi
+echo "Done. Redeploy (tools/deploy.sh staging|production) for the new values to take effect. You can close this tab."
