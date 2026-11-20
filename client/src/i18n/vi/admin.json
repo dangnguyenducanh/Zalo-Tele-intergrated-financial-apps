@@ -1,0 +1,77 @@
+{
+  "users": {
+    "title": "Quản trị người dùng",
+    "search": "Tìm theo tên hoặc email",
+    "role": "Vai trò",
+    "status": "Trạng thái",
+    "all": "Tất cả",
+    "roles": { "user": "Người dùng", "admin": "Quản trị viên" },
+    "statuses": { "active": "Đang hoạt động", "locked": "Đã khoá" },
+    "apply": "Tìm",
+    "caption": "Số người dùng tìm thấy: {{count}}",
+    "user": "Người dùng",
+    "actions": "Thao tác",
+    "you": "bạn",
+    "empty": "Không có người dùng nào khớp với bộ lọc.",
+    "lock": "Khoá",
+    "unlock": "Mở khoá",
+    "makeAdmin": "Cấp quyền quản trị",
+    "removeAdmin": "Bỏ quyền quản trị",
+    "confirm": {
+      "lock": { "title": "Khoá tài khoản này?", "message": "{{name}} ({{email}}) sẽ bị đăng xuất trên mọi thiết bị và không đăng nhập được cho tới khi được mở khoá." },
+      "unlock": { "title": "Mở khoá tài khoản này?", "message": "{{name}} ({{email}}) sẽ đăng nhập lại được." },
+      "makeAdmin": { "title": "Cấp quyền quản trị cho người này?", "message": "{{name}} ({{email}}) sẽ quản lý được người dùng và danh mục mặc định. Thay đổi có hiệu lực trong vòng 15 phút." },
+      "removeAdmin": { "title": "Bỏ quyền quản trị?", "message": "{{name}} ({{email}}) trở thành người dùng thường. Thay đổi có hiệu lực trong vòng 15 phút." }
+    },
+    "done": {
+      "lock": "Đã khoá {{name}} và đăng xuất trên mọi thiết bị.",
+      "unlock": "{{name}} đã đăng nhập lại được.",
+      "makeAdmin": "{{name}} đã là quản trị viên.",
+      "removeAdmin": "{{name}} đã là người dùng thường."
+    },
+    "pagination": {
+      "page": "Trang {{page}}",
+      "first": "Trang đầu",
+      "last": "Trang cuối",
+      "next": "Trang sau",
+      "previous": "Trang trước"
+    }
+  },
+  "stats": {
+    "users": "Người dùng",
+    "activeUsers7d": "Hoạt động trong 7 ngày",
+    "chatLinks": "Chat đã liên kết",
+    "chatLinksDetail": "Telegram {{telegram}} · Zalo {{zalo}}",
+    "transactions": "Giao dịch",
+    "transactionsDetail": "Web {{web}} · Telegram {{telegram}} · Zalo {{zalo}} · Hoá đơn {{receipt}}"
+  },
+  "categories": {
+    "title": "Danh mục mặc định",
+    "intro": "Mỗi tài khoản mới nhận một bản sao các danh mục này. Sửa ở đây không thay đổi danh mục của người dùng hiện có.",
+    "typeTabs": "Loại danh mục",
+    "types": { "expense": "Chi", "income": "Thu" },
+    "add": "Thêm danh mục",
+    "caption": "Số danh mục mặc định: {{count}}",
+    "nameVi": "Tên tiếng Việt",
+    "nameEn": "Tên tiếng Anh",
+    "keywords": "Từ khoá cho bot",
+    "keywordsHelp": "Cách nhau bằng dấu phẩy, tối đa 50 từ khoá, mỗi từ khoá tối đa 40 ký tự, ví dụ: pho, bun bo, cafe",
+    "keywordsTooLong": "Tối đa 50 từ khoá, mỗi từ khoá tối đa 40 ký tự.",
+    "icon": "Biểu tượng",
+    "iconHelp": "Tên biểu tượng Material, ví dụ: Restaurant",
+    "color": "Màu",
+    "actions": "Thao tác",
+    "fallback": "Mục dự phòng",
+    "edit": "Sửa",
+    "delete": "Xoá",
+    "save": "Lưu",
+    "saved": "Đã lưu danh mục mặc định.",
+    "deleted": "Đã xoá {{name}}. Người dùng đã có danh mục này vẫn giữ bản sao của họ.",
+    "editTitle": "Sửa danh mục mặc định",
+    "addTitle": { "expense": "Danh mục chi mới", "income": "Danh mục thu mới" },
+    "confirmDelete": {
+      "title": "Xoá danh mục mặc định này?",
+      "message": "Người dùng mới sẽ không nhận \"{{name}}\" nữa. Người dùng đã có danh mục này vẫn giữ bản sao của họ."
+    }
+  }
+}
