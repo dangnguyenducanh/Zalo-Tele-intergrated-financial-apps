@@ -6,6 +6,7 @@ import sessions from './sessions.js';
 import users from './users.js';
 import wallets from './wallets.js';
 import categories from './categories.js';
+import transactions from './transactions.js';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/sessions', sessions);
 router.use('/users', users);
 router.use('/wallets', wallets);
 router.use('/categories', categories);
+router.use('/transactions', transactions);
 
 export default router;
