@@ -138,8 +138,8 @@ This creates the default category templates and the first admin from `SEED_ADMIN
 ## 6.8 Local development
 
 - `server/.env` (git-ignored) holds the same variables, pointing to the same Atlas cluster with a separate database name, e.g. `finance_dev`.
-- `npm run dev` starts the API on `:3000` and Vite on `:5173` with an `/api` proxy, so everything is same-origin like production.
-- Bots locally: create separate **dev bots** (one Telegram, one Zalo), run `cloudflared tunnel --url http://localhost:3000`, and point the dev bots' webhooks at that URL. The production bots stay attached to Vercel.
+- `npm run dev` starts the API on `:4100` and Vite on `:5300` with an `/api` proxy, so everything is same-origin like production. (3000/5173 are taken on the dev server; in a treehouse worktree, `eval "$(tools/wt-env.sh)"` gives slot *n* ports `4100+10n` / `5300+10n`.)
+- Bots locally: create separate **dev bots** (one Telegram, one Zalo), run `cloudflared tunnel --url http://localhost:4100`, and point the dev bots' webhooks at that URL. The production bots stay attached to Vercel.
 
 ## 6.9 Demo-day checklist
 
