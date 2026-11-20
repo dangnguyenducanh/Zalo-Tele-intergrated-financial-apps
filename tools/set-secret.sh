@@ -62,6 +62,8 @@ for key in "$@"; do
       # so such a value would differ between the local server and Vercel.
       *'#'* | \'* | \"* | \`*) echo "  rejected: a value with '#' or a leading quote can't be stored in server/.env; use another value" >&2; continue ;;
     esac
+    # Same pattern tools/vercel-env-push.sh skips as an unfilled .env.example placeholder.
+    if [[ "$value" =~ \<[[:lower:][:digit:]_\ -]+\> ]]; then echo "  rejected: that looks like a <placeholder> from .env.example; paste the real value" >&2; continue; fi
     break
   done
   if [ "$value" = "-" ]; then echo "  skipped $key"; continue; fi

@@ -32,10 +32,13 @@ all=1; only=" $* "
 [ $# -eq 0 ] || all=0
 wanted() { [ "$all" = 1 ] || [[ "$only" == *" $1 "* ]]; }
 
+# .env.example placeholders look like <db_user> or <openssl rand -hex 24>; tools/set-secret.sh refuses values like that.
+placeholder='<[[:lower:][:digit:]_ -]+>'
 failed=0; pushed=0
 push() { # key value
   [ -n "$2" ] || { echo "  skip $1 (empty)"; return; }
-  case "$2" in *PASTE_* | *'<'*'>'*) echo "  skip $1 (not filled in yet)"; return ;; esac
+  case "$2" in *PASTE_*) echo "  skip $1 (not filled in yet)"; return ;; esac
+  [[ ! "$2" =~ $placeholder ]] || { echo "  skip $1 (still a <placeholder> from .env.example)"; return; }
   npx -y vercel@latest env rm "$1" production --yes </dev/null >/dev/null 2>&1 || true
   if printf '%s' "$2" | npx -y vercel@latest env add "$1" production >/dev/null 2>&1; then
     echo "  set  $1"; pushed=$((pushed + 1))
