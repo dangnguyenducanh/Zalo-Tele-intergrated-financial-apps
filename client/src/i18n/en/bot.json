@@ -1,0 +1,57 @@
+{
+  "title": "Bot inbox",
+  "intro": "Record spending through Telegram, Zalo or a receipt photo. What the bot read waits here as a draft for you to check before it is saved.",
+  "retry": "Retry",
+  "sources": {
+    "telegram": "Telegram",
+    "zalo": "Zalo",
+    "receipt": "Receipt",
+    "web": "Web"
+  },
+  "link": {
+    "title": "Link Telegram / Zalo",
+    "description": "Create a one-time code, valid for 10 minutes, and send it to the bot.",
+    "generate": "Create link code",
+    "regenerate": "Create a new code",
+    "code": "Link code",
+    "expiresIn": "Expires in {{time}}",
+    "expired": "The code has expired. Please create a new one.",
+    "telegram": "Telegram: press Open Telegram, or scan the QR code with your phone.",
+    "openTelegram": "Open Telegram",
+    "qr": "QR code that opens the Telegram bot with the link code",
+    "zalo": "Zalo (or Telegram): send this message to the bot"
+  },
+  "accounts": {
+    "title": "Linked accounts",
+    "empty": "No chat account is linked yet.",
+    "loadError": "Could not load the linked accounts.",
+    "linkedOn": "Linked on {{date}}",
+    "unlink": "Unlink {{name}}",
+    "unlinkTitle": "Unlink?",
+    "unlinkMessage": "The bot will stop recording spending for {{name}} until you link it again.",
+    "unlinkConfirm": "Unlink",
+    "unlinked": "Unlinked {{name}}"
+  },
+  "upload": {
+    "title": "Upload a receipt",
+    "description": "Take or choose a photo of a receipt. It is made smaller before sending; reading takes about 20–40 seconds.",
+    "button": "Choose receipt photo",
+    "reading": "Reading the receipt… (about 20–40 seconds)",
+    "done": "A draft was created from the receipt. Check it and press Confirm below."
+  },
+  "drafts": {
+    "title": "Drafts to review",
+    "empty": "No drafts. Send \"phở 45k\" to the bot or upload a receipt, and the draft shows up here.",
+    "loadError": "Could not load the drafts.",
+    "confirm": "Confirm",
+    "discard": "Discard",
+    "discardTitle": "Discard the draft?",
+    "discardMessage": "The draft \"{{name}}\" will be deleted and not recorded.",
+    "confirmed": "Transaction saved",
+    "discarded": "Draft discarded",
+    "budgetWarning": "Saved. You have used {{percent}}% of this month's budget.",
+    "items": "Line items: {{count}}",
+    "reconciled": "match the total",
+    "notReconciled": "do not match the total"
+  }
+}

@@ -6,6 +6,7 @@ import RouteError from './components/RouteError';
 import Splash from './components/Splash';
 import { adminRoutes } from './features/admin/routes';
 import { authRoutes } from './features/auth/routes';
+import { botRoutes } from './features/bot/routes';
 import { budgetsRoutes } from './features/budgets/routes';
 import { categoriesRoutes } from './features/categories/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
@@ -33,6 +34,7 @@ export const routes: RouteObject[] = [
               ...walletsRoutes, // /wallets
               ...categoriesRoutes, // /categories
               ...budgetsRoutes, // /budgets
+              ...botRoutes, // /bot
               {
                 element: <AdminRoute />,
                 children: [...adminRoutes], // /admin/users, /admin/categories

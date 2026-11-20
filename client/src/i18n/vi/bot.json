@@ -1,0 +1,57 @@
+{
+  "title": "Hộp thư bot",
+  "intro": "Ghi chi tiêu qua Telegram, Zalo hoặc ảnh hoá đơn. Những gì bot đọc được nằm ở đây dưới dạng bản nháp để bạn kiểm tra trước khi lưu.",
+  "retry": "Thử lại",
+  "sources": {
+    "telegram": "Telegram",
+    "zalo": "Zalo",
+    "receipt": "Hoá đơn",
+    "web": "Web"
+  },
+  "link": {
+    "title": "Liên kết Telegram / Zalo",
+    "description": "Tạo mã một lần, có hiệu lực 10 phút, rồi gửi mã cho bot.",
+    "generate": "Tạo mã liên kết",
+    "regenerate": "Tạo mã mới",
+    "code": "Mã liên kết",
+    "expiresIn": "Hết hạn sau {{time}}",
+    "expired": "Mã đã hết hạn. Hãy tạo mã mới.",
+    "telegram": "Telegram: bấm Mở Telegram, hoặc quét mã QR bằng điện thoại.",
+    "openTelegram": "Mở Telegram",
+    "qr": "Mã QR mở bot Telegram với mã liên kết",
+    "zalo": "Zalo (hoặc Telegram): gửi tin nhắn sau cho bot"
+  },
+  "accounts": {
+    "title": "Tài khoản đã liên kết",
+    "empty": "Chưa liên kết tài khoản chat nào.",
+    "loadError": "Không tải được danh sách tài khoản.",
+    "linkedOn": "Liên kết ngày {{date}}",
+    "unlink": "Huỷ liên kết {{name}}",
+    "unlinkTitle": "Huỷ liên kết?",
+    "unlinkMessage": "Bot sẽ không ghi chi tiêu cho {{name}} nữa cho đến khi bạn liên kết lại.",
+    "unlinkConfirm": "Huỷ liên kết",
+    "unlinked": "Đã huỷ liên kết {{name}}"
+  },
+  "upload": {
+    "title": "Tải ảnh hoá đơn",
+    "description": "Chụp hoặc chọn ảnh hoá đơn. Ảnh được thu nhỏ trước khi gửi; đọc hoá đơn mất khoảng 20–40 giây.",
+    "button": "Chọn ảnh hoá đơn",
+    "reading": "Đang đọc hoá đơn… (khoảng 20–40 giây)",
+    "done": "Đã tạo bản nháp từ hoá đơn. Kiểm tra rồi bấm Xác nhận bên dưới."
+  },
+  "drafts": {
+    "title": "Bản nháp chờ duyệt",
+    "empty": "Không có bản nháp nào. Gửi \"phở 45k\" cho bot hoặc tải ảnh hoá đơn lên, bản nháp sẽ hiện ở đây.",
+    "loadError": "Không tải được bản nháp.",
+    "confirm": "Xác nhận",
+    "discard": "Bỏ",
+    "discardTitle": "Bỏ bản nháp?",
+    "discardMessage": "Bản nháp \"{{name}}\" sẽ bị xoá và không được ghi vào sổ.",
+    "confirmed": "Đã lưu giao dịch",
+    "discarded": "Đã bỏ bản nháp",
+    "budgetWarning": "Đã lưu. Bạn đã dùng {{percent}}% ngân sách tháng này.",
+    "items": "{{count}} dòng hàng",
+    "reconciled": "khớp tổng tiền",
+    "notReconciled": "không khớp tổng tiền"
+  }
+}
