@@ -1,0 +1,227 @@
+{
+ "_comment": "POST /analyze response recorded from the KIE service (Document-Intelligence-KIE) on 2026-11-20 for data/test_degraded/mcocr_public_145014khrvg.jpg (fixtures/receipts/). Only shortened: boxes keeps 3 of its entries and each images.*_base64 value keeps its first 120 characters. Everything else is as KIE sent it.",
+ "fields": {
+  "merchant": "HÓA ĐON BÁN HANG",
+  "date": "13/08/2020",
+  "total": "116000",
+  "address": "Tên hàng SL DVT Đon giá Thành tin 8936136161334 mì omachi 102 bò nu dua ch N0"
+ },
+ "line_items": [
+  {
+   "name": "mì omachi 102 bò nu dua ch N0",
+   "quantity": 1,
+   "unit_price": 10000,
+   "amount": 10000,
+   "confidence": 0.9833940863609314,
+   "line_index": 6,
+   "bbox": [
+    302.8742370605469,
+    403.4375,
+    809.0108032226562,
+    470.6770935058594
+   ],
+   "raw_text": "8936136161334 mì omachi 102 bò nu dua ch N0 1 GOI 10,000 10,000"
+  },
+  {
+   "name": "mì omachi bò hm nãu gói 10 N0",
+   "quantity": 1,
+   "unit_price": 10000,
+   "amount": 10000,
+   "confidence": 0.9804073572158813,
+   "line_index": 8,
+   "bbox": [
+    300.1820373535156,
+    474.7114562988281,
+    817.08740234375,
+    537.9166870117188
+   ],
+   "raw_text": "8936136161440 mì omachi bò hm nãu gói 10 N0 1 GOI 10,000 10,000"
+  },
+  {
+   "name": "bánh mì bò kd NT",
+   "quantity": 2,
+   "unit_price": 8000,
+   "amount": 16000,
+   "confidence": 0.9870154857635498,
+   "line_index": 10,
+   "bbox": [
+    297.48980712890625,
+    544.640625,
+    823.8179931640625,
+    603.8114624023438
+   ],
+   "raw_text": "8934680045681 bánh mì bò kd NT 2 GOI 8,000 16,000"
+  },
+  {
+   "name": "Mi omachi bò 82g NT",
+   "quantity": 5,
+   "unit_price": 6000,
+   "amount": 30000,
+   "confidence": 0.9911683797836304,
+   "line_index": 12,
+   "bbox": [
+    293.4515075683594,
+    615.9146118164062,
+    829.202392578125,
+    677.7750244140625
+   ],
+   "raw_text": "291005570000 Mi omachi bò 82g NT 5 GOI 6,000 30,000"
+  },
+  {
+   "name": "Sa kun socola, duàng 180ml NT",
+   "quantity": 4,
+   "unit_price": 6250,
+   "amount": 25000,
+   "confidence": 0.9155800342559814,
+   "line_index": 15,
+   "bbox": [
+    278.6443176269531,
+    688.5333251953125,
+    831.8945922851562,
+    790.7374877929688
+   ],
+   "raw_text": "291014560000 Sa kun socola, duàng 180ml NT Giá bán: 4 HOP 6,250 25,000"
+  },
+  {
+   "name": "Sa kun cam, dåu 180ml NT",
+   "quantity": 4,
+   "unit_price": 6250,
+   "amount": 25000,
+   "confidence": 0.9894189834594727,
+   "line_index": 18,
+   "bbox": [
+    275.95208740234375,
+    804.1854248046875,
+    835.9329223632812,
+    909.0791625976562
+   ],
+   "raw_text": "291016570000 Sa kun cam, dåu 180ml NT Giá bán: 4 CAI 6,250 25,000"
+  }
+ ],
+ "reconciliation": {
+  "calculated_total": 116000,
+  "extracted_total": 116000,
+  "difference": 0,
+  "tolerance": 1000,
+  "is_math_consistent": true,
+  "suspected_line_indices": []
+ },
+ "full_text": "MINIMART ANAN\nChq Súi Phú Thi Gia Lam\nTel:\nHÓA ĐON BÁN HANG\nTên hàng SL DVT Đon giá Thành tin\n8936136161334 mì omachi 102 bò nu dua ch N0\n1 GOI 10,000 10,000\n8936136161440 mì omachi bò hm nãu gói 10 N0\n1 GOI 10,000 10,000\n8934680045681 bánh mì bò kd NT\n2 GOI 8,000 16,000\n291005570000 Mi omachi bò 82g NT\n5 GOI 6,000 30,000\n291014560000 Sa kun socola, duàng 180ml NT\nGiá đǎng ký 6,500\nGiá bán: 4 HOP 6,250 25,000\n291016570000 Sa kun cam, dåu 180ml NT\nGiá đăng ký: 6,500\nGiá bán: 4 CAI 6,250 25,000\nTóng ső: 17\nTông công : 116,000\nTông tin : 116,000\nTin khách trà: VND 120,000\nTin trà lai VND: 4,000\nS GD:000AB2212008003233 Ngày: 13/08/2020-10:35",
+ "lines": [
+  "MINIMART ANAN",
+  "Chq Súi Phú Thi Gia Lam",
+  "Tel:",
+  "HÓA ĐON BÁN HANG",
+  "Tên hàng SL DVT Đon giá Thành tin",
+  "8936136161334 mì omachi 102 bò nu dua ch N0",
+  "1 GOI 10,000 10,000",
+  "8936136161440 mì omachi bò hm nãu gói 10 N0",
+  "1 GOI 10,000 10,000",
+  "8934680045681 bánh mì bò kd NT",
+  "2 GOI 8,000 16,000",
+  "291005570000 Mi omachi bò 82g NT",
+  "5 GOI 6,000 30,000",
+  "291014560000 Sa kun socola, duàng 180ml NT",
+  "Giá đǎng ký 6,500",
+  "Giá bán: 4 HOP 6,250 25,000",
+  "291016570000 Sa kun cam, dåu 180ml NT",
+  "Giá đăng ký: 6,500",
+  "Giá bán: 4 CAI 6,250 25,000",
+  "Tóng ső: 17",
+  "Tông công : 116,000",
+  "Tông tin : 116,000",
+  "Tin khách trà: VND 120,000",
+  "Tin trà lai VND: 4,000",
+  "S GD:000AB2212008003233 Ngày: 13/08/2020-10:35"
+ ],
+ "boxes": [
+  {
+   "bbox": [
+    [
+     457.67664670658684,
+     224.58020833333333
+    ],
+    [
+     667.6694610778443,
+     227.26979166666666
+    ],
+    [
+     667.6694610778443,
+     251.47604166666665
+    ],
+    [
+     457.67664670658684,
+     248.78645833333331
+    ]
+   ],
+   "text": "MINIMART ANAN",
+   "confidence": 0.9997047781944275,
+   "is_key_value": false,
+   "role": "header"
+  },
+  {
+   "bbox": [
+    [
+     428.06227544910183,
+     254.16562499999998
+    ],
+    [
+     691.8994011976048,
+     259.54479166666664
+    ],
+    [
+     691.8994011976048,
+     286.440625
+    ],
+    [
+     428.06227544910183,
+     281.06145833333335
+    ]
+   ],
+   "text": "Chq Súi Phú Thi Gia Lam",
+   "confidence": 0.9160045981407166,
+   "is_key_value": false,
+   "role": "header"
+  },
+  {
+   "bbox": [
+    [
+     290.75928143712576,
+     283.75104166666665
+    ],
+    [
+     335.1808383233533,
+     283.75104166666665
+    ],
+    [
+     335.1808383233533,
+     309.3020833333333
+    ],
+    [
+     290.75928143712576,
+     309.3020833333333
+    ]
+   ],
+   "text": "Tel:",
+   "confidence": 0.9999743700027466,
+   "is_key_value": false,
+   "role": "header"
+  }
+ ],
+ "preprocessing": {
+  "steps": {
+   "shadow_removal": true,
+   "deskew": "rotate_hough(9.96)",
+   "clahe": true
+  }
+ },
+ "timings_ms": {
+  "preprocessing_ms": 24.17,
+  "ocr_ms": 7428.3,
+  "kie_ms": 13.5
+ },
+ "images": {
+  "preprocessed_jpeg_base64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/…(cut; the real value is ~380 KB of base64)",
+  "annotated_jpeg_base64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/…(cut; the real value is ~380 KB of base64)"
+ }
+}

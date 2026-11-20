@@ -1,6 +1,7 @@
 // Bot core (docs/04 §4.6): everything the Telegram and Zalo bots do, written once. An adapter maps its
 // platform's JSON to the calls below and gives the core a way to talk back:
-//   { platform: 'telegram' | 'zalo', sendText(chatId, text), sendDraft(chatId, { id, text }, language) }
+//   { platform: 'telegram' | 'zalo', sendText(chatId, text), sendDraft(chatId, { id, text }, language),
+//     downloadPhoto(photo) → Buffer }
 import { env } from '../config/env.js';
 import { Category } from '../models/Category.js';
 import { ChatLink } from '../models/ChatLink.js';
@@ -8,6 +9,7 @@ import { Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
 import { redeemLinkCode } from '../services/chatLinks.js';
+import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
 import { confirmTransaction, parseTransactions } from '../services/transactions.js';
 import { updateMe } from '../services/users.js';
@@ -49,7 +51,8 @@ function readCommand(text) {
   return match ? [match[1].toLowerCase(), (match[2] ?? '').trim()] : [];
 }
 
-// Every incoming chat message, mapped by the adapter to { platformUserId, chatId, messageId, displayName, text }.
+// Every incoming chat message, mapped by the adapter to { platformUserId, chatId, messageId, displayName, text, photo? }.
+// `photo` is the platform's reference to a photo in the message (Telegram file_id, Zalo photo_url).
 // Without a link, only "/start CODE" and "/link CODE" do something; nothing is ever stored for an unlinked chat.
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
@@ -59,6 +62,7 @@ export async function handleMessage(adapter, message) {
 
   const user = await User.findById(link.userId).lean();
   if (user.status === 'locked') return adapter.sendText(message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
+  if (message.photo) return readReceipt(adapter, link, user.language, message);
   if (command) return adapter.sendText(message.chatId, await runCommand(link, user, command, arg));
   const word = normalize(message.text);
   if (word === 'ok' || word === 'huy') return adapter.sendText(message.chatId, await answerPending(link, word));
@@ -141,6 +145,34 @@ async function createDrafts(adapter, link, language, message) {
     await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: transaction._id });
     await adapter.sendDraft(message.chatId, { id: transaction.id, text: m.draft(await describe(transaction, m)) }, language);
   }
+}
+
+// A receipt photo (docs/02 §2.6): "Reading receipt…", then KIE (about 20 s), then a draft with its buttons that
+// shows merchant · total · category and whether the line items add up. When KIE is down, too slow or finds no
+// total, the user is asked to type the amount instead: there is no AI fallback.
+async function readReceipt(adapter, link, language, message) {
+  const m = messagesFor(language);
+  const chatRef = { platform: adapter.platform, chatId: message.chatId, messageId: `${message.messageId}:1` };
+  const seen = { 'chatRef.platform': chatRef.platform, 'chatRef.chatId': chatRef.chatId, 'chatRef.messageId': chatRef.messageId };
+  if (await Transaction.exists(seen)) return; // delivered again: this photo was read already
+
+  await adapter.sendText(message.chatId, m.readingReceipt);
+  let transaction;
+  try {
+    const image = await adapter.downloadPhoto(message.photo);
+    transaction = await createReceiptDraft(link.userId, image, { source: adapter.platform, chatRef, fileRef: message.photo });
+  } catch (err) {
+    if (err.code === 11000) return; // the same photo delivered twice at once: the other delivery answers
+    const unreadable = err.status === 422 || err.status === 415; // no total found, or not a JPEG/PNG
+    await adapter.sendText(message.chatId, unreadable ? m.receiptUnreadable : m.receiptUnavailable);
+    if (err instanceof AppError) return; // KIE down, too slow, not configured, or nothing to read
+    throw err; // anything else (a failed download, a bug) is logged by the webhook
+  }
+  await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: transaction._id });
+  const lines = [m.draft(await describe(transaction, m))];
+  const { items, reconciled } = transaction.receipt;
+  if (items.length > 0) lines.push(m.receiptItems({ count: items.length, reconciled }));
+  await adapter.sendDraft(message.chatId, { id: transaction.id, text: lines.join('\n') }, language);
 }
 
 // Confirm a draft through the same service as POST /transactions/:id/confirm, plus the budget warning line.

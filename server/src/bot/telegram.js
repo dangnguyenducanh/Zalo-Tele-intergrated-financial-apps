@@ -30,6 +30,13 @@ export const telegram = {
     if (env.APP_URL?.startsWith('https://')) row.push({ text: buttons.edit, url: `${env.APP_URL}/bot` });
     return callApi('sendMessage', { chat_id: chatId, text: draft.text, reply_markup: { inline_keyboard: [row] } });
   },
+  // A photo's file_id → getFile → its bytes (bots may download files up to 20 MB).
+  async downloadPhoto(fileId) {
+    const { file_path: path } = await callApi('getFile', { file_id: fileId });
+    const res = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${path}`, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(`Telegram file download failed: ${res.status}`); // no URL: it contains the token
+    return Buffer.from(await res.arrayBuffer());
+  },
 };
 
 // One webhook update. Only private chats: in a group, other people would see the money.
@@ -43,7 +50,8 @@ export async function handleTelegramUpdate(update) {
     chatId: String(message.chat.id),
     messageId: String(message.message_id),
     displayName: [first, last].filter(Boolean).join(' ') || username || '',
-    text: message.text ?? '', // photos and stickers have no text and get the help reply
+    text: message.text ?? '', // stickers and other messages without text get the help reply
+    photo: message.photo?.at(-1)?.file_id, // Telegram sends each photo in several sizes, the largest last
   });
 }
 
