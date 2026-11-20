@@ -24,31 +24,34 @@ all=1; only=" $* "
 [ $# -eq 0 ] || all=0
 wanted() { [ "$all" = 1 ] || [[ "$only" == *" $1 "* ]]; }
 
-failed=0
+failed=0; pushed=0
 push() { # key value
   [ -n "$2" ] || { echo "  skip $1 (empty)"; return; }
   case "$2" in *PASTE_*) echo "  skip $1 (not filled in yet)"; return ;; esac
   npx -y vercel@latest env rm "$1" production --yes </dev/null >/dev/null 2>&1 || true
   if printf '%s' "$2" | npx -y vercel@latest env add "$1" production >/dev/null 2>&1; then
-    echo "  set  $1"
+    echo "  set  $1"; pushed=$((pushed + 1))
   else
     echo "  FAILED $1" >&2; failed=1
   fi
 }
+# Keys whose Vercel value is computed per target below instead of copied.
+derived() { case "$1" in APP_URL | MONGODB_DB | KIE_URL | KIE_PUBLIC_URL) return 0 ;; esac; return 1; }
 
 echo "Pushing env to Vercel ($target):"
+for k in "$@"; do # a requested key that isn't in server/.env is an error, not a silent no-op
+  derived "$k" || grep -qE "^$k=" "$env_file" || { echo "  MISSING $k (not in server/.env)" >&2; failed=1; }
+done
 while IFS= read -r -u 3 line || [ -n "$line" ]; do
   [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
   key="${line%%=*}"; val="${line#*=}" # split on the first '=' only, so values may contain '='
   wanted "$key" || continue
-  if [[ "$key" =~ $skip ]]; then [ "$all" = 1 ] || echo "  keep $key local only"; continue; fi
+  if [[ "$key" =~ $skip ]]; then derived "$key" || [ "$all" = 1 ] || echo "  keep $key local only"; continue; fi
   push "$key" "$val"
 done 3< "$env_file"
-if [ "$all" = 1 ]; then
-  push APP_URL "$app_url"
-  push MONGODB_DB "$db"
-fi
-if wanted KIE_PUBLIC_URL; then push KIE_URL "$(get KIE_PUBLIC_URL)"; fi
+if wanted APP_URL; then push APP_URL "$app_url"; fi
+if wanted MONGODB_DB; then push MONGODB_DB "$db"; fi
+if wanted KIE_URL || wanted KIE_PUBLIC_URL; then push KIE_URL "$(get KIE_PUBLIC_URL)"; fi # Vercel reaches KIE through the public tunnel
 
 [ "$failed" -eq 0 ] || { echo "Some keys FAILED for $target (see above)." >&2; exit 1; }
-echo "Done ($target). Redeploy (tools/deploy.sh $target) for the new values to take effect."
+if [ "$pushed" -eq 0 ]; then echo "Nothing pushed to $target."; else echo "Done ($target, $pushed keys). Redeploy (tools/deploy.sh $target) for them to take effect."; fi

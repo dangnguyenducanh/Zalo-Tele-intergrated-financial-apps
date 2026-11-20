@@ -24,7 +24,7 @@ You are the **merger agent**. The orchestrator gives you `PR` (the number), `USE
      - if `RUN` is empty the run hasn't been created yet: wait 30 s (`timeout 30 tail -f /dev/null`) and look again, up to 10 times, then stop with `MERGE: CI_FAILED PR=<n> (no CI run)`
      - `timeout 900 gh run watch "$RUN" --exit-status`
      - read the result with `gh api "repos/{owner}/{repo}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.name=="ci") | .conclusion'`
-   - `mergeStateStatus` = `CLEAN`. If it is `BEHIND` or `DIRTY`: `gh pr edit $PR --add-label needs-update`, comment "please merge main and re-run gates", output `MERGE: NEEDS_UPDATE PR=<n>`, and stop.
+   - `mergeStateStatus` = `CLEAN`, read again **after** the CI wait. GitHub computes it lazily: if it is `UNKNOWN` (or `UNSTABLE` while checks finish), re-read it every 20 s, up to 10 times, before deciding. If it is `BEHIND` or `DIRTY`: `echo '{"labels":["needs-update"]}' | gh api -X POST repos/{owner}/{repo}/issues/$PR/labels --input -`, `gh pr comment $PR --body` with "please merge main and re-run gates", output `MERGE: NEEDS_UPDATE PR=<n>`, and stop.
    - `USER_APPROVED=true`. Otherwise output `MERGE: WAITING_FOR_USER PR=<n>` with a 3-line summary of the PR, so the student can read and approve it.
 2. **Merge:** `gh pr merge $PR --squash --delete-branch`. Record the merge SHA: `gh pr view $PR --json mergeCommit -q .mergeCommit.oid`. If gh can't delete the local branch because the coder's worktree has it checked out, it also skips the remote delete; then run `gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/<branch>`. The PR's `Closes #N` closes the task card.
 3. **Post-merge verification on main:**
@@ -40,9 +40,9 @@ You are the **merger agent**. The orchestrator gives you `PR` (the number), `USE
      - Don't pre-empt this by refusing to merge.
 4. **If any other post-merge step fails**, revert right away:
    - `git -C "$WT" switch -c revert/pr-$PR && git -C "$WT" revert --no-edit <merge-sha> && git -C "$WT" push -u origin revert/pr-$PR`
-   - `gh pr create --base main --title "revert: #$PR (post-merge failure)" --label revert` with the failing output in the body.
+   - `gh pr create --base main --title "revert: #$PR (post-merge failure)" --body-file <file>` with the failing output in the body, then label the new PR `revert` through `gh api` as above.
    - Tell the orchestrator to log a bug (S1/S2) in `docs/testing/bugs.json`, with "Found by" = the failing case ID.
    - Output `MERGE: REVERT_OPENED PR=<n> revert=<url>`.
-5. **Report:** `node tools/test-report/build-report.mjs --junit "$WT"/test-results/*.xml --env production` from the main checkout. This updates the local Excel/run history; committing it is the orchestrator's chore PR.
+5. **Report:** `build-report.mjs` takes one file per `--junit`, so repeat the flag: `a=(); for f in "$WT"/test-results/*.xml; do a+=(--junit "$f"); done; node tools/test-report/build-report.mjs "${a[@]}" --env production` from the main checkout. This updates the local Excel/run history; committing it is the orchestrator's chore PR.
 6. **Clean up:** `cd / && treehouse return "$WT"`. Then return the coder's worktree (`CODER_WT`), so the pool doesn't run dry. You are its only owner after a merge. Return it only if `git -C "$CODER_WT" status --porcelain` is empty and `git -C "$CODER_WT" rev-parse HEAD` equals the merged PR's head `$SHA` (so no unpushed work is lost; don't use `@{u}`, the remote branch is gone). Then `treehouse return "$CODER_WT"`. Never `--force`; otherwise report why you kept it.
 7. **Output** exactly one final line: `MERGE: MERGED PR=<n> sha=<sha> postmerge=PASS deploy=<OK|PENDING_SECRETS>`, or one of the stop lines above.
