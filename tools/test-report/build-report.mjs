@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds docs/testing/test-report.xlsx.
 // Inputs (docs/testing/): test-cases.json, bugs.json, runs.json, results.json (created on first JUnit import).
-// Usage: node build-report.mjs [--junit path.xml]... [--env local|production]
+// Usage: node build-report.mjs [--junit path.xml]... [--env local|post-merge|staging|production]
 // With --junit, each <testcase> whose name starts with a case ID (TC-F1-01, MT-03, ...) updates that case's
 // latest result (results.json) and a new row is appended to runs.json. Edit the JSON files, not the Excel:
 // the workbook is regenerated every time.

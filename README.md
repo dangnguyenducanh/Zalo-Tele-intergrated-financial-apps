@@ -2,7 +2,43 @@
 
 A personal finance web app (topic #16, *Quản lý chi tiêu cá nhân*) with **Telegram and Zalo bots**: send `phở 45k` or a receipt photo to the bot, confirm the draft, and it becomes a transaction. The web app has wallets, categories, monthly budgets and statistics. It supports Vietnamese and English and has light and dark themes.
 
-> Status: **specification only**, no code yet. Final-term web class project (BTL).
+> Status: **all 16 task cards built, reviewed and merged**; 293 automated tests pass (169 server, 90 client, 34 end-to-end); 2 more need the live receipt service and skip without it. 2 bugs found by tests, both fixed and closed. Final-term web class project (BTL), done by one student.
+
+| | |
+|---|---|
+| Web app (production) | https://sochitieu-btl.vercel.app (not deployed yet: waits for the Atlas password and bot tokens) |
+| Test site (staging) | https://sochitieu-btl-staging.vercel.app (deployed; the API reports `db: down` until the Atlas password is set) |
+| Telegram bot | [@sochitieu_btl_bot](https://t.me/sochitieu_btl_bot) (created; webhook set after the production deploy) |
+| Zalo bot | not created yet: it can only be made in the Zalo phone app ([docs/06 §6.5](docs/06-deployment.md)) |
+| Test & bug report | [docs/testing/test-report.xlsx](docs/testing/test-report.xlsx) |
+
+## Run it locally
+
+Needs Node.js 22 and npm. Tests need no database or secrets: they start an in-memory MongoDB and stub the bot APIs. Once per clone, the end-to-end tests need a browser (`npx playwright install chromium`) and the report tool needs its own package (`npm install --prefix tools/test-report`).
+
+```bash
+npm ci
+cp .env.example server/.env   # fill it in; never commit it
+npm run dev                    # API on :4100, web on :5300 (Vite proxies /api)
+npm run seed                   # default categories + the admin from SEED_ADMIN_EMAIL/PASSWORD
+```
+
+Secrets go in with `tools/set-secret.sh KEY…`, which asks for each value without showing it, saves it in `server/.env` and pushes it to both Vercel projects. Deploys go through `tools/deploy.sh staging|production`, staging first. See [docs/06](docs/06-deployment.md) for Atlas, Vercel, the bots and the receipt service.
+
+## Tests
+
+```bash
+npm run typecheck && npm run lint
+npm test                 # Vitest: API, webhooks, parser, components (writes test-results/*.xml)
+npm run test:e2e         # Playwright: journeys, responsive, axe accessibility, security (with video)
+npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml
+```
+
+The last command rebuilds the Excel report: test cases with what each one proves, the bug log with root cause and fix, and the run history. The test plan and the fix-and-retest loop are in [docs/07](docs/07-testing.md).
+
+## Team (Phân công)
+
+One member did every part: requirements and design, frontend, backend, database, both bots, receipt reading, testing and deployment. The build was split into 16 task cards, each implemented, reviewed and merged as its own pull request ([docs/08](docs/08-agent-workflow.md)).
 
 ## Documentation
 

@@ -1,1 +1,110 @@
-[]
+[
+  {
+    "id": "RUN-001",
+    "date": "2026-11-20 10:22",
+    "env": "post-merge",
+    "suite": "server-vitest.xml, client-vitest.xml",
+    "total": 196,
+    "passed": 195,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 25,
+    "notes": "79 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
+  },
+  {
+    "id": "RUN-002",
+    "date": "2026-11-20 10:50",
+    "env": "post-merge",
+    "suite": "server-vitest.xml, client-vitest.xml",
+    "total": 227,
+    "passed": 226,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 31,
+    "notes": "82 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
+  },
+  {
+    "id": "RUN-003",
+    "date": "2026-11-20 11:18",
+    "env": "post-merge",
+    "suite": "server-vitest.xml, client-vitest.xml",
+    "total": 233,
+    "passed": 232,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 37,
+    "notes": "84 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
+  },
+  {
+    "id": "RUN-004",
+    "date": "2026-11-20 13:25",
+    "env": "post-merge",
+    "suite": "client-vitest.xml, server-vitest.xml",
+    "total": 241,
+    "passed": 240,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 41,
+    "notes": "90 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
+  },
+  {
+    "id": "RUN-005",
+    "date": "2026-11-20 14:15",
+    "env": "post-merge",
+    "suite": "server-vitest.xml, client-vitest.xml",
+    "total": 257,
+    "passed": 256,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 55,
+    "notes": "94 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest) (not against the production site)"
+  },
+  {
+    "id": "RUN-006",
+    "date": "2026-11-20 14:18",
+    "env": "local",
+    "suite": "client-vitest.xml, e2e.xml, server-vitest.xml",
+    "total": 292,
+    "passed": 290,
+    "failed": 0,
+    "skipped": 2,
+    "durationSec": 242,
+    "notes": "103 catalogue cases matched; 0 tests without a case ID"
+  },
+  {
+    "id": "RUN-007",
+    "date": "2026-11-20 14:41",
+    "env": "post-merge",
+    "suite": "client-vitest.xml, e2e.xml, server-vitest.xml",
+    "total": 295,
+    "passed": 294,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 295,
+    "notes": "104 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main in a fresh worktree (Vitest + Playwright) (not against the production site)"
+  },
+  {
+    "id": "RUN-008",
+    "date": "2026-11-20 14:46",
+    "env": "local",
+    "suite": "server-vitest.xml, client-vitest.xml, e2e.xml",
+    "total": 295,
+    "passed": 292,
+    "failed": 1,
+    "skipped": 2,
+    "durationSec": 294,
+    "notes": "104 catalogue cases matched; 0 tests without a case ID; full retest after BUG-002 (da6ad6a). 1 flaky E2E failure: TC-F12-02 (auth.spec.ts:85) timed out because the host's network changed mid-test (Chromium net::ERR_NETWORK_CHANGED aborted 32 Vite module loads); passed on rerun (RUN-009). Not an app bug."
+  },
+  {
+    "id": "RUN-009",
+    "date": "2026-11-20 14:46",
+    "env": "local",
+    "suite": "e2e-auth-rerun.xml",
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "durationSec": 21,
+    "notes": "4 catalogue cases matched; 0 tests without a case ID; rerun of client/e2e/auth.spec.ts after the flaky TC-F12-02 in RUN-008: 9/9 passed"
+  }
+]

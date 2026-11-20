@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": "BUG-001",
+    "dateFound": "2026-11-20",
+    "foundBy": "TC-NF-03",
+    "feature": "Non-functional",
+    "severity": "S3 Minor",
+    "title": "Language button's accessible name doesn't contain its visible text (WCAG 2.5.3 Label in Name)",
+    "stepsToReproduce": "1. Open any page (logged in or not).\n2. Run axe (TC-NF-03, Playwright + @axe-core/playwright).\n3. Inspect the language button in the app bar.",
+    "expected": "The button's accessible name starts with the text it shows (EN or VI), so voice-control users can say \"click EN\".",
+    "actual": "The button shows EN but is named \"Đổi ngôn ngữ sang English\". axe reports label-content-name-mismatch (serious) on every page.",
+    "rootCause": "LanguageSwitch.tsx set aria-label to the translated hint only, which replaced the visible text as the accessible name.",
+    "fix": "The aria-label now starts with the visible text: `${next.toUpperCase()} – ${t('language.switch')}`. Tests that looked the button up by its old exact name now use a regex (App.test.tsx, CategoriesPage.test.tsx).",
+    "filesOrCommit": "client/src/components/LanguageSwitch.tsx; fix d4d8e75 in PR #33, merged as b14493c",
+    "regressionTest": "TC-NF-03",
+    "status": "Closed",
+    "dateClosed": "2026-11-20",
+    "evidence": "https://github.com/dangnguyenducanh/Zalo-Tele-intergrated-financial-apps/pull/33 ; retest: RUN-006 on b14493c, TC-NF-03 passed in light and dark, full suite green"
+  },
+  {
+    "id": "BUG-002",
+    "dateFound": "2026-11-20",
+    "foundBy": "TC-F9-01 (its server log in RUN-006)",
+    "feature": "Non-functional",
+    "severity": "S3 Minor",
+    "title": "E2E bot tests call the real Telegram Bot API from the test server",
+    "stepsToReproduce": "1. npm run test:e2e (no bot token in the environment).\n2. Watch the E2E API server log while client/e2e/bot.spec.ts runs.",
+    "expected": "The E2E server never leaves the machine: outbound Telegram/Zalo Bot API calls are stubbed and recorded, so tests are hermetic and can't message real chats.",
+    "actual": "server/src/bot/telegram.js:8 posts to https://api.telegram.org/bot<empty>/sendMessage; Telegram answers 404, the error is caught and logged, and the specs still pass. With a real token in the environment they would message real chat IDs.",
+    "rootCause": "server/test/helpers/e2e-server.js only swaps MongoDB for an in-memory one; it doesn't stub outbound HTTP the way the Vitest suites do with MSW.",
+    "fix": "The E2E server now loads a stub before the app starts (server/test/helpers/bot-api-stub.js): Telegram and Zalo Bot API calls get a fake successful answer shaped like the real API and are recorded (method + chat id, never the token); any other non-local host throws. Production code is unchanged.",
+    "filesOrCommit": "server/test/helpers/bot-api-stub.js, server/test/helpers/e2e-server.js, server/test/e2e-server.test.js; fix 1e8e8e1 in PR #35, merged as da6ad6a",
+    "regressionTest": "TC-NF-11",
+    "status": "Closed",
+    "dateClosed": "2026-11-20",
+    "evidence": "Test-run report RUN-006 (E2E server log line: telegram webhook update failed: Error: Telegram sendMessage failed: 404 Not Found) ; fix: https://github.com/dangnguyenducanh/Zalo-Tele-intergrated-financial-apps/pull/35 ; retest: RUN-008 on da6ad6a, TC-NF-11 passed (3/3), no request to api.telegram.org or bot-api.zaloplatforms.com in the E2E run"
+  }
+]

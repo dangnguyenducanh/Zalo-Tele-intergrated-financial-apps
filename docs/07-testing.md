@@ -32,7 +32,7 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**84 cases**: 76 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**116 cases**: 108 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
@@ -144,15 +144,15 @@ Dropdowns limit Status, Severity and Result to valid values, and failed or open 
 
 ```bash
 npm run typecheck                    # client tsc --noEmit
-npm test                             # unit + API + webhook + component (Vitest), writes test-results/vitest.xml
+npm test                             # unit + API + webhook + component (Vitest), writes test-results/{server,client}-vitest.xml
 npm run test:e2e                     # Playwright, writes test-results/e2e.xml + videos
-npm run report -- --junit test-results/vitest.xml --junit test-results/e2e.xml
+npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml
 ```
 
-The report tool already works today, before any app code exists:
+The report tool on its own:
 
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (84 cases, all "Not run")
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (116 cases, last results from results.json)
 ```
