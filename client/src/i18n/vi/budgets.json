@@ -1,0 +1,46 @@
+{
+  "title": "Ngân sách",
+  "add": "Thêm ngân sách",
+  "copy": "Chép từ tháng trước",
+  "copied": "Đã chép ngân sách: {{count}}",
+  "nothingToCopy": "Không có ngân sách mới nào để chép từ tháng trước.",
+  "save": "Lưu",
+  "saved": "Đã lưu ngân sách",
+  "deleted": "Đã xoá ngân sách",
+  "retry": "Thử lại",
+  "loadError": "Không tải được ngân sách.",
+  "empty": "Tháng này chưa có ngân sách",
+  "emptyHint": "Thêm hạn mức chi cho từng danh mục hoặc cho tổng chi tiêu, hoặc chép ngân sách của tháng trước.",
+  "overall": "Tổng chi tiêu",
+  "usage": "Đã chi {{spent}} / {{limit}} ({{percent}}%)",
+  "left": "Còn {{amount}}",
+  "over": "Vượt {{amount}}",
+  "level": {
+    "ok": "Trong hạn mức",
+    "warn": "Sắp hết",
+    "over": "Vượt ngân sách"
+  },
+  "actions": {
+    "edit": "Sửa ngân sách {{name}}",
+    "delete": "Xoá ngân sách {{name}}"
+  },
+  "dialog": {
+    "addTitle": "Thêm ngân sách",
+    "editTitle": "Sửa ngân sách"
+  },
+  "fields": {
+    "category": "Danh mục",
+    "overallOption": "Tổng chi tiêu (mọi danh mục)",
+    "limit": "Hạn mức (₫)",
+    "limitHelp": "Ví dụ: 2tr, 500k hoặc 2.000.000"
+  },
+  "validation": {
+    "limit": "Nhập số tiền lớn hơn 0, ví dụ 2tr hoặc 2.000.000",
+    "category": "Mọi danh mục chi đã có ngân sách trong tháng này."
+  },
+  "deleteConfirm": {
+    "title": "Xoá ngân sách?",
+    "message": "Ngân sách \"{{name}}\" của tháng này sẽ bị xoá. Các giao dịch vẫn giữ nguyên.",
+    "confirm": "Xoá"
+  }
+}

@@ -7,7 +7,9 @@ import Splash from './components/Splash';
 import { adminRoutes } from './features/admin/routes';
 import { authRoutes } from './features/auth/routes';
 import { botRoutes } from './features/bot/routes';
+import { budgetsRoutes } from './features/budgets/routes';
 import { categoriesRoutes } from './features/categories/routes';
+import { dashboardRoutes } from './features/dashboard/routes';
 import { notFoundRoutes } from './features/notFound/routes';
 import { transactionsRoutes } from './features/transactions/routes';
 import { walletsRoutes } from './features/wallets/routes';
@@ -27,11 +29,11 @@ export const routes: RouteObject[] = [
           {
             element: <AppLayout />,
             children: [
-              // T10 replaces this line with ...dashboardRoutes
-              { index: true, lazy: async () => ({ Component: (await import('./components/HomePlaceholder')).default }) },
+              ...dashboardRoutes, // /
               ...transactionsRoutes, // /transactions
               ...walletsRoutes, // /wallets
               ...categoriesRoutes, // /categories
+              ...budgetsRoutes, // /budgets
               ...botRoutes, // /bot
               {
                 element: <AdminRoute />,
