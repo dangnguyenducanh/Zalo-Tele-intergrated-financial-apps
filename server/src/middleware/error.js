@@ -1,5 +1,8 @@
+import { STATUS_CODES } from 'node:http';
 import { ZodError } from 'zod';
 import { AppError } from '../utils/AppError.js';
+
+const CLIENT_ERROR_CODES = { 400: 'VALIDATION_ERROR', 413: 'PAYLOAD_TOO_LARGE', 415: 'UNSUPPORTED_MEDIA_TYPE' };
 
 // Maps any thrown error to { status, body } with the shape { error: { code, message, details? } }.
 export function toErrorResponse(err) {
@@ -17,11 +20,12 @@ export function toErrorResponse(err) {
     const details = Object.keys(err.keyValue ?? {}).map((path) => ({ path, issue: 'duplicate' }));
     return reply(409, 'CONFLICT', 'Resource already exists', details);
   }
-  if (err.type === 'entity.parse.failed') {
-    return reply(400, 'VALIDATION_ERROR', 'Request body is not valid JSON');
-  }
-  if (err.type === 'entity.too.large') {
-    return reply(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large');
+  // Client mistakes caught by Express or its body parser (bad JSON, body too large, unsupported charset
+  // or encoding, undecodable URL parameter) carry a 4xx `status`, which Express's own handler keeps too.
+  const status = err.status ?? err.statusCode;
+  if (status >= 400 && status < 500) {
+    // `expose` marks a message written for clients; otherwise send the standard reason phrase.
+    return reply(status, CLIENT_ERROR_CODES[status] ?? 'BAD_REQUEST', err.expose ? err.message : STATUS_CODES[status]);
   }
   // Anything else is a bug: hide the message and the stack from the client.
   return reply(500, 'INTERNAL', 'Internal server error');

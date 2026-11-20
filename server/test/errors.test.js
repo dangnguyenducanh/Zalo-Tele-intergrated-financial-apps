@@ -1,9 +1,10 @@
+import express from 'express';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import { z } from 'zod';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import app from '../src/app.js';
-import { toErrorResponse } from '../src/middleware/error.js';
+import { errorHandler, toErrorResponse } from '../src/middleware/error.js';
 import { AppError } from '../src/utils/AppError.js';
 import { startTestDb, stopTestDb } from './helpers/db.js';
 
@@ -29,6 +30,24 @@ describe('before the database is connected', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  test('TC-NF-07 client mistakes keep their 4xx status instead of becoming 500', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const charset = await request(app).post('/api/anything').set('Content-Type', 'application/json; charset=latin1').send('{}');
+    const encoding = await request(app).post('/api/anything').set('Content-Type', 'application/json').set('Content-Encoding', 'bogus').send('{}');
+    const tooLarge = await request(app).post('/api/anything').set('Content-Type', 'application/json').send(`"${'x'.repeat(1_100_000)}"`);
+    // Express 5 rejects a path parameter that is not valid percent-encoding (every /:id route from T05 on).
+    const withParam = express().get('/w/:id', (req, res) => res.end()).use(errorHandler);
+    const badParam = await request(withParam).get('/w/%E0%A4%A');
+
+    expect([charset.status, charset.body.error.code]).toEqual([415, 'UNSUPPORTED_MEDIA_TYPE']);
+    expect([encoding.status, encoding.body.error.code]).toEqual([415, 'UNSUPPORTED_MEDIA_TYPE']);
+    expect([tooLarge.status, tooLarge.body.error.code]).toEqual([413, 'PAYLOAD_TOO_LARGE']);
+    expect([badParam.status, badParam.body.error.code]).toEqual([400, 'VALIDATION_ERROR']);
+    expect(log).not.toHaveBeenCalled(); // not logged as server bugs
+    log.mockRestore();
   });
 });
 
