@@ -2,6 +2,11 @@ import mongoose from 'mongoose';
 import { attachDatabasePool } from '@vercel/functions';
 import { env } from './env.js';
 
+// Operator injection guard (docs/04 §4.10): an object such as {"$gt": ""} that reaches a query filter
+// from user input is matched as a plain value. Filters the server builds itself with operators must
+// opt in with mongoose.trusted(), e.g. { date: mongoose.trusted({ $gte: from }) }.
+mongoose.set('sanitizeFilter', true);
+
 // One cached connection promise per process: warm Vercel invocations (and every request locally)
 // reuse it instead of opening a new connection.
 let connection;
