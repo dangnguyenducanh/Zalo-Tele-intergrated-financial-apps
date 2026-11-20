@@ -25,5 +25,6 @@
   "RATE_LIMITED": "Too many attempts. Please try again in a few minutes.",
   "KIE_UNAVAILABLE": "The receipt reader is unavailable. Please try again later.",
   "KIE_TIMEOUT": "Reading the receipt took too long. Please try again.",
+  "FEATURE_NOT_CONFIGURED": "This feature is not set up on the server yet.",
   "INTERNAL": "The server ran into a problem. Please try again later."
 }
