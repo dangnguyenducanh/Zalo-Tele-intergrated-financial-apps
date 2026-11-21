@@ -46,12 +46,12 @@
     "expected": "A refresh whose answer was lost (navigation, reload, flaky network) does not end the session; only a real token reuse (a stolen copy) revokes every session.",
     "actual": "The server already rotated the token, so the old cookie is treated as theft: 401, and every session of the user is revoked, including a second device that did nothing. Seen 3 times during the charter run on an unstable network.",
     "rootCause": "server/src/services/auth.js refresh(): any reuse of a rotated token revokes all sessions (docs/04 §4.3 'Reuse detection'), with no grace window for a lost response.",
-    "fix": "Proposed, waiting for the student's decision because it changes the docs/04 §4.3 rule: within a short grace window (e.g. 30 s) after rotation, a reused token whose replacement has never been used is redeemed once more (the unused replacement is revoked and a new session opened); a reuse outside the window, or after the replacement was used, still revokes every session.",
-    "filesOrCommit": "",
-    "regressionTest": "",
-    "status": "Blocked",
-    "dateClosed": "",
-    "evidence": "charter-runs/2026-11-21/BUG-refresh-abort.mp4, BUG-refresh-abort.log, repro-refresh-abort.mjs, MT-03.attempt1.mp4 (local, git-ignored)"
+    "fix": "Approved by the student on 2026-11-21 (\"Yes, 30 s grace\"). refresh() in server/src/services/auth.js now gives reuse a 30 s grace window: a rotated token that comes back within 30 s while its replacement has never been refreshed is a lost answer, so the unused replacement is revoked and the token is rotated once more (both old rows point at the new session). Any other reuse still revokes every session. docs/04 §4.3 updated.",
+    "filesOrCommit": "server/src/services/auth.js, server/test/auth.test.js, docs/04-backend.md; T21 (#46)",
+    "regressionTest": "TC-F1-19 (and TC-F1-05 for theft)",
+    "status": "Closed",
+    "dateClosed": "2026-11-21",
+    "evidence": "charter-runs/2026-11-21/BUG-refresh-abort.mp4, BUG-refresh-abort.log, repro-refresh-abort.mjs, MT-03.attempt1.mp4 (local, git-ignored) ; retest on staging with the fix deployed, same repro script: charter-runs/2026-11-21/retest-T21/ (BUG-003-retest.mp4, .log): the next refresh answers 200, the user stays on /transactions, the untouched second device refreshes 200"
   },
   {
     "id": "BUG-004",
