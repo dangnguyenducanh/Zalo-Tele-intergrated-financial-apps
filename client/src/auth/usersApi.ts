@@ -6,10 +6,9 @@ export const usersApi = api.injectEndpoints({
   endpoints: (builder) => ({
     updateMe: builder.mutation<{ user: User }, UpdateMeInput>({
       query: (body) => ({ url: '/users/me', method: 'PATCH', body }),
-      // The server names default categories (in statistics, wallets, budgets and transactions) in the profile's
-      // language, so once a new language is saved, everything it named is asked for again (BUG-005).
-      invalidatesTags: (_result, error, { language }) =>
-        language && !error ? ['Stats', 'Category', 'Wallet', 'Budget', 'Transaction', 'Draft'] : [],
+      // GET /stats/by-category names each category in the profile's language (server stats.js); everything else
+      // sends both names and the browser picks one. So a saved language change reloads the statistics (BUG-005).
+      invalidatesTags: (_result, error, { language }) => (language && !error ? ['Stats'] : []),
     }),
   }),
 });
