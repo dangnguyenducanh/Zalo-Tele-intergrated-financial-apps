@@ -238,3 +238,52 @@ test('TC-F8-08 a Zalo photo_url is downloaded and read by KIE into a draft that 
   expect((await send(older)).map(textOf)).toEqual([viText.readingReceipt, expect.stringContaining('116.000')]);
   expect(await Transaction.countDocuments({ status: 'draft' })).toBe(1);
 });
+
+test('TC-F8-19 every line of a message becomes a draft even when the bot cannot reply (BUG-026)', async () => {
+  await linkedUser();
+  // Zalo refuses every reply, as with a made-up chat id, a used-up free quota or a timeout.
+  outbound.use(
+    http.post('https://bot-api.zaloplatforms.com/:bot/sendMessage', () => HttpResponse.json({ ok: false, error_code: 403, description: 'Forbidden' })),
+  );
+  errorLog.mockImplementation(() => {});
+  await say('cafe 21k\nbánh mì 22k\ntaxi 23k');
+
+  const drafts = await Transaction.find({ status: 'draft' }).sort({ _id: 1 }).lean();
+  expect(drafts.map((d) => d.amount)).toEqual([21_000, 22_000, 23_000]);
+  expect((await ChatLink.findOne()).pendingTransactionId).toEqual(drafts[2]._id);
+  expect(errorLog).toHaveBeenCalledTimes(1); // the failed replies are still logged by the webhook
+  errorLog.mockClear();
+});
+
+test('TC-F8-20 Zalo: a reply with only an amount ("55k") corrects the pending draft instead of making a new one (BUG-027)', async () => {
+  await linkedUser();
+  await say('grab 32k');
+  const draft = await Transaction.findOne().lean();
+
+  const corrected = await say('55k');
+  expect(textOf(corrected[0])).toMatch(/55\.000.*Đi lại.*grab/);
+  expect(textOf(corrected[0]).endsWith(`\n${viText.replyHint}`)).toBe(true);
+  expect(await Transaction.find().lean()).toMatchObject([{ _id: draft._id, amount: 55_000, note: 'grab', categoryId: draft.categoryId, status: 'draft' }]);
+  expect((await ChatLink.findOne()).pendingTransactionId).toEqual(draft._id);
+
+  await say('ok');
+  expect(await Transaction.find().lean()).toMatchObject([{ amount: 55_000, note: 'grab', status: 'confirmed' }]);
+
+  // With nothing pending, an amount alone is a new draft, as before.
+  await say('40k');
+  expect(await Transaction.countDocuments({ amount: 40_000, status: 'draft' })).toBe(1);
+});
+
+test('TC-F8-21 Zalo: after a multi-line message, each "ok"/"huy" reaches the next waiting draft, newest first (BUG-028)', async () => {
+  await linkedUser();
+  await say('an sang 30k\ntra sua 40k');
+
+  // "ok" saves the newest draft and says which one the next answer will act on.
+  const first = textOf((await say('ok'))[0]);
+  expect(first).toMatch(/^✅ Đã lưu: .*40\.000.*\n⏭️ .*30\.000/);
+
+  const second = textOf((await say('huy'))[0]);
+  expect(second).toMatch(/^❌ Đã huỷ: .*30\.000[^\n]*$/); // nothing else waits
+  expect(textOf((await say('ok'))[0])).toBe(viText.nothingPending);
+  expect(await Transaction.find({ deletedAt: null }).lean()).toMatchObject([{ amount: 40_000, status: 'confirmed' }]);
+});
