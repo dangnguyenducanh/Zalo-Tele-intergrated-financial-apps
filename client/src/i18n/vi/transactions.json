@@ -10,7 +10,8 @@
   "empty": "Chưa có giao dịch nào",
   "emptyHint": "Gõ vào ô Thêm nhanh, ví dụ \"phở 45k\", rồi nhấn Enter.",
   "noMatch": "Không có giao dịch nào khớp bộ lọc",
-  "total": "Tổng: {{count}} giao dịch",
+  "total_one": "Tổng: {{count}} giao dịch",
+  "total_other": "Tổng: {{count}} giao dịch",
   "listLabel": "Danh sách giao dịch",
   "pagination": "Chọn trang",
   "pages": {

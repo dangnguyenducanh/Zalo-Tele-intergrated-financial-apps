@@ -1,4 +1,4 @@
-import { alpha, Alert, Box, Button, CircularProgress, Grid, LinearProgress, Link, Paper, Stack, Typography } from '@mui/material';
+import { alpha, Alert, AlertTitle, Box, Button, CircularProgress, Grid, LinearProgress, Link, Paper, Stack, Typography } from '@mui/material';
 import { createElement, useId, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
@@ -7,11 +7,12 @@ import { useAuth } from '@/auth/useAuth';
 import MoneyText from '@/components/MoneyText';
 import MonthPicker from '@/components/MonthPicker';
 import QuickAdd from '@/components/QuickAdd';
+import { budgetLevel, useGetBudgetsQuery, type Budget } from '@/features/budgets/budgetsApi';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
 import { DEFAULT_COLOR, iconOf } from '@/features/categories/icons';
 import { signedMoney } from '@/features/transactions/helpers';
-import { useGetTransactionsQuery } from '@/features/transactions/transactionsApi';
-import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
+import { useGetTransactionsQuery, type Transaction } from '@/features/transactions/transactionsApi';
+import { useGetWalletsQuery, type Wallet } from '@/features/wallets/walletsApi';
 import { formatDate, formatMoney } from '@/i18n/format';
 import { GRADIENT, moneySx } from '@/theme/theme';
 import { CategoryBreakdown, MonthCompare } from './Charts';
@@ -31,8 +32,13 @@ export default function DashboardPage() {
   const byCategory = useGetByCategoryQuery(month);
   const daily = useGetDailyQuery(month);
   const previousDaily = useGetDailyQuery(previousMonth(month));
+  const budgets = useGetBudgetsQuery(month);
+  const wallets = useGetWalletsQuery({ includeArchived: true }); // the same cached request as QuickAdd
+  const latest = useGetTransactionsQuery({ status: 'confirmed' }); // newest first; the first page is enough
   const { data: drafts } = useGetTransactionsQuery({ status: 'draft' }); // only `total` is used
-  const stats = [summary, byCategory, daily, previousDaily]; // last month feeds the comparison, so its failure counts too
+  // Every query whose numbers the page shows: one failure shows the error and Retry reloads them all, so a failed
+  // request never reads as a real 0 ₫ or an empty list. Last month feeds the comparison, so it counts too.
+  const stats = [summary, byCategory, daily, previousDaily, budgets, wallets, latest];
   const failed = stats.some((query) => query.isError);
 
   return (
@@ -66,18 +72,19 @@ export default function DashboardPage() {
           {t('loadError')}
         </Alert>
       )}
+      {budgets.currentData && <BudgetWarnings budgets={budgets.currentData} />}
       {!summary.currentData && summary.isFetching && <CircularProgress aria-label={t('common:loading')} sx={{ display: 'block', mx: 'auto', my: 4 }} />}
 
       <Grid container spacing={2}>
+        {summary.currentData && wallets.data && ( // no wallets, no total: never a made-up 0 ₫
+          <Grid size={{ xs: 12, md: 5 }}>
+            <BalanceCard summary={summary.currentData} wallets={wallets.data} />
+          </Grid>
+        )}
         {summary.currentData && (
-          <>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <BalanceCard summary={summary.currentData} />
-            </Grid>
-            <Grid size={{ xs: 12, md: 7 }}>
-              <SummaryCards summary={summary.currentData} />
-            </Grid>
-          </>
+          <Grid size={{ xs: 12, md: 7 }}>
+            <SummaryCards summary={summary.currentData} />
+          </Grid>
         )}
         {daily.currentData && previousDaily.currentData && ( // never compare against a month that has not loaded
           <Grid size={{ xs: 12, md: 7 }}>
@@ -90,7 +97,7 @@ export default function DashboardPage() {
           </Grid>
         )}
         <Grid size={12}>
-          <LatestTransactions />
+          <LatestTransactions transactions={latest.data?.items} wallets={wallets.data ?? []} />
         </Grid>
       </Grid>
     </>
@@ -99,10 +106,9 @@ export default function DashboardPage() {
 
 // The total of every active wallet on the brand gradient, with the month's money in and out underneath.
 // Its text is white on a gradient that keeps 4.5:1 everywhere (theme GRADIENT).
-function BalanceCard({ summary }: { summary: MonthSummary }) {
+function BalanceCard({ summary, wallets }: { summary: MonthSummary; wallets: Wallet[] }) {
   const { t } = useTranslation('dashboard');
   const language = useAppSelector((s) => s.ui.language);
-  const { data: wallets = [] } = useGetWalletsQuery({ includeArchived: true }); // the same cached request as QuickAdd
   const active = wallets.filter((wallet) => !wallet.archived);
   const total = active.reduce((sum, wallet) => sum + wallet.balance, 0);
   const titleId = useId();
@@ -160,9 +166,10 @@ function SummaryCards({ summary }: { summary: MonthSummary }) {
   const language = useAppSelector((s) => s.ui.language);
   const { budget } = summary;
   const left = budget && budget.limit - budget.spent;
-  const used = budget ? Math.round((budget.spent / budget.limit) * 100) : 0;
+  const used = budget ? Math.round((budget.spent / budget.limit) * 100) : 0; // the bar's length only
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, height: '100%' }}>
+    // One column on phones: in a 2×2 grid a card leaves about 100 px for a 10-digit amount (BUG-021).
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, height: '100%' }}>
       <Figure label={t('cards.income')} amount={summary.income} color="income" />
       <Figure label={t('cards.expense')} amount={summary.expense} color="spend" />
       <Figure label={t('cards.net')} amount={summary.net} color={summary.net < 0 ? 'error.main' : undefined} />
@@ -172,7 +179,7 @@ function SummaryCards({ summary }: { summary: MonthSummary }) {
             <LinearProgress
               variant="determinate"
               value={Math.min(used, 100)}
-              color={used > 100 ? 'error' : used >= 85 ? 'warning' : 'primary'}
+              color={BAR_COLOR[budgetLevel(budget)]} // the Budgets page's rule: amber from 80 %, red above 100 %
               aria-hidden // a picture of the line below; its label would say "left" while the value is the share used
               sx={{ my: 1 }}
             />
@@ -196,6 +203,49 @@ function SummaryCards({ summary }: { summary: MonthSummary }) {
   );
 }
 
+const BAR_COLOR = { ok: 'primary', warn: 'warning', over: 'error' } as const;
+
+// Category budgets of the month past 80 % (amber) or 100 % (red): the web side of the bot's budget warning
+// (docs/02 §2.4). The overall budget has its own card. Reuses the Budgets page's strings.
+function BudgetWarnings({ budgets }: { budgets: Budget[] }) {
+  const { t } = useTranslation('budgets');
+  const language = useAppSelector((s) => s.ui.language);
+  const { data: categories = [] } = useGetCategoriesQuery();
+  const titleId = useId();
+  const flagged = budgets.filter((budget) => budget.categoryId && budgetLevel(budget) !== 'ok');
+  if (flagged.length === 0) return null;
+  const money = (amount: number) => formatMoney(amount, language);
+  const nameOf = (budget: Budget) => {
+    const category = categories.find((c) => c.id === budget.categoryId);
+    return category ? categoryName(category, language) : '';
+  };
+  return (
+    <Alert
+      severity={flagged.some((budget) => budgetLevel(budget) === 'over') ? 'error' : 'warning'}
+      role="status" // shown on load, not caused by the user: announced politely
+      aria-labelledby={titleId}
+      action={
+        <Button component={RouterLink} to="/budgets" color="inherit" size="small">
+          {t('dashboard:budgetAlert.open')}
+        </Button>
+      }
+      sx={{ mb: 2 }}
+    >
+      <AlertTitle id={titleId}>{t('dashboard:budgetAlert.title')}</AlertTitle>
+      <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+        {flagged.map((budget) => {
+          const level = budgetLevel(budget);
+          const detail =
+            level === 'over'
+              ? t('over', { amount: money(budget.spent - budget.limit) })
+              : t('usage', { spent: money(budget.spent), limit: money(budget.limit), percent: budget.percent });
+          return <li key={budget.id}>{`${nameOf(budget)}: ${t(`level.${level}`)} · ${detail}`}</li>;
+        })}
+      </Box>
+    </Alert>
+  );
+}
+
 type FigureProps = { label: string; amount: number | null; color?: string; children?: ReactNode };
 
 function Figure({ label, amount, color, children }: FigureProps) {
@@ -206,7 +256,7 @@ function Figure({ label, amount, color, children }: FigureProps) {
         {label}
       </Typography>
       {amount !== null && (
-        <Typography component="p" sx={{ fontSize: { xs: '1.125rem', sm: '1.375rem' }, fontWeight: 400, lineHeight: 1.35, mt: 0.5, color, overflowWrap: 'anywhere' }}>
+        <Typography component="p" sx={{ fontSize: { xs: '1.125rem', sm: '1.375rem' }, fontWeight: 400, lineHeight: 1.35, mt: 0.5, color }}>
           <MoneyText amount={amount} />
         </Typography>
       )}
@@ -217,14 +267,14 @@ function Figure({ label, amount, color, children }: FigureProps) {
 
 // The 5 newest confirmed transactions (any month): a round tile with the category's icon in its colour, the note
 // and its category · wallet, the signed amount and the date. Drafts wait in the bot inbox, see the banner.
-function LatestTransactions() {
+// `transactions` is undefined until it loads (or when the request failed: the page shows the error and Retry).
+// `wallets` includes archived ones: a past transaction may sit in an archived wallet.
+function LatestTransactions({ transactions, wallets }: { transactions?: Transaction[]; wallets: Wallet[] }) {
   const { t } = useTranslation('dashboard');
   const language = useAppSelector((s) => s.ui.language);
-  const { data } = useGetTransactionsQuery({ status: 'confirmed' }); // newest first; the first page is enough
   const { data: categories = [] } = useGetCategoriesQuery();
-  const { data: wallets = [] } = useGetWalletsQuery({ includeArchived: true }); // a past transaction may sit in an archived wallet
   const titleId = useId();
-  const items = data?.items.slice(0, 5) ?? [];
+  const items = transactions?.slice(0, 5) ?? [];
 
   return (
     <Paper component="section" variant="outlined" aria-labelledby={titleId} sx={{ p: { xs: 2, sm: 2.5 } }}>
@@ -236,7 +286,7 @@ function LatestTransactions() {
           {t('latest.all')}
         </Link>
       </Stack>
-      {data && items.length === 0 && <Typography sx={{ color: 'text.secondary' }}>{t('latest.empty')}</Typography>}
+      {transactions && items.length === 0 && <Typography sx={{ color: 'text.secondary' }}>{t('latest.empty')}</Typography>}
       {items.length > 0 && (
         <Box component="ul" role="list" aria-labelledby={titleId} sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gap: 1 }}>
           {items.map((transaction) => {

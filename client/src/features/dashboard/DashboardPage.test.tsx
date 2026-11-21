@@ -2,8 +2,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, expect, test } from 'vitest';
+import type { Budget } from '@/features/budgets/budgetsApi';
 import type { Category } from '@/features/categories/categoriesApi';
 import type { Transaction } from '@/features/transactions/transactionsApi';
+import i18n from '@/i18n';
 import { fake, LAN, resetFake, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 import type { CategoryTotal, DayTotal, MonthSummary } from './statsApi';
@@ -50,6 +52,7 @@ beforeEach(() => {
   };
   server.use(
     http.get('*/api/wallets', () => HttpResponse.json([])),
+    http.get('*/api/budgets', () => HttpResponse.json([])),
     http.get('*/api/categories', () => HttpResponse.json(categories)),
     http.get('*/api/stats/summary', ({ request }) =>
       HttpResponse.json(monthOf(request) === THIS_MONTH ? summary : { income: 0, expense: 0, net: 0, budget: null }),
@@ -149,4 +152,87 @@ test('TC-F12-04 switching to English reloads the category names the server sends
   const englishPie = await screen.findByRole('figure', { name: 'Spending by category' });
   expect(await within(englishPie).findByText('Food & drinks')).toBeInTheDocument();
   expect(within(englishPie).queryByText('Ăn uống')).not.toBeInTheDocument();
+});
+
+// The class MUI puts on the "budget left" bar for its colour.
+const budgetBarColor = async (budget: MonthSummary['budget']) => {
+  server.use(http.get('*/api/stats/summary', () => HttpResponse.json({ ...summary, budget })));
+  renderApp('/');
+  const card = await screen.findByRole('article', { name: 'Ngân sách còn lại' });
+  return card.querySelector('.MuiLinearProgress-root')?.className.match(/MuiLinearProgress-color(\w+)/)?.[1];
+};
+
+test('TC-F6-06 the budget-left bar turns amber at 84 % (BUG-019)', async () => {
+  expect(await budgetBarColor({ limit: 4_000_000, spent: 3_361_002 })).toBe('Warning');
+});
+
+test('TC-F6-06 the budget-left bar turns red just over 100 %, not at a rounded 101 % (BUG-019)', async () => {
+  expect(await budgetBarColor({ limit: 1_000_000, spent: 1_004_000 })).toBe('Error');
+});
+
+test('TC-F6-06 the budget-left bar stays blue just under 80 % (BUG-019)', async () => {
+  expect(await budgetBarColor({ limit: 1_000_000, spent: 799_999 })).toBe('Primary');
+});
+
+test('TC-F5-07 the dashboard lists category budgets past 80 % and 100 % and links to /budgets (BUG-020)', async () => {
+  const budget = (id: string, categoryId: string | null, limit: number, spent: number): Budget => ({
+    id,
+    month: THIS_MONTH,
+    categoryId,
+    limit,
+    spent,
+    percent: Math.round((spent / limit) * 100),
+  });
+  server.use(
+    http.get('*/api/budgets', () =>
+      HttpResponse.json([budget('b1', 'c1', 2_500_000, 2_145_000), budget('b2', 'c2', 300_000, 330_000), budget('b3', null, 10_000_000, 2_475_000)]),
+    ),
+  );
+  renderApp('/');
+
+  const warning = await screen.findByRole('status', { name: 'Ngân sách cần chú ý' });
+  const items = within(warning).getAllByRole('listitem').map((item) => item.textContent);
+  expect(items).toEqual([
+    expect.stringMatching(/^Ăn uống: Sắp hết · Đã chi 2\.145\.000\s₫ \/ 2\.500\.000\s₫ \(86%\)$/),
+    expect.stringMatching(/^Đi lại: Vượt ngân sách · Vượt 30\.000\s₫$/),
+  ]);
+  expect(within(warning).getByRole('link', { name: 'Xem ngân sách' })).toHaveAttribute('href', '/budgets');
+});
+
+test('TC-F6-07 a failed wallets request shows the error with Retry, never a made-up 0 ₫ balance (BUG-022)', async () => {
+  let fail = true;
+  const wallet = { id: 'w1', name: 'Tiền mặt', type: 'cash', initialBalance: 0, balance: 1_250_000, aliases: [], color: '', icon: '', archived: false };
+  server.use(
+    http.get('*/api/wallets', () => (fail ? HttpResponse.json({ error: { code: 'INTERNAL', message: 'boom' } }, { status: 500 }) : HttpResponse.json([wallet]))),
+  );
+  const user = userEvent.setup();
+  renderApp('/');
+
+  const alert = (await screen.findByText('Không tải được số liệu của tháng.')).closest('[role="alert"]') as HTMLElement;
+  expect(screen.queryByText('Tổng số dư')).not.toBeInTheDocument();
+  fail = false;
+  await user.click(within(alert).getByRole('button', { name: 'Thử lại' }));
+  expect(await screen.findByRole('region', { name: 'Tổng số dư' })).toHaveTextContent(/1\.250\.000\s₫/);
+});
+
+test('TC-F6-07 a failed recent-transactions request shows the error, not an empty card (BUG-022)', async () => {
+  server.use(
+    http.get('*/api/transactions', ({ request }) =>
+      new URL(request.url).searchParams.get('status') === 'confirmed'
+        ? HttpResponse.json({ error: { code: 'INTERNAL', message: 'boom' } }, { status: 500 })
+        : HttpResponse.json({ items: drafts, page: 1, limit: 20, total: drafts.length }),
+    ),
+  );
+  renderApp('/');
+  expect(await screen.findByText('Không tải được số liệu của tháng.')).toBeInTheDocument();
+});
+
+test('TC-F12-05 English counts use the singular for 1 (BUG-024)', async () => {
+  server.use(http.get('*/api/transactions', () => HttpResponse.json({ items: drafts.slice(0, 1), page: 1, limit: 20, total: 1 })));
+  resetFake({ ...LAN, language: 'en' }, true);
+  renderApp('/');
+  expect(await screen.findByText('1 draft transaction is waiting for confirmation.')).toBeInTheDocument();
+  expect(i18n.t('transactions:total', { lng: 'en', count: 1 })).toBe('Total: 1 transaction');
+  expect(i18n.t('transactions:total', { lng: 'en', count: 2 })).toBe('Total: 2 transactions');
+  expect(i18n.t('transactions:total', { lng: 'vi', count: 1 })).toBe('Tổng: 1 giao dịch');
 });
