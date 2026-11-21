@@ -50,7 +50,7 @@ helmet → express.json({ limit: '1mb' }) → cookie-parser → requestId/logger
 | Access token | **JWT HS256**, 15 min, claims `{ sub: userId, role, sid: sessionId }`. Sent as `Authorization: Bearer <jwt>`. Verified with `algorithms: ['HS256']`. |
 | Refresh token | 32 random bytes (base64url). Sent only as cookie **`rt`**: `HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=7d`. Stored only as a SHA-256 hash in `sessions`. |
 | Rotation | Every `/auth/refresh` revokes the old session row, creates a new one (`replacedBy`), and sets a new cookie. |
-| Reuse detection | If a refresh token belonging to an **already revoked** session is presented, all of that user's sessions are revoked (the token was probably stolen) → 401. |
+| Reuse detection | If a refresh token belonging to an **already rotated** session is presented, all of that user's sessions are revoked (the token was probably stolen) → 401. **Grace window (BUG-003):** if it comes back within **30 s** of its rotation and its replacement has never been used, the answer was most likely lost (navigation, reload, network drop), so the unused replacement is revoked and the token is rotated once more (200). One valid chain remains, and a reuse after the replacement was used, or after 30 s, is still treated as theft. |
 | Logout | Revokes the current session, clears the cookie → 204. |
 | Log out others | Revokes all sessions except `sid` → 204. |
 | Lock user (admin) | `status = locked` + revoke all sessions. Login and refresh return 403 `ACCOUNT_LOCKED`. Existing access tokens expire within 15 min. |

@@ -193,13 +193,49 @@ describe('refresh and logout', () => {
     expect(String(oldSession.replacedBy)).toBe(String(newSession._id));
     expect(claimsOf(first.body.accessToken).sid).toBe(String(newSession._id));
 
-    // Someone presents the already rotated token A again: it was probably stolen.
+    // B is used (rotated to C), then someone presents the already rotated token A again: it was probably stolen.
+    const second = await refresh(cookieB);
+    expect(second.status).toBe(200);
+    const cookieC = refreshCookie(second);
     const reuse = await refresh(cookieA);
     expect(reuse.status).toBe(401);
     expect(reuse.body.error.code).toBe('INVALID_REFRESH');
 
-    // Every session of the user is revoked, so B (the legitimate holder's newest token) fails too.
+    // Every session of the user is revoked, so C (the legitimate holder's newest token) fails too.
+    expect((await refresh(cookieC)).status).toBe(401);
+    expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  test('TC-F1-05 reuse outside the 30 s grace window is theft even if the replacement was never used', async () => {
+    const { cookie: cookieA, user } = await registerUser();
+    const cookieB = refreshCookie(await refresh(cookieA));
+    // A was rotated 31 s ago.
+    await Session.updateOne({ tokenHash: sha256(cookieA.slice(3)) }, { revokedAt: new Date(Date.now() - 31_000) });
+
+    expect((await refresh(cookieA)).status).toBe(401);
     expect((await refresh(cookieB)).status).toBe(401);
+    expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  test('TC-F1-19 a refresh whose answer was lost: the old token works once more within 30 s, one session stays (BUG-003)', async () => {
+    const { cookie: cookieA, user, email, password } = await registerUser();
+    const other = await loginAs({ email, password }); // the same user on a second device
+    const lost = await refresh(cookieA); // rotated A → B, but the browser never got B (navigation, reload, network drop)
+    const cookieB = refreshCookie(lost);
+
+    const again = await refresh(cookieA);
+    expect(again.status).toBe(200);
+    expect(again.body.user.id).toBe(user.id);
+    const cookieC = refreshCookie(again);
+    expect(cookieC).not.toBe(cookieB);
+
+    // The unused B is revoked so only one chain stays alive; C keeps working; the other device was not touched.
+    expect((await Session.findOne({ tokenHash: sha256(cookieB.slice(3)) })).revokedAt).not.toBeNull();
+    const cookieD = refreshCookie(await refresh(cookieC));
+    expect(cookieD).toMatch(/^rt=/);
+    expect((await refresh(other.cookie)).status).toBe(200);
+    // A third try with A is theft now (its replacement C was used): every session is revoked.
+    expect((await refresh(cookieA)).status).toBe(401);
     expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
   });
 

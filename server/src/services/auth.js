@@ -72,6 +72,9 @@ export async function login({ email, password }, client) {
   return openSession(user, client);
 }
 
+// How long after its rotation a refresh token may come back because its answer was lost (BUG-003).
+const REUSE_GRACE_MS = 30_000;
+
 // Rotation (docs/04 §4.3): every refresh revokes the presented session and opens a new one.
 export async function refresh(refreshToken, client) {
   if (typeof refreshToken !== 'string' || !refreshToken) throw invalidRefresh();
@@ -83,19 +86,30 @@ export async function refresh(refreshToken, client) {
     { tokenHash, revokedAt: null, expiresAt: mongoose.trusted({ $gt: now }) },
     { revokedAt: now, lastUsedAt: now },
   );
-  if (!old) {
-    // A token that was already rotated is being used again: either the user or a thief holds a copy.
-    // We can't tell which, so log out every device of that user. (Tokens revoked by logout just get 401.)
-    const used = await Session.findOne({ tokenHash });
-    if (used?.replacedBy) await revokeAllSessions(used.userId);
-    throw invalidRefresh();
-  }
+  if (old) return rotate(old.userId, client, [old._id]);
 
-  const user = await User.findById(old.userId);
+  const used = await Session.findOne({ tokenHash });
+  if (!used?.replacedBy) throw invalidRefresh(); // unknown, expired, or revoked by logout: just 401
+
+  // A token that was already rotated is back. If that happened moments ago and its replacement was never used,
+  // the browser most likely never got the answer (navigation, reload, network drop): revoke the unused
+  // replacement and rotate again, so one valid chain remains.
+  const replacement =
+    now - used.revokedAt <= REUSE_GRACE_MS && (await Session.findOneAndUpdate({ _id: used.replacedBy, revokedAt: null }, { revokedAt: now }));
+  if (replacement) return rotate(used.userId, client, [used._id, replacement._id]);
+
+  // Otherwise either the user or a thief holds a copy, and we can't tell which: log out every device of that user.
+  await revokeAllSessions(used.userId);
+  throw invalidRefresh();
+}
+
+// Opens the next session and points the revoked ones at it (`replacedBy`), so a later reuse of any of them is caught.
+async function rotate(userId, client, revokedIds) {
+  const user = await User.findById(userId);
   if (!user) throw invalidRefresh();
   if (user.status === 'locked') throw accountLocked();
   const next = await openSession(user, client);
-  await Session.updateOne({ _id: old._id }, { replacedBy: next.session._id });
+  await Session.updateMany({ _id: mongoose.trusted({ $in: revokedIds }) }, { replacedBy: next.session._id });
   return next;
 }
 
