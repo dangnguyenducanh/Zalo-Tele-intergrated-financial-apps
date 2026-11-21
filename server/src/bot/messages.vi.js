@@ -17,7 +17,8 @@ export default {
   expense: 'Chi',
   income: 'Thu',
   draft: (summary) => `📝 ${summary}`,
-  replyHint: 'Trả lời "ok" để lưu hoặc "huy" để huỷ.',
+  replyHint: 'Trả lời "ok" để lưu, "huy" để huỷ, hoặc chỉ số tiền đúng (ví dụ 55k) để sửa.',
+  nextPending: (summary) => `⏭️ Khoản nháp tiếp theo đang chờ: ${summary}`,
   buttons: { save: '✅ Lưu', discard: '❌ Huỷ', edit: '✏️ Sửa' },
   readingReceipt: '🧾 Đang đọc hoá đơn…',
   receiptItems: ({ count, reconciled }) => `🧾 ${count} dòng hàng · ${reconciled ? 'cộng lại khớp tổng tiền' : 'cộng lại không khớp tổng tiền, hãy kiểm tra'}`,
@@ -32,8 +33,14 @@ export default {
   budgetWarning: ({ name, percent, spent, limit, over }) =>
     over ? `🚨 Vượt ngân sách "${name}": ${percent}% (${spent} / ${limit})` : `⚠️ Ngân sách "${name}" đã dùng ${percent}% (${spent} / ${limit})`,
   today: ({ date, expense, income }) => `📅 Hôm nay ${date}\nChi: ${expense}\nThu: ${income}`,
-  month: ({ month, expense, income, budget }) =>
-    [`📅 Tháng ${month}`, `Chi: ${expense}`, `Thu: ${income}`, budget && `Ngân sách: ${budget.percent}% (${budget.spent} / ${budget.limit})`]
+  month: ({ month, expense, income, budget, categoryBudgets }) =>
+    [
+      `📅 Tháng ${month}`,
+      `Chi: ${expense}`,
+      `Thu: ${income}`,
+      budget && `Ngân sách: ${budget.percent}% (${budget.spent} / ${budget.limit})`,
+      ...categoryBudgets.map((b) => `Ngân sách "${b.name}": ${b.percent}% (${b.spent} / ${b.limit})`),
+    ]
       .filter(Boolean)
       .join('\n'),
   languageSet: 'Đã chuyển sang tiếng Việt.',

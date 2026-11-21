@@ -420,6 +420,127 @@
           "zalo:32000"
         ]
       }
+    },
+    {
+      "id": "ZL-10",
+      "platform": "zalo",
+      "title": "Two lines in one message make two drafts, each with the \"ok / huy\" hint (BUG-028)",
+      "do": "send (two lines, Shift+Enter between): an sang 30k / tra sua 40k",
+      "reply": [
+        "📝 Chi 30\\.000\\s₫",
+        "📝 Chi 40\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [
+          "zalo:30000",
+          "zalo:40000"
+        ],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-11",
+      "platform": "zalo",
+      "title": "\"ok\" saves the newest draft and names the next one still waiting (BUG-028)",
+      "do": "send: ok",
+      "reply": [
+        "✅ Đã lưu: Chi 40\\.000\\s₫",
+        "⏭️ Khoản nháp tiếp theo đang chờ: Chi 30\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [
+          "zalo:30000"
+        ],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000",
+          "zalo:40000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-12",
+      "platform": "zalo",
+      "title": "A second \"ok\" reaches the older draft instead of \"nothing pending\" (BUG-028)",
+      "do": "send: ok",
+      "reply": [
+        "✅ Đã lưu: Chi 30\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000",
+          "zalo:40000",
+          "zalo:30000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-13",
+      "platform": "zalo",
+      "title": "Only when no draft of this chat waits, \"ok\" says nothing is pending",
+      "do": "send: ok",
+      "reply": [
+        "Không có khoản nháp nào đang chờ"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000",
+          "zalo:40000",
+          "zalo:30000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-14",
+      "platform": "zalo",
+      "title": "/month lists a category budget's usage when there is no overall budget (BUG-029)",
+      "do": "run: node tools/bot-e2e/bot-e2e.mjs budget \"Đi lại\" 80000, then send: /month",
+      "reply": [
+        "📅 Tháng",
+        "Chi: 179\\.000\\s₫",
+        "Ngân sách \"Đi lại\": 80% \\(64\\.000\\s₫ / 80\\.000\\s₫\\)"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000",
+          "zalo:40000",
+          "zalo:30000"
+        ]
+      }
     }
   ],
   "receipts": {

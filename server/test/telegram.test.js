@@ -393,6 +393,26 @@ test('TC-F8-11 /today and /month match the statistics API, in the language chose
   expect(Object.keys(enText).sort()).toEqual(Object.keys(viText).sort());
 });
 
+test('TC-F8-22 /month lists the category budgets with their usage, also without an overall budget (BUG-029)', async () => {
+  const a = await linkedUser();
+  const month = monthKey(new Date());
+  const add = (amount, categoryId) =>
+    a.me.post('/transactions', { type: 'expense', amount, categoryId, walletId: a.user.defaultWalletId, occurredAt: new Date().toISOString() });
+  await add(135_000, a.food);
+  await add(64_000, a.transport);
+  await a.me.post('/budgets', { month, categoryId: a.transport, limit: 320_000 });
+  await a.me.post('/budgets', { month, categoryId: a.food, limit: 150_000 });
+
+  // Fullest first, each with its own usage; no overall line, since there is no overall budget.
+  const text = textOf((await say('/month'))[0]);
+  expect(text).toMatch(/Chi: 199\.000/);
+  expect(text).toMatch(/\nNgân sách "Ăn uống": 90% \(135\.000\s₫ \/ 150\.000\s₫\)\nNgân sách "Đi lại": 20% \(64\.000\s₫ \/ 320\.000\s₫\)$/);
+  expect(text).not.toContain('Ngân sách:');
+
+  // GET /stats/summary keeps its contract: budget is the overall budget only.
+  expect((await a.me.get(`/stats/summary?month=${month}`)).body.budget).toBeNull();
+});
+
 test('TC-F5-03 confirming an expense past 80 % / 100 % of its budget warns on the web and in the chat', async () => {
   const a = await linkedUser();
   await a.me.post('/budgets', { month: monthKey(new Date()), categoryId: a.food, limit: 100_000 });

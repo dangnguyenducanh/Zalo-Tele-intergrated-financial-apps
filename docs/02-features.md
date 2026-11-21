@@ -67,12 +67,12 @@ The same **bot core** serves both platforms. Only sending/receiving and confirm 
 | | Telegram | Zalo |
 |---|---|---|
 | Link account | Deep link `https://t.me/<bot>?start=<CODE>` (one tap) or `/link CODE` | Send `/link CODE` |
-| Confirm a draft | Inline buttons **✅ Lưu / ❌ Huỷ** (callback query) | Reply **`ok`** to save or **`huy`** to discard (Zalo Bot API has no buttons) |
-| Edit a draft | Button **✏️ Sửa** opens the web Bot inbox | Reply with a corrected line (e.g. `55k`) or edit on the web |
+| Confirm a draft | Inline buttons **✅ Lưu / ❌ Huỷ** (callback query) | Reply **`ok`** to save or **`huy`** to discard (Zalo Bot API has no buttons). After a message with several lines, each `ok`/`huy` acts on the newest draft still waiting, and the reply names the next one |
+| Edit a draft | Button **✏️ Sửa** opens the web Bot inbox | Reply with just the right amount (e.g. `55k`): it replaces the waiting draft's amount and keeps its note and category. Anything else is edited on the web |
 | Receive photo | `message.photo` → `getFile` → download | `message.photo_url` → download |
 | Message limit | 4096 chars | 2000 chars |
 
-**Commands:** `/start` (welcome or link), `/link CODE`, `/help`, `/today` (today's spending), `/month` (month total and budget usage), `/lang vi|en`.
+**Commands:** `/start` (welcome or link), `/link CODE`, `/help`, `/today` (today's spending), `/month` (month total, the overall budget and each category budget with its usage, fullest first), `/lang vi|en`.
 
 **Unlinked chats** get: "Please link your account: open <app>/bot and send `/link CODE`" (in both languages).
 

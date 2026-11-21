@@ -11,7 +11,8 @@
 //                                                     check one step; exit 1 when a reply, a button or the state is wrong
 //                                                     (receipt steps also take --photo <file>: its true total is expected)
 //   node tools/bot-e2e/bot-e2e.mjs state              the e2e user's server state as JSON
-//   node tools/bot-e2e/bot-e2e.mjs reset              delete the e2e user's transactions and unlink its chats
+//   node tools/bot-e2e/bot-e2e.mjs budget "<category>" <limit>   this month's budget for a category (ZL-14)
+//   node tools/bot-e2e/bot-e2e.mjs reset              delete the e2e user's transactions and this month's budgets, unlink its chats
 // Options: -h/--help this usage, --target prod|staging|<https URL> (default prod), --out <dir> for results.jsonl
 //          (default charter-runs/<VN date>/bot-e2e/ in the repo, which git ignores).
 // The e2e user's login is generated on first use and kept in ~/.config/bot-e2e/<host>.json (0600), never in the repo.
@@ -55,7 +56,7 @@ if (opts.help) {
   console.log(usage());
   process.exit(0);
 }
-const [command = 'help', stepId] = positionals;
+const [command = 'help', stepId, budgetLimit] = positionals; // budget: stepId is the category name
 const base = TARGETS[opts.target] ?? opts.target;
 if (!/^https?:\/\//.test(base)) fail(`--target must be prod, staging or a URL, not "${opts.target}"`);
 const { steps, receipts } = JSON.parse(readFileSync(join(HERE, 'scenarios.json'), 'utf8'));
@@ -114,16 +115,33 @@ async function readState(token) {
   return { links: links.map((l) => l.platform).sort(), drafts: keys(drafts), confirmed: keys(confirmed), rows: { links, drafts, confirmed } };
 }
 
+const vnDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+const thisMonth = () => vnDate().slice(0, 7);
+
 async function reset(token) {
   const { rows } = await readState(token);
+  const { data: budgets } = await api('GET', `/budgets?month=${thisMonth()}`, { token });
   for (const t of [...rows.drafts, ...rows.confirmed]) await api('DELETE', `/transactions/${t.id}`, { token });
+  for (const b of budgets ?? []) await api('DELETE', `/budgets/${b.id}`, { token });
   for (const l of rows.links) await api('DELETE', `/chat-links/${l.id}`, { token });
   const after = await readState(token);
   if (after.links.length + after.drafts.length + after.confirmed.length > 0) fail(`reset left data behind: ${JSON.stringify(after)}`);
-  console.log(`Reset: deleted ${rows.drafts.length + rows.confirmed.length} transaction(s), unlinked ${rows.links.length} chat(s).`);
+  console.log(
+    `Reset: deleted ${rows.drafts.length + rows.confirmed.length} transaction(s) and ${budgets?.length ?? 0} budget(s), unlinked ${rows.links.length} chat(s).`,
+  );
 }
 
-const vnDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+// This month's budget for one of the e2e user's categories, by its Vietnamese name ("Đi lại"), for the /month step.
+async function addBudget(token) {
+  const limit = Number(budgetLimit);
+  if (!stepId || !(limit > 0)) fail('usage: budget "<category>" <limit>, e.g. budget "Đi lại" 80000');
+  const { data: categories } = await api('GET', '/categories', { token });
+  const category = categories?.find((c) => c.type === 'expense' && (c.name || c.names?.vi) === stepId);
+  if (!category) fail(`No expense category named "${stepId}"`);
+  const { status, data } = await api('POST', '/budgets', { token, body: { month: thisMonth(), categoryId: category.id, limit } });
+  if (status !== 201) fail(`POST /budgets failed: ${status} ${data?.error?.code ?? ''}`);
+  console.log(`Budget ${thisMonth()} "${stepId}": ${limit}`);
+}
 const outDir = () => resolve(opts.out ?? join(HERE, '..', '..', 'charter-runs', vnDate(), 'bot-e2e'));
 
 // One step: every expected reply pattern must match one of the replies passed in, and the state must be exact.
@@ -194,6 +212,9 @@ const commands = {
   async state() {
     const { links, drafts, confirmed } = await readState(await login());
     console.log(JSON.stringify({ links, drafts, confirmed }));
+  },
+  async budget() {
+    await addBudget(await login());
   },
   async reset() {
     await reset(await login());
