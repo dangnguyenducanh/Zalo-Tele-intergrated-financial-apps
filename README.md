@@ -2,14 +2,14 @@
 
 A personal finance web app (topic #16, *Quản lý chi tiêu cá nhân*) with **Telegram and Zalo bots**: send `phở 45k` or a receipt photo to the bot, confirm the draft, and it becomes a transaction. The web app has wallets, categories, monthly budgets and statistics. It supports Vietnamese and English and has light and dark themes.
 
-> Status: **all 16 task cards built, reviewed and merged**; 293 automated tests pass (169 server, 90 client, 34 end-to-end); 2 more need the live receipt service and skip without it. 2 bugs found by tests, both fixed and closed. Final-term web class project (BTL), done by one student.
+> Status: **live** since 2026-11-21. 18 task cards built, reviewed and merged (the last two are the UI redesigns); 298 automated tests pass (169 server, 94 client, 35 end-to-end); the receipt test skips without the live KIE service. 2 bugs found by tests, both fixed and closed. Final-term web class project (BTL), done by one student.
 
 | | |
 |---|---|
-| Web app (production) | https://sochitieu-btl.vercel.app (not deployed yet: waits for the Atlas password and bot tokens) |
-| Test site (staging) | https://sochitieu-btl-staging.vercel.app (deployed; the API reports `db: down` until the Atlas password is set) |
-| Telegram bot | [@sochitieu_btl_bot](https://t.me/sochitieu_btl_bot) (created; webhook set after the production deploy) |
-| Zalo bot | not created yet: it can only be made in the Zalo phone app ([docs/06 §6.5](docs/06-deployment.md)) |
+| Web app (production) | https://sochitieu-btl.vercel.app (live, database up) |
+| Test site (staging) | https://sochitieu-btl-staging.vercel.app (live, separate database `finance_staging` with test users) |
+| Telegram bot | [@sochitieu_btl_bot](https://t.me/sochitieu_btl_bot) (webhook points at production) |
+| Zalo bot | created in the Zalo phone app; webhook points at production ([docs/06 §6.5](docs/06-deployment.md)) |
 | Test & bug report | [docs/testing/test-report.xlsx](docs/testing/test-report.xlsx) |
 
 ## Run it locally
