@@ -106,5 +106,17 @@
     "skipped": 0,
     "durationSec": 21,
     "notes": "4 catalogue cases matched; 0 tests without a case ID; rerun of client/e2e/auth.spec.ts after the flaky TC-F12-02 in RUN-008: 9/9 passed"
+  },
+  {
+    "id": "RUN-010",
+    "date": "2026-11-21 18:57",
+    "env": "production",
+    "suite": "bot-e2e (real Telegram + Zalo)",
+    "total": 36,
+    "passed": 36,
+    "failed": 0,
+    "skipped": 0,
+    "durationSec": 1500,
+    "notes": "Real-chat bot e2e, docs/testing/bot-e2e.md: student's own Telegram Web + Zalo Web driven by Claude in Chrome, checked by tools/bot-e2e/bot-e2e.mjs; 16 text steps + 5 real receipts x 2 chats x (read + discard). Evidence: charter-runs/2026-11-21/bot-e2e/results.jsonl (local)"
   }
 ]

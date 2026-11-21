@@ -18,3 +18,6 @@ docs/testing/recordings/*.mp4
 # OS / editor
 .DS_Store
 *.log
+
+# charter-run and bot-e2e evidence: videos, logs, chat text (docs/testing/bot-e2e.md)
+/charter-runs/

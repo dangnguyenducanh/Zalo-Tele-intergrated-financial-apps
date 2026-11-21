@@ -1,0 +1,428 @@
+{
+  "about": "Real-chat bot e2e (docs/testing/bot-e2e.md). Each step: what to do in the chat app, the regexes the bot replies must match (each one by some reply), and the server state afterwards (cumulative, as source:amount multisets). {{code}} is a fresh code from `bot-e2e.mjs code`; {{total}} is the true total of the receipt photo passed with --photo (receipts below: the real MC-OCR receipts of server/test/fixtures/receipts/, totals as in server/test/kie.contract.test.js).",
+  "steps": [
+    {
+      "id": "TG-01",
+      "platform": "telegram",
+      "title": "Link the chat with /start CODE (what the deep link sends)",
+      "do": "send: /start {{code}}",
+      "reply": [
+        "Đã liên kết với tài khoản"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [],
+        "confirmed": []
+      }
+    },
+    {
+      "id": "TG-02",
+      "platform": "telegram",
+      "title": "A text message becomes a draft with ✅ / ❌ buttons",
+      "do": "send: phở 45k",
+      "reply": [
+        "📝 Chi 45\\.000\\s₫"
+      ],
+      "buttons": [
+        "✅ Lưu",
+        "❌ Huỷ"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [
+          "telegram:45000"
+        ],
+        "confirmed": []
+      }
+    },
+    {
+      "id": "TG-03",
+      "platform": "telegram",
+      "title": "✅ Lưu confirms the draft and the message is replaced by the result",
+      "do": "press: ✅ Lưu under the 45.000 draft",
+      "reply": [
+        "✅ Đã lưu: Chi 45\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000"
+        ]
+      }
+    },
+    {
+      "id": "TG-04",
+      "platform": "telegram",
+      "title": "Two lines in one message make two drafts",
+      "do": "send (two lines, Shift+Enter between): grab 32k / cafe 25k",
+      "reply": [
+        "📝 Chi 32\\.000\\s₫",
+        "📝 Chi 25\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [
+          "telegram:32000",
+          "telegram:25000"
+        ],
+        "confirmed": [
+          "telegram:45000"
+        ]
+      }
+    },
+    {
+      "id": "TG-05",
+      "platform": "telegram",
+      "title": "❌ Huỷ discards a draft",
+      "do": "press: ❌ Huỷ under the 25.000 draft",
+      "reply": [
+        "❌ Đã huỷ: Chi 25\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [
+          "telegram:32000"
+        ],
+        "confirmed": [
+          "telegram:45000"
+        ]
+      }
+    },
+    {
+      "id": "TG-06",
+      "platform": "telegram",
+      "title": "✅ Lưu on the other draft",
+      "do": "press: ✅ Lưu under the 32.000 draft",
+      "reply": [
+        "✅ Đã lưu: Chi 32\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "TG-07",
+      "platform": "telegram",
+      "title": "/today totals only the confirmed transactions",
+      "do": "send: /today",
+      "reply": [
+        "📅 Hôm nay",
+        "Chi: 77\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "TG-08",
+      "platform": "telegram",
+      "title": "A message without an amount gets the help text and stores nothing",
+      "do": "send: xin chào",
+      "reply": [
+        "Gửi mỗi khoản trên một dòng"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "TG-09",
+      "platform": "telegram",
+      "title": "A linked chat refuses a second code",
+      "do": "send: /start ABC234",
+      "reply": [
+        "đã liên kết với một tài khoản web"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "TG-10",
+      "platform": "telegram",
+      "optional": "needs the KIE receipt service and its tunnel up",
+      "title": "A real receipt photo is read by KIE into a draft with its true total (repeat with each photo, then TG-11 / ZL-09)",
+      "do": "send photo: one of server/test/fixtures/receipts/*.jpg, then pass it with --photo (wait up to 60 s)",
+      "reply": [
+        "Đang đọc hoá đơn",
+        "📝 Chi {{total}}\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [
+          "telegram:{{total}}"
+        ],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "TG-11",
+      "platform": "telegram",
+      "optional": "only after TG-10",
+      "title": "Discard the receipt draft",
+      "do": "press: ❌ Huỷ under the receipt draft",
+      "reply": [
+        "❌ Đã huỷ: Chi {{total}}\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-01",
+      "platform": "zalo",
+      "title": "Link the chat with /link CODE",
+      "do": "send: /link {{code}}",
+      "reply": [
+        "Đã liên kết với tài khoản"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-02",
+      "platform": "zalo",
+      "title": "A text message becomes a draft that ends with the ok / huy hint",
+      "do": "send: grab 32k",
+      "reply": [
+        "📝 Chi 32\\.000\\s₫",
+        "Trả lời \"ok\" để lưu"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [
+          "zalo:32000"
+        ],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-03",
+      "platform": "zalo",
+      "title": "Typing ok confirms the latest draft",
+      "do": "send: ok",
+      "reply": [
+        "✅ Đã lưu: Chi 32\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-04",
+      "platform": "zalo",
+      "title": "A second draft",
+      "do": "send: cafe 25k",
+      "reply": [
+        "📝 Chi 25\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [
+          "zalo:25000"
+        ],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-05",
+      "platform": "zalo",
+      "title": "Typing huy discards it",
+      "do": "send: huy",
+      "reply": [
+        "❌ Đã huỷ: Chi 25\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-06",
+      "platform": "zalo",
+      "title": "ok with nothing pending",
+      "do": "send: ok",
+      "reply": [
+        "Không có khoản nháp nào đang chờ"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-07",
+      "platform": "zalo",
+      "title": "/month adds up both chats",
+      "do": "send: /month",
+      "reply": [
+        "📅 Tháng",
+        "Chi: 109\\.000\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-08",
+      "platform": "zalo",
+      "optional": "needs the KIE receipt service and its tunnel up",
+      "title": "A real receipt photo is read by KIE into a draft with its true total (repeat with each photo, then TG-11 / ZL-09)",
+      "do": "send photo: one of server/test/fixtures/receipts/*.jpg, then pass it with --photo (wait up to 60 s)",
+      "reply": [
+        "Đang đọc hoá đơn",
+        "📝 Chi {{total}}\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [
+          "zalo:{{total}}"
+        ],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    },
+    {
+      "id": "ZL-09",
+      "platform": "zalo",
+      "optional": "only after ZL-08",
+      "title": "Discard the receipt draft",
+      "do": "send: huy",
+      "reply": [
+        "❌ Đã huỷ: Chi {{total}}\\s₫"
+      ],
+      "state": {
+        "links": [
+          "telegram",
+          "zalo"
+        ],
+        "drafts": [],
+        "confirmed": [
+          "telegram:45000",
+          "telegram:32000",
+          "zalo:32000"
+        ]
+      }
+    }
+  ],
+  "receipts": {
+    "mcocr_public_145014cftxo.jpg": 114700,
+    "mcocr_public_145014cgzmv.jpg": 169000,
+    "mcocr_public_145014jcwux.jpg": 45000,
+    "mcocr_public_145014khrvg.jpg": 116000,
+    "mcocr_public_145014ykqth.jpg": 124000
+  }
+}
