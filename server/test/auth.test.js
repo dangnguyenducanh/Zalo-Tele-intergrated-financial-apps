@@ -68,6 +68,31 @@ describe('register', () => {
     expect(await User.countDocuments()).toBe(0);
   });
 
+  // BUG-009: bcrypt only reads the first 72 bytes, and Vietnamese letters take 2–3 bytes each, so a 48-character
+  // password was accepted and everything after its 72nd byte was ignored at login and at password change.
+  test('TC-F1-21 a password longer than 72 bytes is rejected at register and at password change (BUG-009)', async () => {
+    const prefix = 'ư'.repeat(36); // 36 characters, 72 bytes in UTF-8
+    const tooLong = `${prefix}a1b2c3d4e5f6`; // 48 characters, 84 bytes
+    const register = (password, email) => request(app).post('/api/auth/register').send({ name: 'Lan', email, password });
+
+    const rejected = await register(tooLong, 'long@example.com');
+    expect([rejected.status, rejected.body.error.code, rejected.body.error.details]).toEqual([
+      400,
+      'VALIDATION_ERROR',
+      [{ path: 'password', issue: 'custom' }],
+    ]);
+    expect(await User.countDocuments()).toBe(0);
+
+    // Exactly 72 bytes is still fine, and then a longer new password is refused the same way.
+    const ok = await register(prefix, 'exact@example.com');
+    expect(ok.status).toBe(201);
+    const change = await request(app)
+      .patch('/api/users/me/password')
+      .set('Authorization', `Bearer ${ok.body.accessToken}`)
+      .send({ currentPassword: prefix, newPassword: tooLong });
+    expect([change.status, change.body.error.details]).toEqual([400, [{ path: 'newPassword', issue: 'custom' }]]);
+  });
+
   test('TC-F1-02 duplicate email (any letter case) is rejected with 409 EMAIL_TAKEN', async () => {
     await registerUser({ email: 'dup@example.com' });
 
@@ -297,6 +322,72 @@ describe('refresh and logout', () => {
 
     expect([res.status, res.body.error?.code]).toEqual([403, 'ACCOUNT_LOCKED']);
     expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  // BUG-010: the same race as BUG-006, for the revokes that keep this device (or end just one device). Device B's
+  // refresh is paused right after it claimed its old session; device A revokes B in one of the four ways; then B's
+  // rotation goes on to open its new session, which must not stay alive.
+  const sessionIdOf = (res) => claimsOf(res.accessToken).sid;
+  test.each([
+    ['log out other devices', (a) => request(app).delete('/api/sessions?others=true').set('Authorization', `Bearer ${a.accessToken}`)],
+    [
+      'a password change',
+      (a) =>
+        request(app)
+          .patch('/api/users/me/password')
+          .set('Authorization', `Bearer ${a.accessToken}`)
+          .send({ currentPassword: a.password, newPassword: 'new-password-2' }),
+    ],
+    ['logging out device B from Settings', (a, b) => request(app).delete(`/api/sessions/${sessionIdOf(b)}`).set('Authorization', `Bearer ${a.accessToken}`)],
+    ['device B logging itself out', (a, b) => request(app).post('/api/auth/logout').set('Cookie', b.cookie)],
+  ])('TC-F1-22 %s landing between the claim and the new session of a refresh on that device leaves it logged out (BUG-010)', async (_, revoke) => {
+    const a = await registerUser();
+    const b = await loginAs(a);
+
+    const realCreate = Session.create.bind(Session);
+    let revoked;
+    const pause = vi.spyOn(Session, 'create').mockImplementationOnce(async (...args) => {
+      revoked = await revoke(a, b);
+      return realCreate(...args);
+    });
+    const rotation = await refresh(b.cookie);
+    pause.mockRestore();
+
+    expect(revoked.status).toBe(204);
+    expect([rotation.status, rotation.body.error?.code]).toEqual([401, 'INVALID_REFRESH']);
+    // Only device A is left, and it still refreshes.
+    expect((await Session.find({ userId: a.user.id, revokedAt: null })).map((s) => String(s._id))).toEqual([sessionIdOf(a)]);
+    expect((await refresh(a.cookie)).status).toBe(200);
+  });
+
+  test('TC-F1-22 logging out a device whose list entry is out of date still logs out that device (BUG-010)', async () => {
+    const a = await registerUser();
+    const b = await loginAs(a);
+    const auth = `Bearer ${a.accessToken}`;
+    const cookieB2 = refreshCookie(await refresh(b.cookie)); // B rotated after A loaded the device list
+
+    expect((await request(app).delete(`/api/sessions/${sessionIdOf(b)}`).set('Authorization', auth)).status).toBe(204);
+    expect((await refresh(cookieB2)).status).toBe(401);
+    expect((await refresh(a.cookie)).status).toBe(200);
+    expect((await request(app).delete(`/api/sessions/${sessionIdOf(b)}`).set('Authorization', auth)).status).toBe(404);
+  });
+
+  // BUG-011: the admin lock revokes every session, so no refresh token is live any more; the refresh must still say
+  // why (403 ACCOUNT_LOCKED), for a token that was never rotated and for one that was, without counting it as theft.
+  test('TC-F1-23 after an admin lock every device of the user gets 403 ACCOUNT_LOCKED from refresh (BUG-011)', async () => {
+    const { cookie: cookieA, user, email, password } = await registerUser();
+    const other = await loginAs({ email, password });
+    const cookieB = refreshCookie(await refresh(cookieA)); // A → B
+
+    await User.updateOne({ _id: user.id }, { status: 'locked' }); // what PATCH /admin/users/:id does (services/admin.js)
+    await revokeAllSessions(user.id);
+
+    for (const cookie of [cookieA, cookieB, other.cookie]) {
+      const res = await refresh(cookie);
+      expect([res.status, res.body.error?.code]).toEqual([403, 'ACCOUNT_LOCKED']);
+    }
+    const unknown = await refresh('rt=not-a-real-token');
+    expect([unknown.status, unknown.body.error.code]).toEqual([401, 'INVALID_REFRESH']);
   });
 
   test('TC-F1-05 refresh without a cookie, with an unknown token or after expiry answers 401 INVALID_REFRESH', async () => {

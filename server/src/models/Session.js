@@ -14,6 +14,8 @@ const sessionSchema = new mongoose.Schema(
     replacedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', default: null },
     // When the login that began this rotation chain happened; every rotation copies it forward (BUG-006).
     chainStartedAt: { type: Date },
+    // Set on every row of a chain when that one device is logged out; a rotation still under way checks it (BUG-010).
+    chainEndedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

@@ -46,14 +46,14 @@ helmet → express.json({ limit: '1mb' }) → cookie-parser → requestId/logger
 
 | Piece | Design |
 |---|---|
-| Password hashing | `bcryptjs`, cost **10**. Min length 8. Hashes never leave the server (`select: false`). |
+| Password hashing | `bcryptjs`, cost **10**. Min length 8 characters, max **72 bytes** in UTF-8: bcrypt ignores every byte after the 72nd and a Vietnamese letter takes 2–3 bytes, so register and password change count bytes, not characters (BUG-009). Hashes never leave the server (`select: false`). |
 | Access token | **JWT HS256**, 15 min, claims `{ sub: userId, role, sid: sessionId }`. Sent as `Authorization: Bearer <jwt>`. Verified with `algorithms: ['HS256']`. |
 | Refresh token | 32 random bytes (base64url). Sent only as cookie **`rt`**: `HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=7d`. Stored only as a SHA-256 hash in `sessions`. |
 | Rotation | Every `/auth/refresh` revokes the old session row, creates a new one (`replacedBy`), and sets a new cookie. |
 | Reuse detection | If a refresh token belonging to an **already rotated** session is presented, all of that user's sessions are revoked (the token was probably stolen) → 401. **Grace window (BUG-003):** if it comes back within **30 s** of its rotation and its replacement has never been refreshed, the answer was most likely lost (navigation, reload, network drop), so the unused replacement is revoked and the token is rotated once more (200). One valid chain remains, and a reuse after the replacement was refreshed, or after 30 s, is still treated as theft. **Revoke all wins races (BUG-006):** revoking every session first stamps `users.sessionsRevokedAt`; a refresh that was rotating at the same moment checks that stamp (and the account status) after opening its new session. If every session was revoked after the login that began its chain (`sessions.chainStartedAt`), it revokes the new session and answers 401 `INVALID_REFRESH`, or 403 `ACCOUNT_LOCKED` when the cause was an admin lock. |
-| Logout | Revokes the current session, clears the cookie → 204. |
-| Log out others | Revokes all sessions except `sid` → 204. |
-| Lock user (admin) | `status = locked` + revoke all sessions. Login and refresh return 403 `ACCOUNT_LOCKED`. Existing access tokens expire within 15 min. |
+| Logout | Ends this device's rotation chain, clears the cookie → 204. **Wins races (BUG-010):** every row of the chain gets `sessions.chainEndedAt` first, then its live row is revoked; a refresh of this device that was rotating at the same moment sees the mark after opening its new session and revokes it (401). Logging out one device from Settings (`DELETE /sessions/:id`) does the same. |
+| Log out others | Revokes all sessions except `sid` → 204, like a revoke-all (BUG-010): the kept session's `chainStartedAt` is moved just past the time of the `users.sessionsRevokedAt` stamp, the stamp is written, then the other sessions are revoked, so a refresh racing it on another device dies too. A password change does the same. If this device's own refresh runs in that same instant, it is logged out too: the race fails safe. |
+| Lock user (admin) | `status = locked` + revoke all sessions. Login and refresh return 403 `ACCOUNT_LOCKED`: refresh checks the owner's status for any stored token, also one the lock already revoked, before the reuse check (BUG-011); an unknown token stays 401. Existing access tokens expire within 15 min. |
 | `requireAuth` | Verifies the JWT, sets `req.user = { id, role, sid }`. Missing or invalid → 401 `UNAUTHENTICATED`; expired → 401 `TOKEN_EXPIRED` (the client then refreshes). |
 | `requireRole('admin')` | `req.user.role !== 'admin'` → 403 `FORBIDDEN`. |
 | Ownership | Services always query `{ _id, userId: req.user.id, deletedAt: null }`. Not found → 404 (never reveals other users' data). |
@@ -72,11 +72,11 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 |---|---|---|---|---|---|
 | POST | `/auth/register` | — | `{name, email, password, language?}` | **201** `{accessToken, user}` + cookie | 400, 409 `EMAIL_TAKEN`, 429 |
 | POST | `/auth/login` | — | `{email, password}` | **200** `{accessToken, user}` + cookie | 400, 401 `INVALID_CREDENTIALS`, 403 `ACCOUNT_LOCKED`, 429 |
-| POST | `/auth/refresh` | cookie | — | **200** `{accessToken, user}` + new cookie | 401 `INVALID_REFRESH` |
+| POST | `/auth/refresh` | cookie | — | **200** `{accessToken, user}` + new cookie | 401 `INVALID_REFRESH`, 403 `ACCOUNT_LOCKED` |
 | POST | `/auth/logout` | cookie | — | **204** | — |
 | GET | `/auth/me` | 🔒 | — | **200** `{user}` | 401 |
 | GET | `/sessions` | 🔒 | — | **200** `[{id, userAgent, ip, lastUsedAt, current}]` | 401 |
-| DELETE | `/sessions/:id` | 🔒 | — | **204** | 404 |
+| DELETE | `/sessions/:id` | 🔒 | — | **204** (that device's whole chain, also when it rotated after the list was loaded) | 404 |
 | DELETE | `/sessions` | 🔒 | `?others=true` | **204** | — |
 | PATCH | `/users/me` | 🔒 | `{name?, language?, theme?, defaultWalletId?}` | **200** `{user}` | 400, 404 |
 | PATCH | `/users/me/password` | 🔒 | `{currentPassword, newPassword}` | **204** (also revokes other sessions) | 400, 401 `INVALID_CREDENTIALS` |

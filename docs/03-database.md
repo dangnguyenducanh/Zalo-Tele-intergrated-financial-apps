@@ -43,7 +43,7 @@ erDiagram
 | `language` | String | `vi` \| `en`, default `vi` |
 | `theme` | String | `light` \| `dark` \| `system`, default `system` |
 | `defaultWalletId` | ObjectId → Wallet | used by the bot parser |
-| `sessionsRevokedAt` | Date \| null | set by "revoke every session" (theft, admin lock) **before** it revokes them; a refresh that was already rotating re-reads it after opening its new session and revokes that session too if the stamp is not older than the chain's login (`sessions.chainStartedAt`) (BUG-006). Never sent to the client. |
+| `sessionsRevokedAt` | Date \| null | set by "revoke every session" (theft, admin lock) and by "log out other devices" / a password change (BUG-010) **before** they revoke sessions; a refresh that was already rotating re-reads it after opening its new session and revokes that session too if the stamp is not older than the chain's login (`sessions.chainStartedAt`) (BUG-006). Never sent to the client. |
 
 Indexes: `{ email: 1 }` unique.
 
@@ -58,7 +58,8 @@ Indexes: `{ email: 1 }` unique.
 | `lastUsedAt` | Date | updated on refresh |
 | `revokedAt` | Date \| null | set by logout, "log out others", admin lock, reuse detection |
 | `replacedBy` | ObjectId → Session | rotation chain, used to detect a stolen token being reused |
-| `chainStartedAt` | Date | when the login that began this rotation chain happened; set at login/register and copied forward by every rotation. A revoke-all kills every chain whose login is not newer than `users.sessionsRevokedAt` (BUG-006). Rows from before T22 lack it and fall back to `createdAt`. |
+| `chainStartedAt` | Date | when the login that began this rotation chain happened; set at login/register and copied forward by every rotation. A revoke-all kills every chain whose login is not newer than `users.sessionsRevokedAt` (BUG-006); "log out others" first moves the kept session's value just past its stamp (BUG-010). Rows from before T22 lack it and fall back to `createdAt`. |
+| `chainEndedAt` | Date \| null | set on **every** row of a chain when that one device is logged out (logout, Settings → log out this device), before its live row is revoked; a refresh that was already rotating re-reads it on the rows it claimed and revokes its new session too (BUG-010). |
 
 Indexes: `{ tokenHash: 1 }` unique; `{ userId: 1, revokedAt: 1 }`; **TTL** `{ expiresAt: 1 }, expireAfterSeconds: 0` (Atlas deletes expired sessions automatically).
 

@@ -29,8 +29,8 @@
     "currentPassword": "Mật khẩu hiện tại",
     "newPassword": "Mật khẩu mới",
     "confirm": "Nhập lại mật khẩu mới",
-    "hint": "8 đến 72 ký tự. Các thiết bị khác sẽ bị đăng xuất.",
-    "length": "Mật khẩu mới cần từ 8 đến 72 ký tự",
+    "hint": "Từ 8 ký tự, tối đa 72 ký tự không dấu (chữ có dấu tính 2–3). Các thiết bị khác sẽ bị đăng xuất.",
+    "length": "Mật khẩu mới cần ít nhất 8 ký tự",
     "wrongCurrent": "Mật khẩu hiện tại không đúng",
     "submit": "Đổi mật khẩu",
     "changed": "Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất."

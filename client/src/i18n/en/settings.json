@@ -29,8 +29,8 @@
     "currentPassword": "Current password",
     "newPassword": "New password",
     "confirm": "Repeat new password",
-    "hint": "8 to 72 characters. Your other devices will be logged out.",
-    "length": "The new password must be 8 to 72 characters",
+    "hint": "At least 8 characters, at most 72 plain letters (an accented letter counts as 2–3). Your other devices will be logged out.",
+    "length": "The new password must be at least 8 characters",
     "wrongCurrent": "The current password is wrong",
     "submit": "Change password",
     "changed": "Password changed. Your other devices were logged out."

@@ -172,7 +172,7 @@ test('TC-F1-18 password: fields are checked, a wrong current password is shown o
   await user.click(within(form).getByRole('button', { name: 'Đổi mật khẩu' }));
   expect(current).toHaveFocus();
   expect(current).toHaveAccessibleDescription('Vui lòng nhập thông tin này');
-  expect(next).toHaveAccessibleDescription('Mật khẩu mới cần từ 8 đến 72 ký tự');
+  expect(next).toHaveAccessibleDescription('Mật khẩu mới cần ít nhất 8 ký tự');
 
   await user.type(current, 'wrong-password');
   await user.type(next, 'new-secret-1');
@@ -251,4 +251,22 @@ test('TC-F12-02 settings: when the profile cannot be saved the choice still appl
 
   expect(await screen.findByText('Could not save this choice to your account. It still applies on this device.')).toBeInTheDocument();
   expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+});
+
+// BUG-009: bcrypt reads only 72 bytes, and a Vietnamese letter takes 2–3, so 48 such characters are too long.
+test('TC-F1-21 password: a new password longer than 72 bytes is refused in the browser and nothing is sent', async () => {
+  const user = userEvent.setup();
+  renderApp('/settings');
+
+  const form = await screen.findByRole('form', { name: 'Đổi mật khẩu' });
+  const next = within(form).getByLabelText(/^Mật khẩu mới/);
+  const tooLong = `${'ư'.repeat(36)}a1b2c3d4e5f6`;
+  await user.type(within(form).getByLabelText(/^Mật khẩu hiện tại/), PASSWORD);
+  await user.type(next, tooLong);
+  await user.type(within(form).getByLabelText(/^Nhập lại mật khẩu mới/), tooLong);
+  await user.click(within(form).getByRole('button', { name: 'Đổi mật khẩu' }));
+
+  expect(next).toHaveFocus();
+  expect(next).toHaveAccessibleDescription('Mật khẩu quá dài: tối đa 72 ký tự không dấu (chữ có dấu tính 2–3 ký tự)');
+  expect(sent).toEqual([]);
 });

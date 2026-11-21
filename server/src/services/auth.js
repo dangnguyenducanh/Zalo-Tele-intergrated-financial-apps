@@ -7,7 +7,7 @@ import { Session } from '../models/Session.js';
 import { User } from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { copyDefaultCategories } from './categories.js';
-import { revokeAllSessions } from './sessions.js';
+import { endSessionChain, revokeAllSessions } from './sessions.js';
 import { createDefaultWallet } from './wallets.js';
 
 const BCRYPT_COST = 10;
@@ -91,7 +91,11 @@ export async function refresh(refreshToken, client) {
   if (old) return rotate(old.userId, client, [old._id], chainStart(old));
 
   const used = await Session.findOne({ tokenHash });
-  if (!used?.replacedBy) throw invalidRefresh(); // unknown, expired, or revoked by logout: just 401
+  if (!used) throw invalidRefresh(); // unknown token: just 401
+  // BUG-011: an admin lock revokes every session, so a locked user's token is never live here. Say why (403) before
+  // the theft check below, which would only revoke the already revoked sessions again.
+  if ((await User.findById(used.userId).select('status').lean())?.status === 'locked') throw accountLocked();
+  if (!used.replacedBy) throw invalidRefresh(); // expired, or revoked by a logout: just 401
 
   // A token that was already rotated is back. If that happened moments ago and its replacement was never refreshed,
   // the browser most likely never got the answer (navigation, reload, network drop): revoke the unused
@@ -119,9 +123,12 @@ async function rotate(userId, client, revokedIds, chainStartedAt) {
   // this new session, so its updateMany could not see it. It stamps the user first, so read the stamp again now:
   // if every session was revoked after this chain's login, the chain was meant to die, and the new session with it.
   // ponytail: compares two server clocks; a skew of a few ms only matters for a login made in those same ms.
+  // BUG-010: logging out just this device marks every row of its chain, so read the rows this rotation claimed too.
   const now = await User.findById(userId).select('status sessionsRevokedAt').lean();
   const locked = now?.status === 'locked';
-  if (!now || locked || (now.sessionsRevokedAt && now.sessionsRevokedAt >= chainStartedAt)) {
+  const revokedAll = now?.sessionsRevokedAt && now.sessionsRevokedAt >= chainStartedAt;
+  const loggedOut = await Session.exists({ _id: mongoose.trusted({ $in: revokedIds }), chainEndedAt: mongoose.trusted({ $ne: null }) });
+  if (!now || locked || revokedAll || loggedOut) {
     await Session.updateOne({ _id: next.session._id }, { revokedAt: new Date() });
     throw locked ? accountLocked() : invalidRefresh();
   }
@@ -129,8 +136,10 @@ async function rotate(userId, client, revokedIds, chainStartedAt) {
   return next;
 }
 
-// Logout is a server-side revoke, not just deleting the cookie in the browser.
+// Logout is a server-side revoke, not just deleting the cookie in the browser. It ends this device's whole chain,
+// so a refresh this device has running at the same moment (another tab) cannot keep it logged in (BUG-010).
 export async function logout(refreshToken) {
   if (typeof refreshToken !== 'string' || !refreshToken) return;
-  await Session.updateOne({ tokenHash: hashToken(refreshToken), revokedAt: null }, { revokedAt: new Date() });
+  const session = await Session.findOne({ tokenHash: hashToken(refreshToken) });
+  if (session) await endSessionChain(session);
 }
