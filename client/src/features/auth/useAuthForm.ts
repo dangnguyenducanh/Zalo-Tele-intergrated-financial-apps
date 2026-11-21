@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AuthError } from '@/auth/session';
-import type { FieldErrors } from './validation';
+import { fieldErrorsFromApi, type FieldErrors } from './validation';
 
 // Form state shared by the login and register pages: values, field errors, the server error code.
 export function useAuthForm<T extends Record<string, string>>(
@@ -30,22 +30,26 @@ export function useAuthForm<T extends Record<string, string>>(
     };
   };
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const found = validate(values);
+  // Shows the field errors and moves focus to the first wrong field, so keyboard and screen reader users land on
+  // the problem. Returns whether there was one.
+  function showErrors(form: HTMLFormElement, found: FieldErrors<T>) {
     setErrors(found);
     const firstInvalid = Object.keys(found)[0];
-    if (firstInvalid) {
-      // Move focus to the first wrong field so keyboard and screen reader users land on the problem.
-      (event.currentTarget.elements.namedItem(firstInvalid) as HTMLElement | null)?.focus();
-      return;
-    }
+    if (firstInvalid) (form.elements.namedItem(firstInvalid) as HTMLElement | null)?.focus();
+    return Boolean(firstInvalid);
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (showErrors(form, validate(values))) return;
     setBusy(true);
     setServerError(null);
     try {
       await send(values); // on success AuthContext turns "authenticated" and the page redirects
     } catch (error) {
       setServerError(error instanceof AuthError ? error.code : 'GENERIC');
+      if (error instanceof AuthError) showErrors(form, fieldErrorsFromApi(error.details, values));
       setBusy(false);
     }
   }

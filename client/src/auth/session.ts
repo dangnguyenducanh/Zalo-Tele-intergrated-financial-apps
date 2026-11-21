@@ -9,9 +9,11 @@ export const API_URL = `${window.location.origin}/api`;
 
 export class AuthError extends Error {
   readonly code: string;
-  constructor(code: string) {
+  readonly details: unknown; // VALIDATION_ERROR: [{ path, issue }] naming each rejected field
+  constructor(code: string, details?: unknown) {
     super(code);
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -19,9 +21,12 @@ type Listener = (session: AuthResponse | null) => void;
 
 let accessToken: string | null = null;
 let refreshing: Promise<AuthResponse | null> | null = null;
+// Why the last refresh ended the session, when the login page must tell the user: 'ACCOUNT_LOCKED' or null (BUG-011).
+let refreshFailure: string | null = null;
 const listeners = new Set<Listener>();
 
 export const getAccessToken = () => accessToken;
+export const getRefreshFailure = () => refreshFailure;
 
 export function onSessionChange(listener: Listener): () => void {
   listeners.add(listener);
@@ -30,6 +35,7 @@ export function onSessionChange(listener: Listener): () => void {
 
 export function setSession(session: AuthResponse | null) {
   accessToken = session?.accessToken ?? null;
+  if (session) refreshFailure = null;
   listeners.forEach((listener) => listener(session));
 }
 
@@ -44,7 +50,7 @@ export async function postAuth<T>(path: string, body?: unknown): Promise<T> {
     throw new AuthError('NETWORK_ERROR');
   });
   const data: unknown = res.status === 204 ? null : await res.json().catch(() => null);
-  if (!res.ok) throw new AuthError(isApiError(data) ? data.error.code : 'GENERIC');
+  if (!res.ok) throw isApiError(data) ? new AuthError(data.error.code, data.error.details) : new AuthError('GENERIC');
   return data as T;
 }
 
@@ -60,7 +66,10 @@ function postRefresh(): Promise<AuthResponse> {
 // running get the same promise, so two parallel refreshes would not log the user out everywhere.
 export function refreshSession(): Promise<AuthResponse | null> {
   refreshing ??= postRefresh()
-    .catch(() => null)
+    .catch((error: unknown) => {
+      refreshFailure = error instanceof AuthError && error.code === 'ACCOUNT_LOCKED' ? error.code : null;
+      return null;
+    })
     .then((session) => {
       setSession(session);
       return session;

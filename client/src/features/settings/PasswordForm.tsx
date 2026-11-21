@@ -5,6 +5,7 @@ import { useAppDispatch } from '@/app/hooks';
 import { showSnackbar } from '@/app/uiSlice';
 import { useAuth } from '@/auth/useAuth';
 import PasswordField from '@/features/auth/PasswordField';
+import { passwordTooLong } from '@/features/auth/validation';
 import { apiErrorMessage } from '@/features/categories/helpers';
 import { isApiError } from '@/types/api';
 import { useChangePasswordMutation } from './settingsApi';
@@ -12,11 +13,12 @@ import { useChangePasswordMutation } from './settingsApi';
 type Field = 'currentPassword' | 'newPassword' | 'confirm';
 const EMPTY: Record<Field, string> = { currentPassword: '', newPassword: '', confirm: '' };
 
-// Same rules as the API (password 8–72 characters) and the register page. Values are i18n keys.
+// Same rules as the API (at least 8 characters, at most 72 bytes) and the register page. Values are i18n keys.
 function validate(values: Record<Field, string>): Partial<Record<Field, string>> {
   const errors: Partial<Record<Field, string>> = {};
   if (!values.currentPassword) errors.currentPassword = 'auth:validation.required';
-  if (values.newPassword.length < 8 || values.newPassword.length > 72) errors.newPassword = 'password.length';
+  if (values.newPassword.length < 8) errors.newPassword = 'password.length';
+  else if (passwordTooLong(values.newPassword)) errors.newPassword = 'auth:validation.passwordTooLong';
   if (values.confirm !== values.newPassword) errors.confirm = 'auth:validation.confirmMismatch';
   return errors;
 }
