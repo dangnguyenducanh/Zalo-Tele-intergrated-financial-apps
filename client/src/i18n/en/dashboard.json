@@ -12,8 +12,13 @@
     "noBudget": "No overall budget set",
     "setBudget": "Set a limit"
   },
-  "drafts": "{{count}} draft transactions are waiting for confirmation.",
+  "drafts_one": "{{count}} draft transaction is waiting for confirmation.",
+  "drafts_other": "{{count}} draft transactions are waiting for confirmation.",
   "openInbox": "Review drafts",
+  "budgetAlert": {
+    "title": "Budgets to watch",
+    "open": "See budgets"
+  },
   "byCategory": {
     "title": "Spending by category",
     "empty": "No spending this month yet.",

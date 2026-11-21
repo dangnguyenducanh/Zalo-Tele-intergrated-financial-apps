@@ -10,6 +10,15 @@ export type Budget = {
   percent: number; // round(spent / limit × 100); may pass 100
 };
 
+// Green below 80 %, amber from 80 % to 100 %, red above 100 % (docs/05 §5.7), the bot's rule too (services/budgets.js).
+// Compares the exact amounts, not the rounded percent, so 79.6 % is still green and 100.4 % is already red.
+// The Budgets page and the dashboard both use it, so they cannot drift apart.
+export type BudgetLevel = 'ok' | 'warn' | 'over';
+export function budgetLevel({ spent, limit }: Pick<Budget, 'spent' | 'limit'>): BudgetLevel {
+  if (spent * 100 < limit * 80) return 'ok';
+  return spent <= limit ? 'warn' : 'over';
+}
+
 export type BudgetInput = Pick<Budget, 'month' | 'categoryId' | 'limit'>;
 
 // A budget change also changes the dashboard's "budget left" card, which provides the `Budget` tag too.

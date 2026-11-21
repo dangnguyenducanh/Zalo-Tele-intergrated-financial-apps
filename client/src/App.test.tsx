@@ -203,7 +203,7 @@ test('TC-NF-03 the language button is named starting with its visible text, in b
 });
 
 // BUG-014: the profile wins at start-up (docs/05 §5.6), so the warning must not promise the choice outlives a reload.
-test('TC-F12-05 when saving a theme to the profile fails, the warning says it lasts only until a reload, and it does', async () => {
+test('TC-F12-07 when saving a theme to the profile fails, the warning says it lasts only until a reload, and it does', async () => {
   const user = userEvent.setup();
   server.use(http.patch('*/api/users/me', () => HttpResponse.error()));
   resetFake(LAN, true);
