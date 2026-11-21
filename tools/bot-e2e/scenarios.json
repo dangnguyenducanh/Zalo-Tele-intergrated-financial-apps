@@ -197,7 +197,11 @@
           "telegram:45000",
           "telegram:32000"
         ]
-      }
+      },
+      "buttons": [
+        "✅ Lưu",
+        "❌ Huỷ"
+      ]
     },
     {
       "id": "TG-11",

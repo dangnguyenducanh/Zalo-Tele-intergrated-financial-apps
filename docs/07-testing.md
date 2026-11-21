@@ -89,7 +89,7 @@ Playwright E2E runs also record automatically (`video: 'on'`, `trace: 'retain-on
 | MT-07 | Security probing as userB: open userA's transaction URL, replay an old refresh cookie, send a webhook without the secret | 404 / 401 / 401; nothing changed in DB | Ownership isolation, token reuse detection, webhook auth |
 | MT-08 | Demo rehearsal on Vercel: the full demo script, timed | under 10 min; zero errors in Vercel logs | Ready for the defense |
 
-**Real-chat bot e2e.** MT-02 to MT-04 can also be run in the student's real Telegram and Zalo (Telegram Web / Zalo Web through Claude in Chrome, or a phone). [`tools/bot-e2e/bot-e2e.mjs`](../tools/bot-e2e/bot-e2e.mjs) then checks every bot reply, every button and the server state after each step, and sends the five real MC-OCR receipts through both chats to KIE. See the runbook [testing/bot-e2e.md](testing/bot-e2e.md) (TC-F7-08, TC-F8-16…18).
+**Real-chat bot e2e.** MT-02 to MT-04 can also be run in the student's real Telegram and Zalo (Telegram Web / Zalo Web through Claude in Chrome, or a phone). [`tools/bot-e2e/bot-e2e.mjs`](../tools/bot-e2e/bot-e2e.mjs) then checks the expected bot replies, the buttons and the server state after each step, and sends the five real MC-OCR receipts through both chats to KIE. See the runbook [testing/bot-e2e.md](testing/bot-e2e.md) (TC-F7-08, TC-F8-16…18).
 
 ## 7.5 Bugs: find → fix → retest (the refine loop)
 

@@ -181,4 +181,8 @@ const commands = {
 };
 
 if (commands[command]) await commands[command]();
-else console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').filter((l) => /^\/\/ {3}|^\/\/ Options|^\/\/ {10}/.test(l)).join('\n'));
+else {
+  if (command !== 'help') console.error(`Unknown command "${command}".\n`);
+  console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').filter((l) => /^\/\/ {3}|^\/\/ Options|^\/\/ {10}/.test(l)).join('\n'));
+  if (command !== 'help') process.exit(1);
+}
