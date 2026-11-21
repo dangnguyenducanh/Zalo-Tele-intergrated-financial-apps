@@ -60,7 +60,12 @@ export default function LinkedAccounts() {
               }
             >
               <ListItemIcon sx={{ minWidth: 40 }}>{sourceIcon(link.platform)}</ListItemIcon>
-              <ListItemText primary={nameOf(link)} secondary={t('accounts.linkedOn', { date: formatDate(link.createdAt, language) })} />
+              {/* A chat name can be 64 characters with no spaces: let it break anywhere rather than widen the page. */}
+              <ListItemText
+                primary={nameOf(link)}
+                secondary={t('accounts.linkedOn', { date: formatDate(link.createdAt, language) })}
+                slotProps={{ primary: { sx: { overflowWrap: 'anywhere' } } }}
+              />
             </ListItem>
           ))}
         </List>

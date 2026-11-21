@@ -6,7 +6,7 @@
   "cancel": "Cancel",
   "confirm": "OK",
   "reload": "Reload the page",
-  "preferenceNotSaved": "Could not save this choice to your account. It still applies on this device.",
+  "preferenceNotSaved": "Could not save this choice to your account. It only lasts until the page is reloaded – please try again.",
   "nav": {
     "label": "Main navigation",
     "dashboard": "Dashboard",

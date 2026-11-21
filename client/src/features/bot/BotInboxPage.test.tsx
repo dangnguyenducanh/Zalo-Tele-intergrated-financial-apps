@@ -300,6 +300,40 @@ test('TC-F10-05 upload: the resized photo is sent as field "image", a status sho
   expect(uploads).toHaveLength(2); // the PDF never reached the server
 });
 
+// BUG-031: the status line and the error are translated when shown, so they follow a language switch.
+test('TC-F10-06 the receipt status and error switch to English with the rest of the page', async () => {
+  const user = userEvent.setup();
+  renderApp('/bot');
+  await card('phở');
+  const photo = new File([new Uint8Array(8)], 'IMG_0001.jpg', { type: 'image/jpeg' });
+
+  await user.upload(screen.getByLabelText('Chọn ảnh hoá đơn'), photo);
+  expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo bản nháp từ hoá đơn.');
+  receiptAnswer = () => fail(502, 'KIE_UNAVAILABLE');
+  await user.upload(screen.getByLabelText('Chọn ảnh hoá đơn'), photo);
+  expect(await screen.findByText('Dịch vụ đọc hoá đơn đang tạm ngưng. Vui lòng thử lại sau.')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /Đổi ngôn ngữ sang English/ }));
+  expect(await screen.findByRole('heading', { level: 1, name: 'Bot inbox' })).toBeInTheDocument();
+  expect(screen.getByText('The receipt reader is unavailable. Please try again later.')).toBeInTheDocument();
+
+  receiptAnswer = () => HttpResponse.json({ transaction: drafts[0] }, { status: 201 });
+  await user.upload(screen.getByLabelText('Choose receipt photo'), photo);
+  expect(await screen.findByRole('status')).toHaveTextContent('A draft was created from the receipt.');
+  await user.click(screen.getByRole('button', { name: /Change language to Tiếng Việt/ }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo bản nháp từ hoá đơn.');
+});
+
+// BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card, not widen the page.
+test('TC-F7-09 a long linked-chat name with no spaces may break anywhere, so it stays inside the card', async () => {
+  const name = 'Nguyễn_Thị_Phương_Thảo_Official_Shop_Mỹ_Phẩm_Chính_Hãng_Giá_Rẻ';
+  links = [{ id: 'l1', platform: 'telegram', displayName: name, createdAt: NOW }];
+  renderApp('/bot');
+
+  const text = await screen.findByText(`Telegram · ${name}`);
+  expect(getComputedStyle(text).overflowWrap).toBe('anywhere');
+});
+
 test('TC-F9-04 opening the inbox again shows drafts confirmed in the chat meanwhile as gone (BUG-004)', async () => {
   const { router } = renderApp('/bot');
   expect(await screen.findByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (3)' })).toBeInTheDocument();

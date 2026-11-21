@@ -2,6 +2,7 @@ import { Box, Drawer, Toolbar, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/auth/useAuth';
 import Brand from './BrandMark';
+import { initials } from './initials';
 import NavList from './NavList';
 import { GRADIENT } from '@/theme/theme';
 import { navItemsFor } from './navItems';
@@ -42,11 +43,3 @@ export default function NavDrawer() {
     </Drawer>
   );
 }
-
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(-2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('');

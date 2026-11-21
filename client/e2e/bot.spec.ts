@@ -30,8 +30,8 @@ const drafts = async (request: APIRequestContext, headers: Record<string, string
   (await (await request.get('/api/transactions?status=draft', { headers })).json()) as { total: number; items: { amount: number; source: string }[] };
 
 // A private Telegram chat message, in the shape Telegram POSTs to the webhook (server/test/fixtures/telegram-updates.json).
-function telegramUpdate(chatId: number, messageId: number, text: string) {
-  const person = { id: chatId, first_name: 'Anh', last_name: 'Nguyen' };
+function telegramUpdate(chatId: number, messageId: number, text: string, name: { first_name: string; last_name?: string } = { first_name: 'Anh', last_name: 'Nguyen' }) {
+  const person = { id: chatId, ...name };
   return { update_id: messageId, message: { message_id: messageId, from: { ...person, is_bot: false }, chat: { ...person, type: 'private' }, date: 1763620200, text } };
 }
 
@@ -78,6 +78,28 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
   const row = page.getByRole('row').filter({ hasText: 'phở' });
   await expect(row).toContainText(/−50\.000\s₫/);
   await expect(row).not.toContainText('Nháp');
+});
+
+// BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card at any width.
+test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accounts: no sideways scroll on a phone', async ({ page, request }, testInfo) => {
+  const { email } = await createAccount(request);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await logIn(page, email);
+  await page.goto('/bot');
+  await page.getByRole('button', { name: 'Tạo mã liên kết' }).click();
+  const code = (await page.getByRole('region', { name: 'Liên kết Telegram / Zalo' }).getByText(/^[A-Z2-9]{6}$/).textContent())!;
+  const longName = 'Nguyễn_Thị_Phương_Thảo_Official_Shop_Mỹ_Phẩm_Chính_Hãng_Giá_Rẻ';
+  const webhook = { headers: { 'X-Telegram-Bot-Api-Secret-Token': TELEGRAM_SECRET } };
+  const update = telegramUpdate(Math.floor(Math.random() * 1e9), 1, `/start ${code}`, { first_name: longName });
+  expect((await request.post('/api/webhooks/telegram', { ...webhook, data: update })).status()).toBe(200);
+  const accounts = page.getByRole('region', { name: 'Tài khoản đã liên kết' });
+  await expect(accounts).toContainText(longName, { timeout: 10_000 });
+
+  for (const width of [390, 375, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `no sideways scroll at ${width} px`).toBe(true);
+    await accounts.screenshot({ path: testInfo.outputPath(`linked-accounts-long-name-${width}.png`), animations: 'disabled' });
+  }
 });
 
 test('TC-F10-03 an 8 MB phone photo is shrunk in the browser: the request stays under 4.5 MB and KIE makes a draft', async ({ page, request }, testInfo) => {

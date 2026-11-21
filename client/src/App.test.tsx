@@ -26,8 +26,8 @@ const guardedRoutes = [
   },
 ];
 
-async function logIn(user = userEvent.setup()) {
-  await user.type(await screen.findByRole('textbox', { name: 'Email' }), LAN.email);
+async function logIn(user = userEvent.setup(), email = LAN.email) {
+  await user.type(await screen.findByRole('textbox', { name: 'Email' }), email);
   await user.type(screen.getByLabelText(/^Mật khẩu/), PASSWORD);
   await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
 }
@@ -65,6 +65,23 @@ test('TC-F1-17 ProtectedRoute sends a visitor to /login and back to the page the
   expect(await screen.findByRole('heading', { name: 'Secret page' })).toBeInTheDocument();
   // The query string (e.g. URL-synced filters) and hash come back too.
   expect(router.state.location).toMatchObject({ pathname: '/secret', search: '?wallet=w1', hash: '#top' });
+});
+
+// BUG-013: logging out must not hand the next person who logs in on this browser the last page (and filters) of the previous user.
+test('TC-F1-25 after a logout the next user to log in starts at /, not on the previous user\'s page', async () => {
+  const user = userEvent.setup();
+  resetFake(LAN, true);
+  const { router } = renderApp('/transactions?walletId=w1');
+  await user.click(await screen.findByRole('button', { name: 'Tài khoản' }));
+  await user.click(await screen.findByRole('menuitem', { name: 'Đăng xuất' }));
+  expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument();
+
+  resetFake({ ...LAN, id: 'u2', name: 'Minh', email: 'minh@example.com' });
+  await logIn(user, 'minh@example.com');
+
+  await waitFor(() => expect(router.state.location.pathname).not.toBe('/login'));
+  expect(router.state.location).toMatchObject({ pathname: '/', search: '' });
+  expect(await screen.findByRole('heading', { level: 1, name: 'Xin chào, Minh' })).toBeInTheDocument();
 });
 
 test('TC-F1-17 a logged-in user who opens /login or /register is sent to the app', async () => {
@@ -183,6 +200,22 @@ test('TC-NF-03 the language button is named starting with its visible text, in b
 
   const toVietnamese = await screen.findByRole('button', { name: 'VI – Change language to Tiếng Việt' });
   expect(toVietnamese).toHaveTextContent(/^VI$/);
+});
+
+// BUG-014: the profile wins at start-up (docs/05 §5.6), so the warning must not promise the choice outlives a reload.
+test('TC-F12-05 when saving a theme to the profile fails, the warning says it lasts only until a reload, and it does', async () => {
+  const user = userEvent.setup();
+  server.use(http.patch('*/api/users/me', () => HttpResponse.error()));
+  resetFake(LAN, true);
+  const first = renderApp('/');
+
+  await user.click(await screen.findByRole('button', { name: 'Chuyển sang giao diện tối' }));
+  expect(await screen.findByText('Không lưu được lựa chọn vào tài khoản. Lựa chọn chỉ có hiệu lực đến khi tải lại trang – vui lòng thử lại.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Chuyển sang giao diện sáng' })).toBeInTheDocument();
+
+  first.unmount(); // "reload": the saved profile (theme: system) is applied again
+  renderApp('/');
+  expect(await screen.findByRole('button', { name: 'Chuyển sang giao diện tối' })).toBeInTheDocument();
 });
 
 test('TC-F12-02 the language saved in the profile is applied after login', async () => {

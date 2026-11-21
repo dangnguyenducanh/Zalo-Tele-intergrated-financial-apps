@@ -3,6 +3,7 @@ import { useAuth } from './useAuth';
 
 // Layout route: renders the child routes only for a logged-in user, otherwise goes to /login and
 // remembers where the user wanted to go. (While the session is restoring, App shows a splash.)
+// An explicit logout then replaces this with a plain /login (UserMenu), so the next user does not inherit it.
 export default function ProtectedRoute() {
   const { status } = useAuth();
   const location = useLocation();
