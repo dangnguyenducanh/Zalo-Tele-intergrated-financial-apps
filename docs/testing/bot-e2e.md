@@ -21,6 +21,7 @@ The receipt steps take `--photo <file>` and expect that photo's true total. The 
 ## Running it
 
 ```bash
+node tools/bot-e2e/bot-e2e.mjs --help    # the usage (an unknown option prints the usage and exits 1)
 node tools/bot-e2e/bot-e2e.mjs list      # the steps
 node tools/bot-e2e/bot-e2e.mjs setup     # e2e user exists and is empty
 node tools/bot-e2e/bot-e2e.mjs code      # code for TG-01 (run again for ZL-01: codes are single-use)
@@ -30,7 +31,7 @@ node tools/bot-e2e/bot-e2e.mjs step TG-10 --photo mcocr_public_145014khrvg.jpg -
 node tools/bot-e2e/bot-e2e.mjs reset     # always at the end: no transactions, no chat links
 ```
 
-Run `step` right after its action: the state check is exact, and the next action changes it. A step that fails exits with code 1 and lists each problem (missing reply pattern, missing button, state difference).
+Run `step` right after its action: the state check is exact, and the next action changes it. A step that fails exits with code 1 and lists each problem (missing reply pattern, missing button, state difference). The tool's own self-test (TC-NF-15: help and bad options) is `node --test tools/bot-e2e/bot-e2e.test.mjs`; it needs no network.
 
 ### Driving the chats with Claude in Chrome
 

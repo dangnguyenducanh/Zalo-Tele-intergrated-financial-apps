@@ -106,5 +106,23 @@
     "status": "Closed",
     "dateClosed": "2026-11-21",
     "evidence": "TC-F1-20 (4 cases): pausing Session.create makes the interleaving deterministic; the 2 interleaving cases failed before the fix (200, one session alive), and the 'session younger than the stamp' case failed against the first version of the fix (200). All pass now; 40 real parallel retries left 0 active sessions."
+  },
+  {
+    "id": "BUG-007",
+    "dateFound": "2026-11-21",
+    "foundBy": "manual: deploy check 2026-11-21",
+    "feature": "Tools / bot e2e",
+    "severity": "S4 Trivial",
+    "title": "bot-e2e.mjs --help (or any unknown option) crashes with a stack trace instead of printing the usage",
+    "stepsToReproduce": "1. node tools/bot-e2e/bot-e2e.mjs --help\n2. node tools/bot-e2e/bot-e2e.mjs list --targt staging",
+    "expected": "--help/-h prints the usage and exits 0; an unknown option prints a one-line error plus the usage and exits 1, like an unknown command.",
+    "actual": "Both print an uncaught TypeError [ERR_PARSE_ARGS_UNKNOWN_OPTION] with a Node stack trace and no usage.",
+    "rootCause": "parseArgs() runs in strict mode (the default), so it throws on any option it was not told about; the tool declared no help option and did not catch the error. Only unknown commands had a friendly path.",
+    "fix": "Declare --help/-h; catch parseArgs's ERR_PARSE_ARGS_* errors (unknown option, missing value) and print the message on one line, then the usage, exit 1. The usage text moved into one usage() function shared by --help, the help command and both error paths.",
+    "filesOrCommit": "tools/bot-e2e/bot-e2e.mjs, tools/bot-e2e/bot-e2e.test.mjs; T23 (#51)",
+    "regressionTest": "TC-NF-15",
+    "status": "Closed",
+    "dateClosed": "2026-11-21",
+    "evidence": "TC-NF-15 (4 cases, node --test tools/bot-e2e/bot-e2e.test.mjs): all 4 failed before the fix (stack trace, exit 1 for --help) and pass after it."
   }
 ]

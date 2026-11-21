@@ -14,7 +14,7 @@ Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free clus
 
 **Why not host KIE on Hugging Face Spaces?** Its docs still list a free CPU Basic tier (2 vCPU, 16 GB, sleeps after 48 h idle), but 2026 forum threads report free Docker Spaces being restricted. It is not reliable enough for demo day. Our own machine plus a tunnel is fully under our control.
 
-**Checked on the dev server (192.168.30.28):** Docker 29.1.3 ✅, `cloudflared` at `/usr/local/bin/cloudflared` ✅, Node 22.22.1 ✅, **Vercel CLI not installed** (use `npx vercel@latest`, which must be ≥ 47.0.5 for zero-config Express; or deploy through the GitHub integration).
+**Checked on the dev server (192.168.30.28):** Docker 29.1.3 ✅, `cloudflared` at `/usr/local/bin/cloudflared` ✅, Node 22.22.1 ✅, **Vercel CLI not installed**: the scripts run it through `npx`, pinned to **`vercel@66.6.0`** (zero-config Express needs ≥ 47.0.5). The version is set in one place, `VERCEL_CLI` at the top of `tools/deploy.sh`, which `tools/vercel-env-push.sh` also reads, so a new CLI release cannot change a deploy until that line is changed.
 
 ## 6.2 MongoDB Atlas (≈ 10 min)
 

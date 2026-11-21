@@ -2,7 +2,7 @@
 
 A personal finance web app (topic #16, *Quản lý chi tiêu cá nhân*) with **Telegram and Zalo bots**: send `phở 45k` or a receipt photo to the bot, confirm the draft, and it becomes a transaction. The web app has wallets, categories, monthly budgets and statistics. It supports Vietnamese and English and has light and dark themes.
 
-> Status: **live** since 2026-11-21. 18 task cards built, reviewed and merged (the last two are the UI redesigns); 298 automated tests pass (169 server, 94 client, 35 end-to-end); the receipt test skips without the live KIE service. 2 bugs found by tests, both fixed and closed. Final-term web class project (BTL), done by one student.
+> Status: **live** since 2026-11-21. 23 task cards built, reviewed and merged (T17–T18 are the UI redesigns, T19–T23 the real-chat bot e2e and the fixes found while running it live); 312 automated tests pass (176 server, 96 client, 36 end-to-end, 4 tool self-tests). Two of them, the receipt tests TC-F10-01 and TC-F10-03, need the live KIE service: they pass against it and skip without it (as in CI). 7 bugs logged (2 found by automated tests, 3 by manual charter runs, 1 by code review, 1 by a deploy check), all fixed and closed. Final-term web class project (BTL), done by one student.
 
 | | |
 |---|---|
@@ -38,7 +38,7 @@ The last command rebuilds the Excel report: test cases with what each one proves
 
 ## Team (Phân công)
 
-One member did every part: requirements and design, frontend, backend, database, both bots, receipt reading, testing and deployment. The build was split into 16 task cards, each implemented, reviewed and merged as its own pull request ([docs/08](docs/08-agent-workflow.md)).
+One member did every part: requirements and design, frontend, backend, database, both bots, receipt reading, testing and deployment. The build was split into 23 task cards (T01–T23) plus one bug card, each implemented, reviewed and merged as its own pull request ([docs/08](docs/08-agent-workflow.md)).
 
 ## Documentation
 

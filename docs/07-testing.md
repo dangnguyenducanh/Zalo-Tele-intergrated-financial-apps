@@ -32,24 +32,24 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**116 cases**: 108 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**128 cases**: 120 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
-| F1 Auth | 10 | TC-F1-01 passwords stored as bcrypt hashes; TC-F1-05 refresh rotation + stolen-token reuse detection; TC-F1-06 logout really revokes server-side; TC-F1-08 reload keeps you logged in (silent refresh) |
-| F2 Wallets | 5 | TC-F2-02 user B can't touch user A's wallet (404); TC-F2-04 balance excludes drafts and deleted items |
-| F3 Categories | 4 | TC-F3-01 defaults seeded on register; TC-F3-03 deleting a category moves its transactions to "Other" |
-| F4 Transactions | 7 | TC-F4-02 only positive integer VND accepted; TC-F4-07 month boundaries use Vietnam time |
-| F5 Budgets | 4 | TC-F5-01 one budget per category per month (409); TC-F5-03 80 %/100 % warnings on web and bot |
-| F6 Statistics | 4 | TC-F6-01 totals equal hand-computed fixture; TC-F6-03 daily grouping in VN time |
-| F7 Bot linking | 5 | TC-F7-02 link codes are single-use and expire; TC-F7-03 one chat account → one web account |
-| F8 Bot capture | 13 | TC-F8-01 parser table; TC-F8-03 bad webhook secret rejected; TC-F8-05 duplicate delivery → one draft; TC-F8-08 Zalo photo → KIE → draft |
-| F9 Bot inbox | 2 | TC-F9-01 edit + confirm a draft from the web |
-| F10 Receipt upload | 3 | TC-F10-01 real KIE output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit |
-| F11 Admin | 5 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
-| F12 Preferences | 3 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
-| F13 Quick add | 3 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
-| Non-functional | 8 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke |
+| F1 Auth | 20 | TC-F1-01 passwords stored as bcrypt hashes; TC-F1-05 refresh rotation + stolen-token reuse detection; TC-F1-06 logout really revokes server-side; TC-F1-08 reload keeps you logged in (silent refresh) |
+| F2 Wallets | 6 | TC-F2-02 user B can't touch user A's wallet (404); TC-F2-04 balance excludes drafts and deleted items |
+| F3 Categories | 6 | TC-F3-01 defaults seeded on register; TC-F3-03 deleting a category moves its transactions to "Other" |
+| F4 Transactions | 11 | TC-F4-02 only positive integer VND accepted; TC-F4-07 month boundaries use Vietnam time |
+| F5 Budgets | 6 | TC-F5-01 one budget per category per month (409); TC-F5-03 80 %/100 % warnings on web and bot |
+| F6 Statistics | 5 | TC-F6-01 totals equal hand-computed fixture; TC-F6-03 daily grouping in VN time |
+| F7 Bot linking | 8 | TC-F7-02 link codes are single-use and expire; TC-F7-03 one chat account → one web account |
+| F8 Bot capture | 18 | TC-F8-01 parser table; TC-F8-03 bad webhook secret rejected; TC-F8-05 duplicate delivery → one draft; TC-F8-08 Zalo photo → KIE → draft |
+| F9 Bot inbox | 4 | TC-F9-01 edit + confirm a draft from the web |
+| F10 Receipt upload | 5 | TC-F10-01 real KIE output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit |
+| F11 Admin | 8 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
+| F12 Preferences | 4 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
+| F13 Quick add | 4 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
+| Non-functional | 15 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-15 the bot-e2e tool's `--help` and bad options |
 | Manual charters | 8 | MT-01…MT-08 below |
 
 ## 7.4 Manual testing in the browser (recorded)
@@ -60,7 +60,7 @@ Run by Claude in your Chrome (or by you). Each charter is one recorded session.
 1. `npm run seed:test` on the target environment.
 2. Open the backend logs:
    - Local: the API console (every line has a request id).
-   - Production: Vercel → Project → **Logs** (live), or `npx vercel@latest logs <deployment-url>`.
+   - Production: Vercel → Project → **Logs** (live), or `npx vercel@66.6.0 logs <deployment-url>` (the CLI version pinned in `tools/deploy.sh`, see docs/06).
 3. Open Atlas → **Data Explorer** on the right database, to check documents after each step.
 
 **During the session**
@@ -148,6 +148,7 @@ Dropdowns limit Status, Severity and Result to valid values, and failed or open 
 npm run typecheck                    # client tsc --noEmit
 npm test                             # unit + API + webhook + component (Vitest), writes test-results/{server,client}-vitest.xml
 npm run test:e2e                     # Playwright, writes test-results/e2e.xml + videos
+node --test tools/bot-e2e/bot-e2e.test.mjs   # TC-NF-15: the bot-e2e tool's --help and bad options (not part of npm test)
 npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml
 ```
 
@@ -156,5 +157,5 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (116 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (128 cases, last results from results.json)
 ```
