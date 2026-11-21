@@ -9,6 +9,9 @@ target="${1:?usage: tools/vercel-env-push.sh staging|production [KEY...]}"
 shift
 root="$(git rev-parse --show-toplevel)"
 env_file="$root/server/.env"
+# The pinned Vercel CLI, from its one definition in tools/deploy.sh.
+VERCEL_CLI="$(sed -n 's/^VERCEL_CLI="\(.*\)"$/\1/p' "$root/tools/deploy.sh")"
+[ -n "$VERCEL_CLI" ] || { echo "VERCEL_CLI not found in tools/deploy.sh" >&2; exit 1; }
 # A value exactly as Node's --env-file reads it (what the local server sees), so Vercel gets the same thing:
 # quoted → the text inside the quotes; unquoted → cut at '#' (a comment) and trimmed.
 envval() {
@@ -41,7 +44,7 @@ push() { # key value
   [[ ! "$2" =~ $placeholder ]] || { echo "  skip $1 (still a <placeholder> from .env.example)"; return; }
   # --force overwrites an existing value in one step (newer Vercel CLIs refuse a scripted `env rm` without an
   # extra --confirm-name); the value still travels through stdin, never the command line.
-  if printf '%s' "$2" | npx -y vercel@latest env add "$1" production --force --yes >/dev/null 2>&1; then
+  if printf '%s' "$2" | npx -y "$VERCEL_CLI" env add "$1" production --force --yes >/dev/null 2>&1; then
     echo "  set  $1"; pushed=$((pushed + 1))
   else
     echo "  FAILED $1" >&2; failed=1
