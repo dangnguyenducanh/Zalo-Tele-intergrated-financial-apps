@@ -25,6 +25,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '@/app/hooks';
 import { showSnackbar } from '@/app/uiSlice';
+import { getAccessToken, setSession } from '@/auth/session';
+import { useAuth } from '@/auth/useAuth';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import MoneyText from '@/components/MoneyText';
@@ -49,6 +51,7 @@ export default function WalletsPage() {
   const [deleteWallet] = useDeleteWalletMutation();
   const [editing, setEditing] = useState<Wallet | 'new' | null>(null); // which dialog is open
   const [deleting, setDeleting] = useState<Wallet | null>(null);
+  const { user } = useAuth();
 
   const active = wallets.filter((wallet) => !wallet.archived);
   const archived = wallets.filter((wallet) => wallet.archived);
@@ -63,12 +66,29 @@ export default function WalletsPage() {
     }
   }
 
+  // The server clears the default wallet when it is archived or deleted; the signed-in user is updated to match,
+  // so the Add form and Settings stop offering it without a reload.
+  function forgetIfDefault(walletId: string) {
+    const accessToken = getAccessToken();
+    if (user && accessToken && user.defaultWalletId === walletId) setSession({ accessToken, user: { ...user, defaultWalletId: null } });
+  }
+
+  async function toggleArchive(wallet: Wallet) {
+    await updateWallet({ id: wallet.id, archived: !wallet.archived }).unwrap();
+    if (!wallet.archived) forgetIfDefault(wallet.id);
+  }
+
+  async function remove(wallet: Wallet) {
+    await deleteWallet(wallet.id).unwrap();
+    forgetIfDefault(wallet.id);
+  }
+
   const cardFor = (wallet: Wallet) => (
     <WalletCard
       key={wallet.id}
       wallet={wallet}
       onEdit={() => setEditing(wallet)}
-      onToggleArchive={() => void run(() => updateWallet({ id: wallet.id, archived: !wallet.archived }).unwrap())}
+      onToggleArchive={() => void run(() => toggleArchive(wallet))}
       onDelete={() => setDeleting(wallet)}
     />
   );
@@ -118,7 +138,7 @@ export default function WalletsPage() {
         onConfirm={() => {
           const wallet = deleting;
           setDeleting(null);
-          if (wallet) void run(() => deleteWallet(wallet.id).unwrap(), t('deleted'));
+          if (wallet) void run(() => remove(wallet), t('deleted'));
         }}
         onCancel={() => setDeleting(null)}
       />

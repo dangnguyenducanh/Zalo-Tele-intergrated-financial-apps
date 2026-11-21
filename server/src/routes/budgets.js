@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { MAX_MONEY } from '../models/Transaction.js';
 import { copyBudgets, createBudget, deleteBudget, listBudgets, updateBudget } from '../services/budgets.js';
 import { monthKey } from '../utils/vnTime.js';
 
@@ -11,7 +12,7 @@ router.use(requireAuth);
 export const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'must be YYYY-MM');
 export const monthQuery = z.object({ month: month.default(() => monthKey(new Date())) });
 
-const limit = z.int().positive(); // whole VND, 1 … Number.MAX_SAFE_INTEGER
+const limit = z.int().positive().max(MAX_MONEY); // whole VND, 1 … 10^13
 const createBody = z.object({
   month,
   categoryId: z.string().regex(/^[0-9a-f]{24}$/i, 'must be an id').nullable(), // null = overall budget; must be sent

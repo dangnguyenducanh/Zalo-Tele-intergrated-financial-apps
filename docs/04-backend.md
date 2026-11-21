@@ -88,7 +88,7 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 | GET | `/wallets` | 🔒 | `?includeArchived=` | **200** `[{…, balance}]` | — |
 | POST | `/wallets` | 🔒 | `{name, type, initialBalance, aliases?, color?, icon?}` | **201** | 400, 409 `NAME_TAKEN` |
 | GET | `/wallets/:id` | 🔒 | — | **200** | 404 |
-| PATCH | `/wallets/:id` | 🔒 | any field above, `archived?` | **200** | 400, 404, 409 |
+| PATCH | `/wallets/:id` | 🔒 | any field above, `archived?` (archiving the default wallet clears the user's default) | **200** | 400, 404, 409 |
 | DELETE | `/wallets/:id` | 🔒 | — | **204** | 404, 409 `WALLET_IN_USE` |
 | GET | `/categories` | 🔒 | `?type=expense\|income` | **200** | — |
 | POST | `/categories` | 🔒 | `{type, name, keywords?, icon?, color?}` | **201** | 400, 409 |
@@ -105,13 +105,13 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 | Method | Path | Auth | Body / query | Success | Errors |
 |---|---|---|---|---|---|
 | GET | `/transactions` | 🔒 | `?from&to&type&walletId&categoryId&status&source&q&page=1&limit=20&sort=-occurredAt` | **200** `{items, page, limit, total}` | 400 |
-| POST | `/transactions/parse` | 🔒 | `{text}` (web quick add; same parser as the bots) | **200** `{drafts:[{type, amount, categoryId, walletId, occurredAt, note}]}`; nothing is saved | 400, 422 `NO_AMOUNT_FOUND` |
+| POST | `/transactions/parse` | 🔒 | `{text}` (web quick add; same parser as the bots) | **200** `{drafts:[{type, amount, categoryId, walletId, occurredAt, note}], noAmountLines:[3], truncated}`: `noAmountLines` are the line numbers with no amount, `truncated` is true past 10 lines; nothing is saved | 400, 422 `NO_AMOUNT_FOUND` (no line has an amount) |
 | POST | `/transactions` | 🔒 | `{type, amount, walletId, categoryId, occurredAt, note?}` | **201** (status `confirmed`) | 400, 404 (wallet/category) |
 | GET | `/transactions/:id` | 🔒 | — | **200** | 404 |
 | PATCH | `/transactions/:id` | 🔒 | any editable field | **200** | 400, 404 |
 | DELETE | `/transactions/:id` | 🔒 | — | **204** (soft) | 404 |
 | POST | `/transactions/:id/restore` | 🔒 | — | **200** (undo delete) | 404 |
-| POST | `/transactions/:id/confirm` | 🔒 | — | **200** `{transaction, budgetWarning?}` | 404, 409 `ALREADY_CONFIRMED` |
+| POST | `/transactions/:id/confirm` | 🔒 | optional edits, same fields as PATCH (the Bot inbox) | **200** `{transaction, budgetWarning?}`; the edits and the confirm are one write that only matches a draft | 400, 404, 409 `ALREADY_CONFIRMED` (nothing changed) |
 | GET | `/stats/summary` | 🔒 | `?month=YYYY-MM` | **200** `{income, expense, net, budget:{limit, spent}}` | 400 |
 | GET | `/stats/by-category` | 🔒 | `?month=&type=expense` | **200** `[{categoryId, name, total, percent}]` | 400 |
 | GET | `/stats/daily` | 🔒 | `?month=` | **200** `[{date, income, expense}]` | 400 |

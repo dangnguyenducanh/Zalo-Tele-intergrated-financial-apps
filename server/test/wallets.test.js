@@ -150,6 +150,20 @@ test('TC-F2-03 deleting the default wallet clears the user\'s default', async ()
   expect((await User.findById(user.id)).defaultWalletId).toBeNull(); // the bot then falls back to another wallet
 });
 
+test('TC-F2-07 archiving the default wallet clears the default; quick add and the bots then use an active wallet', async () => {
+  const { accessToken, user } = await registerUser();
+  const me = api(accessToken);
+  const { body: momo } = await me.post('/wallets', { name: 'MoMo', type: 'ewallet', initialBalance: 0 });
+
+  expect((await me.patch(`/wallets/${user.defaultWalletId}`, { archived: true })).status).toBe(200);
+  expect((await me.get('/auth/me')).body.user.defaultWalletId).toBeNull(); // Settings and the server agree
+  expect((await me.post('/transactions/parse', { text: 'phở 45k' })).body.drafts[0].walletId).toBe(momo.id);
+
+  // An account already left in that state (default archived before this fix) is not filed into the hidden wallet either.
+  await User.updateOne({ _id: user.id }, { defaultWalletId: user.defaultWalletId });
+  expect((await me.post('/transactions/parse', { text: 'phở 45k' })).body.drafts[0].walletId).toBe(momo.id);
+});
+
 test('TC-F2-04 balance counts only confirmed, non-deleted transactions of that wallet', async () => {
   const userA = await registerUser();
   const userB = await registerUser();

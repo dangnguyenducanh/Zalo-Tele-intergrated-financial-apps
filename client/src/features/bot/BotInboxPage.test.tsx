@@ -97,12 +97,15 @@ beforeEach(() => {
       drafts = drafts.map((d) => (d.id === params.id ? { ...d, deleted: true } : d));
       return new HttpResponse(null, { status: 204 });
     }),
-    http.post('*/api/transactions/:id/confirm', ({ params }) => {
-      sent.push({ method: 'POST', url: `/transactions/${params.id}/confirm` });
+    // Like the server: optional edits in the body, applied in the same step and only to a draft.
+    http.post('*/api/transactions/:id/confirm', async ({ request, params }) => {
+      const text = await request.text();
+      const body = text ? (JSON.parse(text) as Partial<Draft>) : undefined;
+      sent.push({ method: 'POST', url: `/transactions/${params.id}/confirm`, body });
       const found = drafts.find((d) => d.id === params.id);
       if (!found) return fail(404, 'NOT_FOUND');
       if (found.status === 'confirmed') return fail(409, 'ALREADY_CONFIRMED');
-      found.status = 'confirmed';
+      Object.assign(found, body, { status: 'confirmed' });
       return HttpResponse.json({ transaction: found, ...confirmAnswer });
     }),
     http.get('*/api/chat-links', () => HttpResponse.json(links)),
@@ -122,7 +125,7 @@ beforeEach(() => {
 const card = (name: string) => screen.findByRole('form', { name });
 const writes = () => sent.filter((s) => s.method !== 'GET').map((s) => `${s.method} ${s.url}`);
 
-test('TC-F9-03 drafts from every source: edit the amount inline, Confirm saves the change then confirms', async () => {
+test('TC-F9-03 drafts from every source: edit the amount inline, Confirm sends the change with the confirm', async () => {
   const user = userEvent.setup();
   renderApp('/bot');
 
@@ -150,13 +153,13 @@ test('TC-F9-03 drafts from every source: edit the amount inline, Confirm saves t
 
   expect(await screen.findByText('Đã lưu giao dịch')).toBeInTheDocument();
   await waitFor(() => expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument());
-  expect(writes()).toEqual(['PATCH /transactions/d1', 'POST /transactions/d1/confirm']); // the edit first, then confirm
+  expect(writes()).toEqual(['POST /transactions/d1/confirm']); // the edit travels with the confirm (TC-F9-06)
   expect(sent[0]?.body).toEqual({ type: 'expense', amount: 50000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'phở' });
   // The Confirm button left with its card: focus is on the list heading, not lost to <body>.
   expect(screen.getByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toHaveFocus();
 });
 
-test('TC-F9-03 receipt line items expand; an unchanged draft confirms without a PATCH; Discard asks first', async () => {
+test('TC-F9-03 receipt line items expand; an unchanged draft confirms without edits; Discard asks first', async () => {
   const user = userEvent.setup();
   confirmAnswer = { budgetWarning: { percent: 85, threshold: 80 } };
   renderApp('/bot');
@@ -171,6 +174,7 @@ test('TC-F9-03 receipt line items expand; an unchanged draft confirms without a 
   await user.click(within(await card('lương')).getByRole('button', { name: 'Xác nhận' }));
   expect(await screen.findByText('Đã lưu. Bạn đã dùng 85% ngân sách tháng này.')).toBeInTheDocument();
   expect(writes()).toEqual(['POST /transactions/d3/confirm']);
+  expect(sent[0]?.body).toBeUndefined();
   expect(screen.getByRole('heading', { level: 2, name: /^Bản nháp chờ duyệt/ })).toHaveFocus();
 
   await user.click(within(receipt).getByRole('button', { name: 'Bỏ' }));
@@ -196,6 +200,23 @@ test('TC-F9-02 a draft already confirmed in the chat: Confirm shows the translat
   await waitFor(() => expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument());
   expect(writes()).toEqual(['POST /transactions/d1/confirm']);
   expect(screen.getByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toHaveFocus();
+});
+
+test('TC-F9-06 a stale card confirmed in the chat meanwhile: a changed amount is refused and the saved transaction keeps its amount (BUG-008)', async () => {
+  const user = userEvent.setup();
+  renderApp('/bot');
+  const pho = await card('phở');
+
+  drafts[0]!.status = 'confirmed'; // ✅ in Telegram saved it at 45.000 while the inbox stayed open
+  const amount = within(pho).getByRole('textbox', { name: 'Số tiền (₫)' });
+  await user.clear(amount);
+  await user.type(amount, '99k');
+  await user.click(within(pho).getByRole('button', { name: 'Xác nhận' }));
+
+  expect(await screen.findByText('Giao dịch này đã được xác nhận.')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument());
+  expect(writes()).toEqual(['POST /transactions/d1/confirm']); // one request: no PATCH that could change the saved entry
+  expect(drafts[0]).toMatchObject({ amount: 45000, status: 'confirmed' });
 });
 
 test('TC-F7-06 link card: the code with a countdown, the Telegram link + QR and the Zalo command; unlink an account', async () => {

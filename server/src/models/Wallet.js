@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { MAX_MONEY } from './Transaction.js';
 
 // docs/03 §3.3 `wallets`. The current balance is not stored: services/wallets.js computes it from the
 // confirmed transactions every time it is read.
@@ -7,7 +8,7 @@ const walletSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     name: { type: String, required: true, trim: true, minlength: 1, maxlength: 40 },
     type: { type: String, enum: ['cash', 'bank', 'ewallet', 'credit'], required: true },
-    initialBalance: { type: Number, default: 0, validate: Number.isSafeInteger }, // may be negative (credit card)
+    initialBalance: { type: Number, default: 0, validate: (v) => Number.isSafeInteger(v) && Math.abs(v) <= MAX_MONEY }, // may be negative (credit card)
     aliases: { type: [String], default: [] }, // bot shortcuts such as "mm", stored like the parser reads them
     color: { type: String, default: '' },
     icon: { type: String, default: '' },

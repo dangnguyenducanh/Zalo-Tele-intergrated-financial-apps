@@ -21,6 +21,8 @@ export type TransactionInput = Pick<Transaction, 'type' | 'amount' | 'walletId' 
 // POST /transactions/parse: one draft per line that has an amount. The ids are null when the user has no
 // wallet, or no fallback category of that type.
 export type ParsedDraft = Omit<TransactionInput, 'walletId' | 'categoryId'> & { walletId: string | null; categoryId: string | null };
+// noAmountLines: line numbers (1 = first) that have no amount; truncated: the text has more than 10 lines.
+export type ParseResult = { drafts: ParsedDraft[]; noAmountLines: number[]; truncated: boolean };
 
 // GET /transactions query string; every filter is optional (docs/04 §4.4).
 export type TransactionQuery = {
@@ -47,7 +49,7 @@ export const transactionsApi = api.injectEndpoints({
     }),
     // Read-only preview for the quick-add box: a query (cached per text), even though it is a POST.
     // The result holds wallet/category ids found by alias and keyword, so a change to either re-parses.
-    parseTransactions: builder.query<{ drafts: ParsedDraft[] }, string>({
+    parseTransactions: builder.query<ParseResult, string>({
       query: (text) => ({ url: '/transactions/parse', method: 'POST', body: { text } }),
       providesTags: ['Wallet', 'Category'],
     }),
