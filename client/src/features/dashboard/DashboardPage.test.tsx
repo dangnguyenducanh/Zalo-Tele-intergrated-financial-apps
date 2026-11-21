@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { beforeEach, expect, test } from 'vitest';
 import type { Category } from '@/features/categories/categoriesApi';
 import type { Transaction } from '@/features/transactions/transactionsApi';
-import { LAN, resetFake, server } from '@/test/fakeApi';
+import { fake, LAN, resetFake, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 import type { CategoryTotal, DayTotal, MonthSummary } from './statsApi';
 
@@ -129,4 +129,24 @@ test('TC-F6-05 a failed statistics request shows a translated error with Retry',
   await user.click(within(alert.closest('[role="alert"]') as HTMLElement).getByRole('button', { name: 'Thử lại' }));
   expect(await screen.findByRole('article', { name: 'Thu nhập' })).toHaveTextContent(/15\.000\.000\s₫/);
   expect(screen.queryByText('Không tải được số liệu của tháng.')).not.toBeInTheDocument();
+});
+
+test('TC-F12-04 switching to English reloads the category names the server sends in the profile language (BUG-005)', async () => {
+  // The server names default categories in the profile's language (stats.js), which PATCH /users/me changes.
+  const english: Record<string, string> = { 'Ăn uống': 'Food & drinks', 'Đi lại': 'Transport' };
+  server.use(
+    http.get('*/api/stats/by-category', () =>
+      HttpResponse.json(byCategory.map((row) => ({ ...row, name: fake.account?.language === 'en' ? english[row.name] : row.name }))),
+    ),
+  );
+  const user = userEvent.setup();
+  renderApp('/');
+  const pie = await screen.findByRole('figure', { name: 'Chi tiêu theo danh mục' });
+  await within(pie).findByText('Ăn uống');
+
+  await user.click(screen.getByRole('button', { name: /^EN/ }));
+
+  const englishPie = await screen.findByRole('figure', { name: 'Spending by category' });
+  expect(await within(englishPie).findByText('Food & drinks')).toBeInTheDocument();
+  expect(within(englishPie).queryByText('Ăn uống')).not.toBeInTheDocument();
 });
