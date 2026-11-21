@@ -9,7 +9,12 @@ import { getUser } from '../services/users.js';
 const router = Router();
 
 const email = z.string().trim().toLowerCase().pipe(z.email());
-export const newPassword = z.string().min(8).max(72); // bcrypt only uses the first 72 bytes
+// bcrypt only reads the first 72 bytes and ignores the rest. A Vietnamese letter takes 2–3 bytes, so the limit
+// counts bytes, not characters (BUG-009); the client checks the same rule (features/auth/validation.ts).
+export const newPassword = z
+  .string()
+  .min(8)
+  .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'Password is longer than 72 bytes');
 const registerBody = z.object({
   name: z.string().trim().min(1).max(60),
   email,

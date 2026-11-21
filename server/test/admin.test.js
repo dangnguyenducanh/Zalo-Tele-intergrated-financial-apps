@@ -72,8 +72,9 @@ test('TC-F11-02 locking a user revokes their sessions; unlocking lets them log i
   expect(locked.body).toMatchObject({ id: victim.user.id, status: 'locked', role: 'user' });
   expect(locked.body).not.toHaveProperty('passwordHash');
 
-  expect(codeOf(await refresh(victim.cookie))).toEqual([401, 'INVALID_REFRESH']);
-  expect(codeOf(await refresh(otherDevice.cookie))).toEqual([401, 'INVALID_REFRESH']);
+  // docs/04 §4.3: refresh tells a locked user why (BUG-011), although every session was revoked.
+  expect(codeOf(await refresh(victim.cookie))).toEqual([403, 'ACCOUNT_LOCKED']);
+  expect(codeOf(await refresh(otherDevice.cookie))).toEqual([403, 'ACCOUNT_LOCKED']);
   expect(await Session.countDocuments({ userId: victim.user.id, revokedAt: null })).toBe(0);
   const login = await request(app).post('/api/auth/login').send({ email: victim.email, password: victim.password });
   expect(codeOf(login)).toEqual([403, 'ACCOUNT_LOCKED']);
