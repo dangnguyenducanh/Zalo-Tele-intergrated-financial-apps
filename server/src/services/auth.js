@@ -86,7 +86,7 @@ export async function refresh(refreshToken, client) {
     { tokenHash, revokedAt: null, expiresAt: mongoose.trusted({ $gt: now }) },
     { revokedAt: now, lastUsedAt: now },
   );
-  if (old) return rotate(old.userId, client, [old._id]);
+  if (old) return rotate(old.userId, client, [old._id], old.createdAt);
 
   const used = await Session.findOne({ tokenHash });
   if (!used?.replacedBy) throw invalidRefresh(); // unknown, expired, or revoked by logout: just 401
@@ -96,7 +96,7 @@ export async function refresh(refreshToken, client) {
   // replacement and rotate again, so one valid chain remains.
   const replacement =
     now - used.revokedAt <= REUSE_GRACE_MS && (await Session.findOneAndUpdate({ _id: used.replacedBy, revokedAt: null }, { revokedAt: now }));
-  if (replacement) return rotate(used.userId, client, [used._id, replacement._id]);
+  if (replacement) return rotate(used.userId, client, [used._id, replacement._id], used.createdAt);
 
   // Otherwise either the user or a thief holds a copy, and we can't tell which: log out every device of that user.
   await revokeAllSessions(used.userId);
@@ -104,11 +104,22 @@ export async function refresh(refreshToken, client) {
 }
 
 // Opens the next session and points the revoked ones at it (`replacedBy`), so a later reuse of any of them is caught.
-async function rotate(userId, client, revokedIds) {
+// `chainCreatedAt` is when the first session in `revokedIds` was created.
+async function rotate(userId, client, revokedIds, chainCreatedAt) {
   const user = await User.findById(userId);
   if (!user) throw invalidRefresh();
   if (user.status === 'locked') throw accountLocked();
   const next = await openSession(user, client);
+
+  // BUG-006: a "revoke every session" (theft, admin lock) may have run while we were between the claim above and
+  // this new session, so its updateMany could not see it. It stamps the user first, so read the stamp again now:
+  // if every session was revoked after this chain began, the chain was meant to die, and the new session with it.
+  // ponytail: compares two server clocks; a skew of a few ms only matters for a chain created in those same ms.
+  const { sessionsRevokedAt } = await User.findById(userId).select('sessionsRevokedAt').lean();
+  if (sessionsRevokedAt && sessionsRevokedAt >= chainCreatedAt) {
+    await Session.updateOne({ _id: next.session._id }, { revokedAt: new Date() });
+    throw invalidRefresh();
+  }
   await Session.updateMany({ _id: mongoose.trusted({ $in: revokedIds }) }, { replacedBy: next.session._id });
   return next;
 }

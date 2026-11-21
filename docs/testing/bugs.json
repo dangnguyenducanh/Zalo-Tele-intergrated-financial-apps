@@ -88,5 +88,23 @@
     "status": "Closed",
     "dateClosed": "2026-11-21",
     "evidence": "found: MT-05_phone-dark-en-dashboard-full.png vs …-after-reload.png; retest on staging with the fix deployed: charter-runs/2026-11-21/retest-T20/ (BUG-005_*.png, retest-T20.mp4): English names right after the switch"
+  },
+  {
+    "id": "BUG-006",
+    "dateFound": "2026-11-21",
+    "foundBy": "Code review S2 of PR #47 (T21)",
+    "feature": "F1 Auth",
+    "severity": "S3 Minor",
+    "title": "A refresh running in parallel with \"revoke every session\" keeps its new session alive",
+    "stepsToReproduce": "1. Log in, refresh A → B.\n2. Within 30 s send two refreshes with A at the same moment (or a reuse of A in parallel with a refresh of B).\n3. Count the user's active sessions.",
+    "expected": "One request is treated as theft, so every session of the user is revoked and none stays active.",
+    "actual": "The winner's new session stays active after the \"revoke all\" (about 3 runs in 5 in the reviewer's repro).",
+    "rootCause": "revokeAllSessions is one updateMany on revokedAt: null. A parallel refresh that had already claimed its old session called openSession() after that updateMany had passed, so its new row was never matched (server/src/services/sessions.js, auth.js rotate()).",
+    "fix": "revokeAllSessions first stamps users.sessionsRevokedAt, then revokes. rotate() re-reads the stamp after openSession(); if it is not older than the session being rotated away from, it revokes the new session and answers 401 INVALID_REFRESH.",
+    "filesOrCommit": "server/src/services/{auth,sessions}.js, server/src/models/User.js; T22 (#49)",
+    "regressionTest": "TC-F1-20",
+    "status": "Closed",
+    "dateClosed": "2026-11-21",
+    "evidence": "TC-F1-20 pauses Session.create inside the rotation so the interleaving is deterministic: 2/2 cases failed before the fix (200, one session alive), pass after it."
   }
 ]

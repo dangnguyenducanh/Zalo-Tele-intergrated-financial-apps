@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema(
     language: { type: String, enum: ['vi', 'en'], default: 'vi' },
     theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
     defaultWalletId: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet', default: null },
+    // When every session was last revoked (theft or admin lock). A refresh that was already under way checks it (BUG-006).
+    sessionsRevokedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -21,6 +23,7 @@ const userSchema = new mongoose.Schema(
         ret.id = String(ret._id);
         delete ret._id;
         delete ret.passwordHash;
+        delete ret.sessionsRevokedAt;
         return ret;
       },
     },

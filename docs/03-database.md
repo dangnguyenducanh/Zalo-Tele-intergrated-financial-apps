@@ -43,6 +43,7 @@ erDiagram
 | `language` | String | `vi` \| `en`, default `vi` |
 | `theme` | String | `light` \| `dark` \| `system`, default `system` |
 | `defaultWalletId` | ObjectId → Wallet | used by the bot parser |
+| `sessionsRevokedAt` | Date \| null | set by "revoke every session" (theft, admin lock) **before** it revokes them; a refresh that was already rotating re-reads it after opening its new session and revokes that session too if the stamp is not older than its chain (BUG-006). Never sent to the client. |
 
 Indexes: `{ email: 1 }` unique.
 
