@@ -74,9 +74,9 @@ test('TC-F6-04 dashboard cards and charts, with text summaries, update after a q
   const pie = page.getByRole('figure', { name: 'Chi tiêu theo danh mục' });
   await expect(pie.getByRole('listitem')).toHaveCount(2); // one ranked row (colour key, amount, share, bar) per category …
   await expect(pie.getByRole('listitem')).toHaveText([/^Ăn uống: 450\.000\s₫ \(75%\)$/, /^Đi lại: 150\.000\s₫ \(25%\)$/]); // … and summed up in text
-  const bars = page.getByRole('figure', { name: 'Thu chi theo ngày' });
-  await expect(bars.locator('.recharts-bar-rectangle').first()).toBeVisible();
-  await expect(bars).toContainText(/Tổng thu 15\.000\.000\s₫, tổng chi 600\.000\s₫\. Ngày chi nhiều nhất: 1 tháng \d+, 600\.000\s₫\./);
+  const compare = page.getByRole('figure', { name: 'Chi tiêu tháng này' }); // weekly columns, this month vs last
+  await expect(compare.locator('.recharts-bar-rectangle').first()).toBeVisible();
+  await expect(compare).toContainText(/Tháng này chi 600\.000\s₫, nhiều hơn tháng trước 300\.000\s₫\. Tuần cao nhất: tuần \d, 600\.000\s₫\./);
   await page.screenshot({ path: testInfo.outputPath('dashboard.png'), fullPage: true, animations: 'disabled' });
 
   // A quick add on the dashboard refreshes the cards by itself (RTK Query tags).
@@ -92,7 +92,7 @@ test('TC-F6-04 dashboard cards and charts, with text summaries, update after a q
   await expect(page.getByRole('article', { name: 'Thu nhập' })).toContainText(/^Thu nhập0\s₫$/);
   await expect(page.getByRole('article', { name: 'Ngân sách còn lại' })).toContainText('Chưa đặt ngân sách tổng');
   await expect(pie.getByRole('listitem')).toHaveText([/^Mua sắm: 300\.000\s₫ \(100%\)$/]);
-  await expect(bars).toContainText(/Tổng thu 0\s₫, tổng chi 300\.000\s₫\./);
+  await expect(compare).toContainText(/Tháng này chi 300\.000\s₫, nhiều hơn tháng trước 300\.000\s₫\./); // the month before has nothing
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible(); // the phone's bottom navigation
@@ -122,15 +122,15 @@ test('TC-F5-04 budget bars are green, amber and red with text labels; "Copy from
   const food = page.getByRole('article', { name: 'Ăn uống' });
   await expect(food).toContainText('Trong hạn mức');
   await expect(food).toContainText(/Đã chi 500\.000\s₫ \/ 1\.000\.000\s₫ \(50%\)/);
-  await expect(food.getByRole('progressbar', { name: 'Ăn uống' })).toHaveCSS('accent-color', 'rgb(6, 118, 71)'); // green
+  await expect(food.getByRole('progressbar', { name: 'Ăn uống' })).toHaveCSS('accent-color', 'rgb(4, 120, 87)'); // green
   const transport = page.getByRole('article', { name: 'Đi lại' });
   await expect(transport).toContainText('Sắp hết');
   await expect(transport).toContainText('(90%)');
-  await expect(transport.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(181, 71, 8)'); // amber
+  await expect(transport.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(180, 83, 9)'); // amber
   const overall = page.getByRole('article', { name: 'Tổng chi tiêu' });
   await expect(overall).toContainText('Vượt ngân sách');
   await expect(overall).toContainText(/Vượt 400\.000\s₫/);
-  await expect(overall.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(217, 45, 32)'); // red
+  await expect(overall.getByRole('progressbar')).toHaveCSS('accent-color', 'rgb(220, 38, 38)'); // red
 
   const copied = page.waitForResponse((res) => res.url().endsWith('/api/budgets/copy'));
   await page.getByRole('button', { name: 'Chép từ tháng trước' }).click();

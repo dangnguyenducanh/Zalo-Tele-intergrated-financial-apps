@@ -19,17 +19,34 @@
     "empty": "No spending this month yet.",
     "item": "{{name}}: {{amount}} ({{percent}}%)"
   },
-  "daily": {
-    "title": "Income and spending by day",
-    "empty": "No transactions this month yet.",
-    "totals": "Total income {{income}}, total spending {{expense}}.",
-    "peak": "Biggest spending day: {{day}}, {{amount}}.",
-    "income": "Income",
-    "expense": "Spending"
-  },
   "latest": {
     "title": "Recent transactions",
     "empty": "No transactions yet.",
     "all": "See all"
+  },
+  "compare": {
+    "expense": "Spending this month",
+    "income": "Income this month",
+    "switch": "Show",
+    "toExpense": "Spending",
+    "toIncome": "Income",
+    "thisMonth": "This month",
+    "lastMonth": "Last month",
+    "week": "Week {{n}}",
+    "versus": "Compared with last month",
+    "more": "This month you {{what}} {{now}}, {{diff}} more than last month.",
+    "less": "This month you {{what}} {{now}}, {{diff}} less than last month.",
+    "same": "This month you {{what}} {{now}}, the same as last month.",
+    "spent": "spent",
+    "earned": "earned",
+    "peak": "Highest week: week {{n}}, {{amount}}.",
+    "empty": "No transactions in these two months yet."
+  },
+  "wallet": {
+    "title": "Total balance",
+    "count": "Wallets: {{count}}",
+    "month": "This month",
+    "in": "in",
+    "out": "out"
   }
 }

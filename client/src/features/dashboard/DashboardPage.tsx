@@ -1,5 +1,5 @@
-import { Alert, Box, Button, CircularProgress, Grid, LinearProgress, Link, Paper, Stack, Typography } from '@mui/material';
-import { useId, type ReactNode } from 'react';
+import { alpha, Alert, Box, Button, CircularProgress, Grid, LinearProgress, Link, Paper, Stack, Typography } from '@mui/material';
+import { createElement, useId, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
 import { useAppSelector } from '@/app/hooks';
@@ -8,19 +8,20 @@ import MoneyText from '@/components/MoneyText';
 import MonthPicker from '@/components/MonthPicker';
 import QuickAdd from '@/components/QuickAdd';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
-import { DEFAULT_COLOR } from '@/features/categories/icons';
+import { DEFAULT_COLOR, iconOf } from '@/features/categories/icons';
 import { signedMoney } from '@/features/transactions/helpers';
 import { useGetTransactionsQuery } from '@/features/transactions/transactionsApi';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
 import { formatDate, formatMoney } from '@/i18n/format';
-import { moneySx } from '@/theme/theme';
-import { CategoryBreakdown, DailyBars } from './Charts';
+import { GRADIENT, moneySx } from '@/theme/theme';
+import { CategoryBreakdown, MonthCompare } from './Charts';
 import { useGetByCategoryQuery, useGetDailyQuery, useGetSummaryQuery, type MonthSummary } from './statsApi';
+import { previousMonth } from './weekly';
 
-// "/" (docs/05 §5.7): quick add, the shared MonthPicker, the month's four figures in one strip, daily bars and a
-// ranked category breakdown (each with a text summary), a "drafts waiting" banner linking to the bot inbox, and
-// the latest 5 transactions as ledger rows. Every query is tagged, so a quick add, a budget change or a new month
-// refreshes the numbers by itself.
+// "/" (docs/05 §5.7, draft 3): greeting and the shared MonthPicker, quick add, a "drafts waiting" banner, the total
+// balance on a gradient card beside the month's four figures, this month against last month in weekly columns
+// (spending or income) with a ranked category breakdown, and the latest 5 transactions. Every query is tagged, so a
+// quick add, a budget change or a new month refreshes the numbers by itself.
 export default function DashboardPage() {
   const { t } = useTranslation('dashboard');
   const { user } = useAuth();
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const summary = useGetSummaryQuery(month);
   const byCategory = useGetByCategoryQuery(month);
   const daily = useGetDailyQuery(month);
+  const previousDaily = useGetDailyQuery(previousMonth(month));
   const { data: drafts } = useGetTransactionsQuery({ status: 'draft' }); // only `total` is used
   const stats = [summary, byCategory, daily];
   const failed = stats.some((query) => query.isError);
@@ -36,8 +38,8 @@ export default function DashboardPage() {
   return (
     <>
       <title>{`${t('title')} · ${t('common:appName')}`}</title>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
-        <Typography variant="h5" component="h1">
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 2.5 }}>
+        <Typography variant="h4" component="h1" sx={{ typography: { xs: 'h5', sm: 'h4' } }}>
           {t('common:home.title', { name: user?.name })}
         </Typography>
         <MonthPicker />
@@ -66,40 +68,103 @@ export default function DashboardPage() {
       )}
       {!summary.currentData && summary.isFetching && <CircularProgress aria-label={t('common:loading')} sx={{ display: 'block', mx: 'auto', my: 4 }} />}
 
-      <Stack spacing={2}>
-        {summary.currentData && <SummaryStrip summary={summary.currentData} />}
-        <Grid container spacing={2}>
-          {daily.currentData && (
-            <Grid size={{ xs: 12, md: 8 }}>
-              <DailyBars days={daily.currentData} />
+      <Grid container spacing={2}>
+        {summary.currentData && (
+          <>
+            <Grid size={{ xs: 12, md: 5 }}>
+              <BalanceCard summary={summary.currentData} />
             </Grid>
-          )}
-          {byCategory.currentData && (
-            <Grid size={{ xs: 12, md: 4 }}>
-              <CategoryBreakdown rows={byCategory.currentData} />
+            <Grid size={{ xs: 12, md: 7 }}>
+              <SummaryCards summary={summary.currentData} />
             </Grid>
-          )}
+          </>
+        )}
+        {daily.currentData && (
+          <Grid size={{ xs: 12, md: 7 }}>
+            <MonthCompare days={daily.currentData} previousDays={previousDaily.currentData ?? []} />
+          </Grid>
+        )}
+        {byCategory.currentData && (
+          <Grid size={{ xs: 12, md: 5 }}>
+            <CategoryBreakdown rows={byCategory.currentData} />
+          </Grid>
+        )}
+        <Grid size={12}>
+          <LatestTransactions />
         </Grid>
-        <LatestTransactions />
-      </Stack>
+      </Grid>
     </>
   );
 }
 
-// Income, expense, net and what is left of the month's overall budget: four cells of one panel, split by hairlines.
-function SummaryStrip({ summary }: { summary: MonthSummary }) {
+// The total of every active wallet on the brand gradient, with the month's money in and out underneath.
+// Its text is white on a gradient that keeps 4.5:1 everywhere (theme GRADIENT).
+function BalanceCard({ summary }: { summary: MonthSummary }) {
+  const { t } = useTranslation('dashboard');
+  const language = useAppSelector((s) => s.ui.language);
+  const { data: wallets = [] } = useGetWalletsQuery({ includeArchived: true }); // the same cached request as QuickAdd
+  const active = wallets.filter((wallet) => !wallet.archived);
+  const total = active.reduce((sum, wallet) => sum + wallet.balance, 0);
+  const titleId = useId();
+  return (
+    <Box
+      component="section"
+      aria-labelledby={titleId}
+      sx={{
+        position: 'relative',
+        overflow: 'hidden',
+        height: '100%',
+        minHeight: 196,
+        borderRadius: '24px',
+        p: { xs: 2.25, sm: 2.75 },
+        color: '#ffffff',
+        backgroundImage: GRADIENT,
+        boxShadow: '0 18px 36px -20px rgba(190, 24, 93, 0.6)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        gap: 2,
+        // two soft light discs, decoration only
+        '&::before, &::after': { content: '""', position: 'absolute', borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.12)', pointerEvents: 'none' },
+        '&::before': { width: 260, height: 260, right: -90, top: -120 },
+        '&::after': { width: 200, height: 200, right: 20, bottom: -140 },
+      }}
+    >
+      <Stack direction="row" sx={{ justifyContent: 'space-between', fontSize: '0.8125rem', position: 'relative' }}>
+        <span id={titleId}>{t('wallet.title')}</span>
+        <span>{t('wallet.count', { count: active.length })}</span>
+      </Stack>
+      <Box sx={{ position: 'relative' }}>
+        <Typography component="p" sx={{ ...moneySx, fontSize: { xs: '2rem', sm: '2.375rem' }, fontWeight: 400, lineHeight: 1.1 }}>
+          {formatMoney(total, language)}
+        </Typography>
+        <Typography noWrap sx={{ fontSize: '0.8125rem', mt: 0.5 }}>
+          {active.map((wallet) => wallet.name).join(' · ')}
+        </Typography>
+      </Box>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', fontSize: '0.8125rem', position: 'relative', ...moneySx }}>
+        <span>
+          {t('wallet.month')} +{formatMoney(summary.income, language)} {t('wallet.in')}
+        </span>
+        <span>
+          −{formatMoney(summary.expense, language)} {t('wallet.out')}
+        </span>
+      </Stack>
+    </Box>
+  );
+}
+
+// Income, expense, net and what is left of the month's overall budget, as four cards in a 2×2 grid.
+function SummaryCards({ summary }: { summary: MonthSummary }) {
   const { t } = useTranslation('dashboard');
   const language = useAppSelector((s) => s.ui.language);
   const { budget } = summary;
   const left = budget && budget.limit - budget.spent;
   const used = budget ? Math.round((budget.spent / budget.limit) * 100) : 0;
   return (
-    <Paper
-      variant="outlined"
-      sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: '1px', bgcolor: 'divider', overflow: 'hidden' }}
-    >
-      <Figure label={t('cards.income')} amount={summary.income} color="success.main" />
-      <Figure label={t('cards.expense')} amount={summary.expense} />
+    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, height: '100%' }}>
+      <Figure label={t('cards.income')} amount={summary.income} color="income" />
+      <Figure label={t('cards.expense')} amount={summary.expense} color="spend" />
       <Figure label={t('cards.net')} amount={summary.net} color={summary.net < 0 ? 'error.main' : undefined} />
       <Figure label={t('cards.budgetLeft')} amount={left} color={left !== null && left < 0 ? 'error.main' : undefined}>
         {budget ? (
@@ -127,7 +192,7 @@ function SummaryStrip({ summary }: { summary: MonthSummary }) {
           </>
         )}
       </Figure>
-    </Paper>
+    </Box>
   );
 }
 
@@ -136,22 +201,22 @@ type FigureProps = { label: string; amount: number | null; color?: string; child
 function Figure({ label, amount, color, children }: FigureProps) {
   const id = useId();
   return (
-    <Box component="article" aria-labelledby={id} sx={{ bgcolor: 'background.paper', px: 2, py: 1.75, minWidth: 0 }}>
+    <Paper component="article" variant="outlined" aria-labelledby={id} sx={{ px: 2, py: 1.75, minWidth: 0 }}>
       <Typography id={id} variant="body2" sx={{ color: 'text.secondary' }}>
         {label}
       </Typography>
       {amount !== null && (
-        <Typography component="p" sx={{ fontSize: { xs: '1.125rem', sm: '1.375rem' }, fontWeight: 500, lineHeight: 1.35, mt: 0.5, color, overflowWrap: 'anywhere' }}>
+        <Typography component="p" sx={{ fontSize: { xs: '1.125rem', sm: '1.375rem' }, fontWeight: 400, lineHeight: 1.35, mt: 0.5, color, overflowWrap: 'anywhere' }}>
           <MoneyText amount={amount} />
         </Typography>
       )}
       {children}
-    </Box>
+    </Paper>
   );
 }
 
-// The 5 newest confirmed transactions (any month) as ledger rows: date, description with its category, wallet,
-// amount. Drafts wait in the bot inbox, see the banner.
+// The 5 newest confirmed transactions (any month): a round tile with the category's icon in its colour, the note
+// and its category · wallet, the signed amount and the date. Drafts wait in the bot inbox, see the banner.
 function LatestTransactions() {
   const { t } = useTranslation('dashboard');
   const language = useAppSelector((s) => s.ui.language);
@@ -162,66 +227,60 @@ function LatestTransactions() {
   const items = data?.items.slice(0, 5) ?? [];
 
   return (
-    <Paper component="section" variant="outlined" aria-labelledby={titleId}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography id={titleId} variant="h6" component="h2">
+    <Paper component="section" variant="outlined" aria-labelledby={titleId} sx={{ p: { xs: 2, sm: 2.5 } }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1.5 }}>
+        <Typography id={titleId} variant="overline" component="h2" sx={{ color: 'text.primary' }}>
           {t('latest.title')}
         </Typography>
         <Link component={RouterLink} to="/transactions" variant="body2">
           {t('latest.all')}
         </Link>
       </Stack>
-      {data && items.length === 0 && <Typography sx={{ color: 'text.secondary', p: 2 }}>{t('latest.empty')}</Typography>}
+      {data && items.length === 0 && <Typography sx={{ color: 'text.secondary' }}>{t('latest.empty')}</Typography>}
       {items.length > 0 && (
-        <Box component="ul" role="list" aria-labelledby={titleId} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+        <Box component="ul" role="list" aria-labelledby={titleId} sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gap: 1 }}>
           {items.map((transaction) => {
             const category = categories.find((c) => c.id === transaction.categoryId);
             const categoryLabel = category ? categoryName(category, language) : '';
             const wallet = wallets.find((w) => w.id === transaction.walletId)?.name ?? '';
+            const income = transaction.type === 'income';
+            const tint = category?.color || DEFAULT_COLOR;
             return (
               <Box
                 component="li"
                 key={transaction.id}
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '52px 1fr auto', md: '72px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto' },
+                  gridTemplateColumns: '40px 1fr auto',
                   alignItems: 'center',
-                  columnGap: 2,
-                  px: 2,
+                  columnGap: 1.5,
+                  px: 1.5,
                   py: 1.25,
-                  fontSize: '0.8125rem',
-                  borderBottom: 1,
+                  border: 1,
                   borderColor: 'divider',
-                  '&:last-of-type': { borderBottom: 0 },
+                  borderRadius: '16px',
+                  transition: 'background-color 140ms',
                   '&:hover': { bgcolor: 'panel2' },
                 }}
               >
-                <Box component="span" sx={{ ...moneySx, color: 'text.secondary' }}>
-                  {formatDate(transaction.occurredAt, language, { day: '2-digit', month: '2-digit' })}
+                <Box aria-hidden sx={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', bgcolor: alpha(tint, 0.14), color: tint }}>
+                  {createElement(iconOf(category?.icon ?? ''), { fontSize: 'small' })}
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography noWrap sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
                     {transaction.note || categoryLabel}
                   </Typography>
-                  <Stack direction="row" sx={{ display: { md: 'none' }, alignItems: 'center', gap: 0.75, color: 'text.secondary', fontSize: '0.75rem' }}>
-                    <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: category?.color || DEFAULT_COLOR }} />
+                  <Typography noWrap sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
                     {[categoryLabel, wallet].filter(Boolean).join(' · ')}
-                  </Stack>
-                </Box>
-                <Stack direction="row" sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1, color: 'text.secondary', minWidth: 0 }}>
-                  <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '2px', flexShrink: 0, bgcolor: category?.color || DEFAULT_COLOR }} />
-                  <Typography noWrap sx={{ fontSize: 'inherit' }}>
-                    {categoryLabel}
                   </Typography>
-                </Stack>
-                <Typography noWrap sx={{ display: { xs: 'none', md: 'block' }, fontSize: 'inherit', color: 'text.secondary' }}>
-                  {wallet}
-                </Typography>
-                <Box
-                  component="span"
-                  sx={{ ...moneySx, fontWeight: 500, fontSize: '0.875rem', whiteSpace: 'nowrap', textAlign: 'right', color: transaction.type === 'income' ? 'success.main' : 'text.primary' }}
-                >
-                  {signedMoney(transaction.type, transaction.amount, language)}
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Box component="span" sx={{ ...moneySx, display: 'block', fontWeight: 500, fontSize: '0.875rem', whiteSpace: 'nowrap', color: income ? 'income' : 'text.primary' }}>
+                    {signedMoney(transaction.type, transaction.amount, language)}
+                  </Box>
+                  <Box component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                    {formatDate(transaction.occurredAt, language, { day: '2-digit', month: '2-digit' })}
+                  </Box>
                 </Box>
               </Box>
             );

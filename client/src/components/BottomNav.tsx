@@ -1,4 +1,4 @@
-import { BottomNavigation, BottomNavigationAction, Box, Drawer, IconButton, Paper, Toolbar, Typography, type Theme } from '@mui/material';
+import { alpha, BottomNavigation, BottomNavigationAction, Box, Drawer, IconButton, Paper, Toolbar, Typography } from '@mui/material';
 import { Menu, X } from '@/components/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +6,7 @@ import { Link, matchPath, useLocation } from 'react-router';
 import { useAuth } from '@/auth/useAuth';
 import NavList from './NavList';
 import { ICON, navItemsFor } from './navItems';
+import { GRADIENT } from '@/theme/theme';
 
 // Phone (< md): four tabs at the bottom plus "More", which opens the other pages in a bottom sheet.
 // The sheet is a modal (MUI Drawer): focus moves into it, Escape and the backdrop close it, and focus
@@ -28,18 +29,21 @@ export default function BottomNav() {
         component="nav"
         aria-label={t('nav.label')}
         elevation={0}
-        square
         sx={(theme) => ({
           position: 'fixed',
-          insetInline: 0,
-          bottom: 0,
+          insetInline: 12,
+          bottom: 'calc(12px + env(safe-area-inset-bottom))',
           zIndex: 'appBar',
-          pb: 'env(safe-area-inset-bottom)',
-          borderTop: `1px solid ${theme.palette.divider}`,
-          bgcolor: theme.palette.background.default,
+          borderRadius: '22px',
+          border: `1px solid ${theme.palette.divider}`,
+          bgcolor: alpha(theme.palette.background.paper, 0.94),
+          backdropFilter: 'saturate(1.4) blur(12px)',
+          boxShadow: theme.palette.mode === 'light' ? '0 12px 28px -14px rgba(15, 23, 42, 0.3)' : '0 12px 28px -10px rgba(0, 0, 0, 0.7)',
+          px: 0.75,
         })}
       >
-        <BottomNavigation showLabels value={current}>
+        {/* Without showLabels only the current tab shows its label; every tab keeps it as its accessible name. */}
+        <BottomNavigation value={current}>
           {tabs.map((tab) => (
             <BottomNavigationAction
               key={tab.to}
@@ -85,18 +89,23 @@ export default function BottomNav() {
   );
 }
 
-// Five tabs fit a 320 px phone: labels stay on one line and shrink instead of wrapping.
-// The current tab (.Mui-selected, also on "More" for its pages) gets bold text and a top bar in
-// primary.main, not colour alone (modern-web-guidance `navbar`, WCAG 1.4.1).
+// The current tab (.Mui-selected, also on "More" for its pages) becomes a gradient pill with its label and white
+// semibold text; the others show their icon only. Five tabs still fit a 320 px phone.
 const actionSx = {
   minWidth: 0,
+  flex: '1 1 0',
+  height: 46,
+  my: 'auto',
   px: 0.5,
-  '&.Mui-selected': { boxShadow: (theme: Theme) => `inset 0 2px 0 ${theme.palette.primary.main}` },
-  '& svg': { mb: 0.5 },
-  '& .MuiBottomNavigationAction-label': {
-    fontSize: '0.6875rem',
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-    '&.Mui-selected': { fontSize: '0.6875rem', fontWeight: 600 },
+  borderRadius: '16px',
+  '& .MuiBottomNavigationAction-label': { fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase', whiteSpace: 'nowrap' },
+  '&.Mui-selected': {
+    flex: '1.9 1 0',
+    flexDirection: 'row',
+    gap: 0.75,
+    backgroundImage: GRADIENT,
+    color: '#ffffff',
+    boxShadow: '0 8px 18px -8px rgba(190, 24, 93, 0.55)',
+    '& .MuiBottomNavigationAction-label': { fontSize: '0.6875rem' },
   },
 } as const;

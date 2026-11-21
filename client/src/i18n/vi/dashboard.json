@@ -19,17 +19,34 @@
     "empty": "Tháng này chưa có khoản chi nào.",
     "item": "{{name}}: {{amount}} ({{percent}}%)"
   },
-  "daily": {
-    "title": "Thu chi theo ngày",
-    "empty": "Tháng này chưa có giao dịch nào.",
-    "totals": "Tổng thu {{income}}, tổng chi {{expense}}.",
-    "peak": "Ngày chi nhiều nhất: {{day}}, {{amount}}.",
-    "income": "Thu",
-    "expense": "Chi"
-  },
   "latest": {
     "title": "Giao dịch gần đây",
     "empty": "Chưa có giao dịch nào.",
     "all": "Xem tất cả"
+  },
+  "compare": {
+    "expense": "Chi tiêu tháng này",
+    "income": "Thu nhập tháng này",
+    "switch": "Xem",
+    "toExpense": "Chi tiêu",
+    "toIncome": "Thu nhập",
+    "thisMonth": "Tháng này",
+    "lastMonth": "Tháng trước",
+    "week": "Tuần {{n}}",
+    "versus": "So với tháng trước",
+    "more": "Tháng này {{what}} {{now}}, nhiều hơn tháng trước {{diff}}.",
+    "less": "Tháng này {{what}} {{now}}, ít hơn tháng trước {{diff}}.",
+    "same": "Tháng này {{what}} {{now}}, bằng tháng trước.",
+    "spent": "chi",
+    "earned": "thu",
+    "peak": "Tuần cao nhất: tuần {{n}}, {{amount}}.",
+    "empty": "Hai tháng này chưa có giao dịch nào."
+  },
+  "wallet": {
+    "title": "Tổng số dư",
+    "count": "{{count}} ví",
+    "month": "Tháng này",
+    "in": "thu",
+    "out": "chi"
   }
 }

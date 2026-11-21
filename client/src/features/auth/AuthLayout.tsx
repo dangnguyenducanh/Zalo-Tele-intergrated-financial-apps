@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import telegramLogo from '@/assets/telegram.svg'; // the real Telegram mark (SVG Logos, CC0)
 import Brand from '@/components/BrandMark';
 import LanguageSwitch from '@/components/LanguageSwitch';
-import { moneySx } from '@/theme/theme';
+import { GRADIENT, moneySx } from '@/theme/theme';
 import ThemeToggle from '@/components/ThemeToggle';
 
 // Login and register: the form on the page ground on the left; on wide screens the product itself on the right
@@ -55,11 +55,11 @@ function Showcase() {
         gap: 4,
         m: 1.5,
         p: { md: 5, lg: 7 },
-        borderRadius: '6px',
+        borderRadius: '28px',
         border: 1,
         borderColor: theme.palette.mode === 'light' ? 'transparent' : 'divider',
         color: '#ffffff',
-        bgcolor: theme.palette.mode === 'light' ? '#101828' : '#111418',
+        backgroundImage: GRADIENT,
         overflow: 'hidden',
       })}
     >
@@ -80,7 +80,7 @@ function Showcase() {
 
       {/* The product at work, built from the app's own pieces; decorative for screen readers (the text above says it). */}
       <Box aria-hidden sx={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 2, maxWidth: 560, color: 'text.primary' }}>
-        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: '6px', gridRow: 'span 2', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: '18px', gridRow: 'span 2', display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {t('showcase.month')}
@@ -100,7 +100,7 @@ function Showcase() {
             <LinearProgress variant="determinate" value={81} />
           </Box>
         </Paper>
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: '18px', display: 'flex', flexDirection: 'column', gap: 1.25 }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Box component="img" src={telegramLogo} alt="" sx={{ width: 18, height: 18 }} />
             <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -110,7 +110,7 @@ function Showcase() {
           <Bubble mine>{t('showcase.chatUser')}</Bubble>
           <Bubble>{t('showcase.chatBot')}</Bubble>
         </Paper>
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: '6px' }}>
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: '18px' }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('showcase.income')}
           </Typography>

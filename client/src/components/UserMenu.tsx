@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { LogOut, Settings } from '@/components/icons';
 import { useAuth } from '@/auth/useAuth';
+import { GRADIENT } from '@/theme/theme';
 
 // Avatar button in the app bar → account menu with Settings and Log out.
 export default function UserMenu() {
@@ -22,7 +23,7 @@ export default function UserMenu() {
         aria-expanded={Boolean(anchor)}
         onClick={(event) => setAnchor(event.currentTarget)}
       >
-        <Avatar variant="rounded" sx={{ width: 30, height: 30, borderRadius: '4px', fontSize: 12, bgcolor: 'panel2', color: 'text.primary', border: 1, borderColor: 'divider' }}>
+        <Avatar sx={{ width: 34, height: 34, fontSize: 13, color: '#ffffff', backgroundImage: GRADIENT }}>
           {user?.name.charAt(0).toUpperCase()}
         </Avatar>
       </IconButton>

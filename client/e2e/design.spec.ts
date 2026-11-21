@@ -15,10 +15,10 @@ test('TC-NF-13 the UI fonts are self-hosted and draw Vietnamese text', async ({ 
   await page.goto('/login');
   const heading = page.getByRole('heading', { level: 1, name: 'Đăng nhập' });
   await expect(heading).toBeVisible();
-  expect(await heading.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/^"Chivo Variable"/);
+  expect(await heading.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/^"Be Vietnam Pro"/);
 
   const faces = await page.evaluate(async () =>
-    (await document.fonts.load('500 16px "Chivo Variable"', 'Sổ chi tiêu ữ')).map((face) => ({ status: face.status, range: face.unicodeRange })),
+    (await document.fonts.load('300 32px "Be Vietnam Pro"', 'Sổ chi tiêu ữ')).map((face) => ({ status: face.status, range: face.unicodeRange })),
   );
   expect(faces.length).toBeGreaterThan(0);
   expect(faces.every((face) => face.status === 'loaded')).toBe(true);

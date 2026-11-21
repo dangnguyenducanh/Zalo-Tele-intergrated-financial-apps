@@ -1,4 +1,5 @@
 import {
+  alpha,
   Box,
   Chip,
   IconButton,
@@ -17,11 +18,12 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { createElement } from 'react';
 import { Pencil, Trash2 } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
-import { DEFAULT_COLOR } from '@/features/categories/icons';
+import { DEFAULT_COLOR, iconOf } from '@/features/categories/icons';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
 import { formatDate } from '@/i18n/format';
 import { signedMoney } from './helpers';
@@ -45,8 +47,10 @@ export default function TransactionList({ items, onEdit, onDelete }: Props) {
       transaction,
       categoryLabel,
       avatar: (
-        // The category's colour as a small square key (draft 2: no coloured icon tiles in lists).
-        <Box aria-hidden sx={{ width: 10, height: 10, borderRadius: '2px', flexShrink: 0, bgcolor: category?.color || DEFAULT_COLOR }} />
+        // A round soft tile with the category's icon in its colour (draft 3).
+        <Box aria-hidden sx={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', color: category?.color || DEFAULT_COLOR, bgcolor: alpha(category?.color || DEFAULT_COLOR, 0.14) }}>
+          {createElement(iconOf(category?.icon ?? ''), { fontSize: 'small' })}
+        </Box>
       ),
       wallet: wallets.find((w) => w.id === transaction.walletId)?.name ?? '',
       date: formatDate(transaction.occurredAt, language),
@@ -75,7 +79,7 @@ export default function TransactionList({ items, onEdit, onDelete }: Props) {
         <List aria-label={t('listLabel')}>
           {rows.map((row) => (
             <ListItem key={row.transaction.id} secondaryAction={row.actions} sx={{ pr: 13 }}>
-              <ListItemAvatar sx={{ minWidth: 24 }}>{row.avatar}</ListItemAvatar>
+              <ListItemAvatar sx={{ minWidth: 48 }}>{row.avatar}</ListItemAvatar>
               <ListItemText
                 primary={
                   <>

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/auth/useAuth';
 import Brand from './BrandMark';
 import NavList from './NavList';
+import { GRADIENT } from '@/theme/theme';
 import { navItemsFor } from './navItems';
 
 export const DRAWER_WIDTH = 232;
@@ -24,7 +25,7 @@ export default function NavDrawer() {
         <Box sx={{ mt: 'auto', mx: 1.5, mb: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1.25, alignItems: 'center', minWidth: 0 }}>
           <Box
             aria-hidden
-            sx={{ width: 30, height: 30, flexShrink: 0, borderRadius: '4px', border: 1, borderColor: 'divider', bgcolor: 'panel2', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600 }}
+            sx={{ width: 34, height: 34, flexShrink: 0, borderRadius: '50%', color: '#ffffff', backgroundImage: GRADIENT, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600 }}
           >
             {initials(user.name)}
           </Box>
