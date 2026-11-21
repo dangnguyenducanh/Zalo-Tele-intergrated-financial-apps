@@ -208,7 +208,8 @@ server/src/bot/
 - Register with `setWebhook { url, secret_token }` (secret 8–256 chars). Zalo sends it back in `X-Bot-Api-Secret-Token`. Webhook and `getUpdates` polling are mutually exclusive.
 - Body: `{ event_name, message }`. Handle `message.text.received` (`message.text`) and `message.image.received` (`message.photo_url`, older payloads used `photo`; optional `message.caption`). Ignore `message.sticker.received`, `message.voice.received` and `message.unsupported.received`.
 - Reply target: `message.chat.id`. Sender: `message.from.id`, `message.from.display_name`.
-- `sendMessage { chat_id, text }`, max 2000 chars. **No buttons**, so `ok`/`huy` replies resolve `chatLinks.pendingTransactionId`.
+- `sendMessage { chat_id, text }`, max 2000 chars. **No buttons**, so `ok`/`huy` replies resolve `chatLinks.pendingTransactionId` while it is still a draft, else the newest draft of this chat that still waits (several lines make several drafts); the reply names the next waiting draft. A one-line reply that is only an amount (`55k`) corrects that draft's amount through the same update service as the web Bot inbox.
+- Every line of a message is saved before any reply is sent, so a failed `sendMessage` (monthly quota, timeout) never loses the lines after it.
 - ⚠️ The payload shape comes from community SDKs (see sources in [06-deployment.md](06-deployment.md)). Log the first real webhook body during setup and adjust if it differs.
 
 ## 4.7 Text parser

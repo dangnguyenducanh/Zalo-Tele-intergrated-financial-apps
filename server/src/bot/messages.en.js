@@ -16,7 +16,8 @@ export default {
   expense: 'Expense',
   income: 'Income',
   draft: (summary) => `📝 ${summary}`,
-  replyHint: 'Reply "ok" to save or "huy" to discard.',
+  replyHint: 'Reply "ok" to save, "huy" to discard, or just the right amount (e.g. 55k) to correct it.',
+  nextPending: (summary) => `⏭️ Next draft waiting: ${summary}`,
   buttons: { save: '✅ Save', discard: '❌ Discard', edit: '✏️ Edit' },
   readingReceipt: '🧾 Reading receipt…',
   receiptItems: ({ count, reconciled }) => `🧾 ${count} line items · ${reconciled ? 'they add up to the total' : 'they do not add up to the total, please check'}`,
@@ -31,8 +32,14 @@ export default {
   budgetWarning: ({ name, percent, spent, limit, over }) =>
     over ? `🚨 Over the "${name}" budget: ${percent}% (${spent} / ${limit})` : `⚠️ The "${name}" budget is ${percent}% used (${spent} / ${limit})`,
   today: ({ date, expense, income }) => `📅 Today ${date}\nSpent: ${expense}\nReceived: ${income}`,
-  month: ({ month, expense, income, budget }) =>
-    [`📅 Month ${month}`, `Spent: ${expense}`, `Received: ${income}`, budget && `Budget: ${budget.percent}% (${budget.spent} / ${budget.limit})`]
+  month: ({ month, expense, income, budget, categoryBudgets }) =>
+    [
+      `📅 Month ${month}`,
+      `Spent: ${expense}`,
+      `Received: ${income}`,
+      budget && `Budget: ${budget.percent}% (${budget.spent} / ${budget.limit})`,
+      ...categoryBudgets.map((b) => `"${b.name}" budget: ${b.percent}% (${b.spent} / ${b.limit})`),
+    ]
       .filter(Boolean)
       .join('\n'),
   languageSet: 'Switched to English.',

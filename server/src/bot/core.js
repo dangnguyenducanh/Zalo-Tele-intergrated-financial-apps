@@ -9,9 +9,10 @@ import { Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
 import { redeemLinkCode } from '../services/chatLinks.js';
+import { listBudgets } from '../services/budgets.js';
 import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
-import { confirmTransaction, parseTransactions } from '../services/transactions.js';
+import { confirmTransaction, parseTransactions, updateTransaction } from '../services/transactions.js';
 import { updateMe } from '../services/users.js';
 import { AppError } from '../utils/AppError.js';
 import { normalize } from '../utils/normalize.js';
@@ -88,7 +89,7 @@ async function linkChat(platform, { platformUserId, chatId, displayName }, code,
 }
 
 // /today, /month, /lang vi|en; anything else (/start, /help, unknown) gets the help text.
-// The totals come from the same statistics service as the dashboard.
+// The totals come from the same statistics service as the dashboard, the budgets from the Budgets page's service.
 async function runCommand(link, user, command, arg) {
   const m = messagesFor(user.language);
   const now = new Date();
@@ -98,12 +99,16 @@ async function runCommand(link, user, command, arg) {
   }
   if (command === 'month') {
     const month = monthKey(now);
-    const { expense, income, budget } = await monthSummary(link.userId, month);
+    const [{ expense, income }, budgets] = await Promise.all([monthSummary(link.userId, month), listBudgets(link.userId, month)]);
+    const usage = ({ percent, spent, limit }) => ({ percent, spent: money(spent, m), limit: money(limit, m) });
+    const overall = budgets.find((b) => !b.categoryId);
+    const byCategory = budgets.filter((b) => b.categoryId).sort((a, b) => b.percent - a.percent); // fullest first
     return m.month({
       month: `${month.slice(5)}/${month.slice(0, 4)}`,
       expense: money(expense, m),
       income: money(income, m),
-      budget: budget && { percent: Math.round((budget.spent * 100) / budget.limit), spent: money(budget.spent, m), limit: money(budget.limit, m) },
+      budget: overall && usage(overall),
+      categoryBudgets: await Promise.all(byCategory.map(async (b) => ({ name: categoryName(await Category.findById(b.categoryId).lean(), m), ...usage(b) }))),
     });
   }
   const language = arg.toLowerCase();
@@ -114,16 +119,31 @@ async function runCommand(link, user, command, arg) {
   return m.help;
 }
 
-// Zalo has no buttons, so a typed "ok" / "huy" acts on the latest draft (chatLinks.pendingTransactionId).
+// The draft a typed "ok" / "huy" or a Zalo correction acts on: chatLinks.pendingTransactionId while it is still a
+// draft, else the newest draft from this chat that still waits (a message with several lines makes several).
+// null when nothing from this chat waits.
+async function pendingDraft(link) {
+  const waiting = { userId: link.userId, status: 'draft', deletedAt: null };
+  const pending = link.pendingTransactionId && (await Transaction.findOne({ _id: link.pendingTransactionId, ...waiting }));
+  return pending || Transaction.findOne({ ...waiting, 'chatRef.platform': link.platform, 'chatRef.chatId': link.chatId }).sort({ _id: -1 });
+}
+
+// Zalo has no buttons, so a typed "ok" / "huy" acts on the pending draft, newest first. The reply names the next
+// draft still waiting, so the user knows what the next "ok" / "huy" will do.
 async function answerPending(link, word) {
-  if (!link.pendingTransactionId) return (await messagesOf(link)).nothingPending;
-  const action = word === 'ok' ? confirm : discard;
-  return (await action(link, link.pendingTransactionId)).text;
+  const m = await messagesOf(link);
+  const draft = await pendingDraft(link);
+  if (!draft) return m.nothingPending;
+  const { text } = await (word === 'ok' ? confirm : discard)(link, draft._id);
+  const next = await pendingDraft(link);
+  return next ? `${text}\n${m.nextPending(await describe(next, m))}` : text;
 }
 
 // Text → one draft per line with an amount (the same parser as the web quick add), each sent with its buttons.
 // chatRef.messageId is "<message id>:<line>", so a message the platform delivers twice hits the unique
 // chatRef index and makes no second draft or reply.
+// Every line is saved before any reply goes out: a failed reply (Zalo's monthly quota, Telegram 429, a timeout)
+// must not lose the lines after it, because the platform already has its 200 and never sends the message again.
 async function createDrafts(adapter, link, language, message) {
   const m = messagesFor(language);
   let drafts;
@@ -133,18 +153,40 @@ async function createDrafts(adapter, link, language, message) {
     if (err instanceof AppError && err.code === 'NO_AMOUNT_FOUND') return adapter.sendText(message.chatId, m.help);
     throw err;
   }
+  // Zalo has no ✏️ button, so a reply that is only an amount ("55k") corrects the waiting draft (docs/02 §2.4).
+  if (adapter.platform === 'zalo' && drafts.length === 1 && drafts[0].note === '') {
+    const pending = await pendingDraft(link);
+    if (pending) return correctDraft(adapter, link, language, message.chatId, pending, drafts[0].amount);
+  }
+  const saved = [];
   for (const [i, draft] of drafts.entries()) {
     const chatRef = { platform: adapter.platform, chatId: message.chatId, messageId: `${message.messageId}:${i + 1}` };
-    let transaction;
     try {
-      transaction = await Transaction.create({ ...draft, userId: link.userId, status: 'draft', source: adapter.platform, chatRef });
+      saved.push(await Transaction.create({ ...draft, userId: link.userId, status: 'draft', source: adapter.platform, chatRef }));
     } catch (err) {
       if (err.code === 11000) continue; // delivered again: this line's draft exists already
       throw err;
     }
-    await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: transaction._id });
-    await adapter.sendDraft(message.chatId, { id: transaction.id, text: m.draft(await describe(transaction, m)) }, language);
   }
+  if (saved.length === 0) return;
+  await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: saved.at(-1)._id });
+  let failed = null;
+  for (const transaction of saved) {
+    const text = m.draft(await describe(transaction, m));
+    await adapter.sendDraft(message.chatId, { id: transaction.id, text }, language).catch((err) => {
+      failed ??= err; // still reply to the other lines
+    });
+  }
+  if (failed) throw failed; // the webhook logs it
+}
+
+// A Zalo correction: the new amount goes through the same service as the web Bot inbox edit (PATCH /transactions/:id).
+// Note, category, wallet and date stay. The draft is sent again, and "ok" / "huy" still act on it.
+async function correctDraft(adapter, link, language, chatId, draft, amount) {
+  const m = messagesFor(language);
+  const updated = await updateTransaction(link.userId, draft._id, { amount });
+  await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: updated._id });
+  return adapter.sendDraft(chatId, { id: updated.id, text: m.draft(await describe(updated, m)) }, language);
 }
 
 // A receipt photo (docs/02 §2.6): "Reading receipt…", then KIE (about 20 s), then a draft with its buttons that
