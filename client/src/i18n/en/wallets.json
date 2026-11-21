@@ -35,7 +35,8 @@
   },
   "validation": {
     "name": "Wallet name must be 1 to 40 characters",
-    "initialBalance": "Enter a whole amount, for example 200000"
+    "initialBalance": "Enter a whole amount, for example 200000",
+    "initialBalanceMax": "From {{min}} to {{max}}"
   },
   "deleteConfirm": {
     "title": "Delete wallet?",

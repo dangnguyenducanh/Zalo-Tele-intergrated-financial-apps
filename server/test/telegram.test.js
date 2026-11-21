@@ -292,6 +292,16 @@ test('TC-F8-05 the same update delivered twice makes one draft per line and one 
   expect(calls.slice(from).map((c) => c.method)).toEqual(['sendMessage', 'sendMessage']);
 });
 
+test('TC-F8-23 a line over the 10^13 ₫ ceiling makes no draft and is named; the good line still becomes a draft (BUG-033)', async () => {
+  await linkedUser();
+  const replies = await say('cafe 20000000000000\ncafe 45k');
+  expect(await Transaction.find().lean()).toMatchObject([{ amount: 45_000, note: 'cafe', status: 'draft' }]);
+  expect(replies.map((c) => c.method)).toEqual(['sendMessage', 'sendMessage']);
+  expect(textOf(replies[1])).toMatch(/^⚠️ Chưa ghi dòng 1: không đọc được số tiền \(tối đa 10\.000\.000\.000\.000\s₫\)/);
+  expect(textOf((await say('cafe 10000000000001'))[0])).toBe(viText.help); // only that line: the help text, as for "cafe"
+  expect(await Transaction.countDocuments()).toBe(1);
+});
+
 test("TC-F8-06 ✅ confirms and ❌ discards, only on the presser's own drafts", async () => {
   const a = await linkedUser(CHAT_A);
   const b = await linkedUser(CHAT_B);

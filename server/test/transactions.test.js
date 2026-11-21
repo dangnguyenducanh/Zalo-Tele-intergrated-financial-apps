@@ -368,6 +368,17 @@ test('TC-F13-05 POST /transactions/parse names the lines it cannot save: no amou
   expect([long.body.drafts.length, long.body.noAmountLines, long.body.truncated]).toEqual([10, [], true]);
 });
 
+test('TC-F13-07 POST /transactions/parse names a line over the 10^13 ₫ ceiling like a line with no amount (BUG-033)', async () => {
+  const { me } = await newUser();
+
+  const res = await me.post('/transactions/parse', { text: 'cafe 20000000000000\ncafe 45k' });
+  expect(res.status).toBe(200);
+  expect(res.body).toMatchObject({ noAmountLines: [1], truncated: false });
+  expect(res.body.drafts.map((d) => d.amount)).toEqual([45_000]);
+  const only = await me.post('/transactions/parse', { text: 'cafe 10000000000001' });
+  expect([only.status, only.body.error.code]).toEqual([422, 'NO_AMOUNT_FOUND']);
+});
+
 test('TC-F4-12 one money value is at most 10^13 ₫, so wallet and month totals stay exact integers', async () => {
   const { me, walletId, food } = await newUser();
   const MAX = 10_000_000_000_000;

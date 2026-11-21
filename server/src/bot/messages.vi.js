@@ -23,6 +23,7 @@ export default {
   readingReceipt: '🧾 Đang đọc hoá đơn…',
   receiptItems: ({ count, reconciled }) => `🧾 ${count} dòng hàng · ${reconciled ? 'cộng lại khớp tổng tiền' : 'cộng lại không khớp tổng tiền, hãy kiểm tra'}`,
   receiptUnavailable: 'Chưa đọc được hoá đơn vì dịch vụ đọc hoá đơn không phản hồi. Hãy gõ số tiền, ví dụ: siêu thị 125k',
+  noAmountLines: ({ lines, max }) => `⚠️ Chưa ghi dòng ${lines}: không đọc được số tiền (tối đa ${max}), ví dụ: phở 45k`,
   receiptUnreadable: 'Không tìm thấy tổng tiền trên ảnh này. Hãy gõ số tiền, ví dụ: siêu thị 125k',
   saved: (summary) => `✅ Đã lưu: ${summary}`,
   discarded: (summary) => `❌ Đã huỷ: ${summary}`,

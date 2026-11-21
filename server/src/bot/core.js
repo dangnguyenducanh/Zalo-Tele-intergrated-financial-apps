@@ -5,7 +5,7 @@
 import { env } from '../config/env.js';
 import { Category } from '../models/Category.js';
 import { ChatLink } from '../models/ChatLink.js';
-import { Transaction } from '../models/Transaction.js';
+import { MAX_MONEY, Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
 import { redeemLinkCode } from '../services/chatLinks.js';
@@ -146,9 +146,9 @@ async function answerPending(link, word) {
 // must not lose the lines after it, because the platform already has its 200 and never sends the message again.
 async function createDrafts(adapter, link, language, message) {
   const m = messagesFor(language);
-  let drafts;
+  let drafts, noAmountLines;
   try {
-    ({ drafts } = await parseTransactions(link.userId, message.text));
+    ({ drafts, noAmountLines } = await parseTransactions(link.userId, message.text));
   } catch (err) {
     if (err instanceof AppError && err.code === 'NO_AMOUNT_FOUND') return adapter.sendText(message.chatId, m.help);
     throw err;
@@ -175,6 +175,12 @@ async function createDrafts(adapter, link, language, message) {
     const text = m.draft(await describe(transaction, m));
     await adapter.sendDraft(message.chatId, { id: transaction.id, text }, language).catch((err) => {
       failed ??= err; // still reply to the other lines
+    });
+  }
+  // Lines with no amount, or one over the ceiling, are named so the user knows they were not recorded (BUG-033).
+  if (noAmountLines.length > 0) {
+    await adapter.sendText(message.chatId, m.noAmountLines({ lines: noAmountLines.join(', '), max: money(MAX_MONEY, m) })).catch((err) => {
+      failed ??= err;
     });
   }
   if (failed) throw failed; // the webhook logs it

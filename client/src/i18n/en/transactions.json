@@ -72,6 +72,7 @@
   },
   "validation": {
     "amount": "Enter an amount above 0, e.g. 45000 or 45k",
+    "amountMax": "At most {{max}}",
     "category": "Choose a category",
     "wallet": "Choose a wallet",
     "occurredAt": "Choose a date and time"

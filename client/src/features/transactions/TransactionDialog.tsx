@@ -22,7 +22,7 @@ import { categoryName, useGetCategoriesQuery } from '@/features/categories/categ
 import { apiErrorMessage } from '@/features/categories/helpers';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
 import { formatMoney } from '@/i18n/format';
-import { formatNumber, fromDateTimeInput, parseAmount, toDateTimeInput } from './helpers';
+import { formatNumber, fromDateTimeInput, isOverMax, MAX_MONEY, parseAmount, toDateTimeInput } from './helpers';
 import type { ParsedDraft, TransactionInput, TransactionType } from './transactionsApi';
 
 const TYPES: TransactionType[] = ['expense', 'income'];
@@ -64,6 +64,8 @@ export default function TransactionDialog({ title, submitLabel, initial, onSubmi
   const amount = parseAmount(amountText);
   const wrong = { amount: amount === null, categoryId: !category, walletId: !wallet, occurredAt: !dateTime };
   const errors: Partial<typeof wrong> = submitted ? wrong : {};
+  const amountError = (text: string) =>
+    isOverMax(text) ? t('validation.amountMax', { max: formatMoney(MAX_MONEY, language) }) : t('validation.amount');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,7 +129,7 @@ export default function TransactionDialog({ title, submitLabel, initial, onSubmi
             onChange={(event) => setAmountText(event.target.value)}
             onBlur={() => amount !== null && setAmountText(formatNumber(amount, language))}
             error={errors.amount}
-            helperText={errors.amount ? t('validation.amount') : amount !== null ? `= ${formatMoney(amount, language)}` : t('fields.amountHelp')}
+            helperText={errors.amount ? amountError(amountText) : amount !== null ? `= ${formatMoney(amount, language)}` : t('fields.amountHelp')}
             required
             autoFocus
             fullWidth

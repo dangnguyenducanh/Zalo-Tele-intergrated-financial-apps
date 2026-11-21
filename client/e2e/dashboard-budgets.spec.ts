@@ -174,6 +174,43 @@ test('TC-NF-16 at 375 px a 10-digit amount stays on one line in every figure car
   await page.screenshot({ path: testInfo.outputPath('dashboard-375-light-en.png'), fullPage: true, animations: 'disabled' });
 });
 
+test('TC-NF-18 at 360 and 390 px a 14-digit total balance reads in full on one line, in vi and en (BUG-018)', async ({ page, request }, testInfo) => {
+  const { email, headers, walletId, category } = await createAccount(request);
+  const MAX = 10_000_000_000_000; // every value at the 10^13 ₫ ceiling, but their sum is 14 digits long
+  const card = await request.post('/api/wallets', { headers, data: { name: 'Thẻ', type: 'credit', initialBalance: -MAX } });
+  expect(card.status()).toBe(201);
+  const at = `${THIS_MONTH}-01T10:00:00+07:00`;
+  await addTransaction(request, headers, { type: 'income', amount: MAX, walletId, categoryId: category('Lương'), occurredAt: at, note: 'e2e' });
+  for (let i = 0; i < 3; i++) await addTransaction(request, headers, { type: 'expense', amount: MAX, walletId, categoryId: category('Mua sắm'), occurredAt: at, note: 'e2e' });
+
+  // The total is never cut off by the card, and each half of the month line stays on one line.
+  const balanceFits = async (title: string, total: RegExp, monthStart: string, outWord: string) => {
+    const region = page.getByRole('region', { name: title });
+    const figure = region.getByText(total);
+    await expect(figure).toBeVisible();
+    expect(await figure.evaluate((p) => p.scrollWidth <= p.clientWidth), `${title} total fits`).toBe(true);
+    for (const half of [region.getByText(new RegExp(`^${monthStart}`)), region.getByText(new RegExp(`${outWord}$`))]) {
+      expect(await half.evaluate((span) => span.getClientRects().length), `${title} month line`).toBe(1);
+    }
+  };
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await logIn(page, email);
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 844 });
+    await balanceFits('Tổng số dư', /^-30\.000\.000\.000\.000\s₫$/, 'Tháng này', 'chi');
+    await page.screenshot({ path: testInfo.outputPath(`balance-${width}-vi.png`), animations: 'disabled' });
+  }
+
+  expect((await request.patch('/api/users/me', { headers, data: { language: 'en' } })).status()).toBe(200);
+  await page.reload();
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await balanceFits('Total balance', /^-₫30,000,000,000,000$/, 'This month', 'out');
+    await page.screenshot({ path: testInfo.outputPath(`balance-${width}-en.png`), animations: 'disabled' });
+  }
+});
+
 test('TC-NF-17 Tab goes from the spending/income switch straight to "See all": the chart adds no unnamed stops (BUG-023)', async ({ page, request }, testInfo) => {
   const { email, headers, walletId, category } = await createAccount(request);
   await addTransaction(request, headers, { type: 'expense', amount: 450_000, walletId, categoryId: category('Ăn uống'), occurredAt: `${THIS_MONTH}-01T10:00:00+07:00`, note: 'e2e' });
