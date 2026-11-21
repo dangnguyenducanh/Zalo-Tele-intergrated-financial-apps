@@ -161,6 +161,8 @@ export function getTheme(mode: ColorScheme) {
                   color: '#ffffff',
                   boxShadow: '0 8px 20px -10px rgba(190, 24, 93, 0.55)',
                   '&:hover': { backgroundColor: '#0369a1', boxShadow: '0 10px 24px -10px rgba(190, 24, 93, 0.7)' },
+                  // loading/disabled: plain grey, so the spinner and the disabled state stay visible
+                  '&.Mui-disabled': { backgroundImage: 'none', boxShadow: 'none' },
                 }
               : {},
           sizeSmall: { minHeight: 30, paddingInline: 12, fontSize: '0.8125rem' },

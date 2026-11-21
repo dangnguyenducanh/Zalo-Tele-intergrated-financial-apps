@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const daily = useGetDailyQuery(month);
   const previousDaily = useGetDailyQuery(previousMonth(month));
   const { data: drafts } = useGetTransactionsQuery({ status: 'draft' }); // only `total` is used
-  const stats = [summary, byCategory, daily];
+  const stats = [summary, byCategory, daily, previousDaily]; // last month feeds the comparison, so its failure counts too
   const failed = stats.some((query) => query.isError);
 
   return (
@@ -79,9 +79,9 @@ export default function DashboardPage() {
             </Grid>
           </>
         )}
-        {daily.currentData && (
+        {daily.currentData && previousDaily.currentData && ( // never compare against a month that has not loaded
           <Grid size={{ xs: 12, md: 7 }}>
-            <MonthCompare days={daily.currentData} previousDays={previousDaily.currentData ?? []} />
+            <MonthCompare days={daily.currentData} previousDays={previousDaily.currentData} />
           </Grid>
         )}
         {byCategory.currentData && (
@@ -125,7 +125,7 @@ function BalanceCard({ summary }: { summary: MonthSummary }) {
         justifyContent: 'space-between',
         gap: 2,
         // two soft light discs, decoration only
-        '&::before, &::after': { content: '""', position: 'absolute', borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.12)', pointerEvents: 'none' },
+        '&::before, &::after': { content: '""', position: 'absolute', borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.06)', pointerEvents: 'none' }, // faint enough that white text stays ≥ 4.5:1
         '&::before': { width: 260, height: 260, right: -90, top: -120 },
         '&::after': { width: 200, height: 200, right: 20, bottom: -140 },
       }}

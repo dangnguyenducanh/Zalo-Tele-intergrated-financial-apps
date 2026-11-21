@@ -56,6 +56,8 @@ export function MonthCompare({ days, previousDays }: { days: DayTotal[]; previou
   const total = now.reduce((a, b) => a + b, 0);
   const totalBefore = before.reduce((a, b) => a + b, 0);
   const color = flow === 'expense' ? palette.spend : palette.income;
+  // Last month in a neutral slate that keeps 3:1 against the card (WCAG 1.4.11), this month in its own colour.
+  const previous = palette.mode === 'dark' ? '#7a8aa3' : '#64748b';
   const money = (amount: number) => formatMoney(amount, language);
   const data = now.map((value, i) => ({ week: t('compare.week', { n: i + 1 }), now: value, before: before[i] }));
   const peak = now.indexOf(Math.max(...now));
@@ -93,7 +95,7 @@ export function MonthCompare({ days, previousDays }: { days: DayTotal[]; previou
         </Box>
         <Stack sx={{ gap: 0.5, typography: 'body2', color: 'text.secondary' }}>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
-            <Dot color={alpha(color, 0.35)} />
+            <Dot color={previous} />
             {t('compare.lastMonth')}
           </Stack>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
@@ -119,7 +121,7 @@ export function MonthCompare({ days, previousDays }: { days: DayTotal[]; previou
           itemStyle={{ color: '#fff' }}
           formatter={(value) => money(Number(value))}
         />
-        <Bar dataKey="before" name={t('compare.lastMonth')} fill={alpha(color, 0.35)} radius={[8, 8, 8, 8]} maxBarSize={22} />
+        <Bar dataKey="before" name={t('compare.lastMonth')} fill={previous} radius={[8, 8, 8, 8]} maxBarSize={22} />
         <Bar dataKey="now" name={t('compare.thisMonth')} fill={color} radius={[8, 8, 8, 8]} maxBarSize={22} />
       </BarChart>
     </ChartFigure>
