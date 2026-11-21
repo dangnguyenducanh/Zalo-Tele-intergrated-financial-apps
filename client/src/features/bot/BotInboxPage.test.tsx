@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -277,4 +277,17 @@ test('TC-F10-05 upload: the resized photo is sent as field "image", a status sho
   await user.upload(screen.getByLabelText('Chọn ảnh hoá đơn'), new File(['%PDF'], 'bill.pdf', { type: 'application/pdf' }));
   expect(await screen.findByText('Chỉ hỗ trợ ảnh JPEG hoặc PNG.')).toBeInTheDocument();
   expect(uploads).toHaveLength(2); // the PDF never reached the server
+});
+
+test('TC-F9-04 opening the inbox again shows drafts confirmed in the chat meanwhile as gone (BUG-004)', async () => {
+  const { router } = renderApp('/bot');
+  expect(await screen.findByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (3)' })).toBeInTheDocument();
+
+  // The user leaves the inbox, types "ok" in Zalo (the server confirms the draft), then comes back in the app.
+  await act(() => router.navigate('/wallets'));
+  drafts = drafts.map((d) => (d.id === 'd1' ? { ...d, status: 'confirmed' } : d));
+  await act(() => router.navigate('/bot'));
+
+  expect(await screen.findByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toBeInTheDocument();
+  expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument();
 });

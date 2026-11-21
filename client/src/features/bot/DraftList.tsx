@@ -8,7 +8,9 @@ import DraftCard from './DraftCard';
 export default function DraftList() {
   const { t } = useTranslation('bot');
   const titleId = useId();
-  const { data, isLoading, isError, refetch } = useGetDraftsQuery();
+  // Drafts also change in the chats (✅ / "ok" / "huy"), which the web's tags never hear about, so the inbox asks
+  // the server again each time it opens instead of showing a cached list (BUG-004).
+  const { data, isLoading, isError, refetch } = useGetDraftsQuery(undefined, { refetchOnMountOrArgChange: true });
   const heading = useRef<HTMLHeadingElement>(null);
 
   return (
