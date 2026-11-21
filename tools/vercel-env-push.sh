@@ -39,8 +39,9 @@ push() { # key value
   [ -n "$2" ] || { echo "  skip $1 (empty)"; return; }
   case "$2" in *PASTE_*) echo "  skip $1 (not filled in yet)"; return ;; esac
   [[ ! "$2" =~ $placeholder ]] || { echo "  skip $1 (still a <placeholder> from .env.example)"; return; }
-  npx -y vercel@latest env rm "$1" production --yes </dev/null >/dev/null 2>&1 || true
-  if printf '%s' "$2" | npx -y vercel@latest env add "$1" production >/dev/null 2>&1; then
+  # --force overwrites an existing value in one step (newer Vercel CLIs refuse a scripted `env rm` without an
+  # extra --confirm-name); the value still travels through stdin, never the command line.
+  if printf '%s' "$2" | npx -y vercel@latest env add "$1" production --force --yes >/dev/null 2>&1; then
     echo "  set  $1"; pushed=$((pushed + 1))
   else
     echo "  FAILED $1" >&2; failed=1
