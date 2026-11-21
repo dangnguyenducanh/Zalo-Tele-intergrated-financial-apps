@@ -32,7 +32,8 @@ export default function AdminUsersPage() {
   const [filters, setFilters] = useState<UserFilters>({});
   const [page, setPage] = useState(1);
   const [pending, setPending] = useState<{ user: User; action: Action } | null>(null);
-  const { data, isError } = useGetAdminUsersQuery({ ...filters, page, limit: PAGE_SIZE });
+  const { data: lastData, isError, isFetching, refetch } = useGetAdminUsersQuery({ ...filters, page, limit: PAGE_SIZE });
+  const data = isError ? undefined : lastData; // after a failed load, lastData is an older answer: don't show it
   const [updateUser] = useUpdateAdminUserMutation();
   const pageCount = Math.ceil((data?.total ?? 0) / PAGE_SIZE);
   // An action can shrink the filtered list (e.g. locking the last user on page 2 of "active"):
@@ -45,7 +46,10 @@ export default function AdminUsersPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const value = (name: string) => String(form.get(name) ?? '').trim() || undefined; // "" = no filter
-    setFilters({ q: value('q'), role: value('role') as UserFilters['role'], status: value('status') as UserFilters['status'] });
+    const next: UserFilters = { q: value('q'), role: value('role') as UserFilters['role'], status: value('status') as UserFilters['status'] };
+    // The same search again: RTK Query sees the same arguments and would not ask again, so ask explicitly (BUG-015).
+    if (page === 1 && JSON.stringify(next) === JSON.stringify(filters)) void refetch();
+    setFilters(next);
     setPage(1);
   }
 
@@ -95,63 +99,75 @@ export default function AdminUsersPage() {
         </Stack>
       </Box>
 
-      {isError && <Alert severity="error">{errorMessage('GENERIC')}</Alert>}
-      <Box role="region" aria-labelledby={captionId} tabIndex={0} sx={tableWrapperSx}>
-        <Table size="small">
-          <caption id={captionId} style={{ captionSide: 'top', textAlign: 'start', padding: '8px 0' }}>
-            {data ? t('users.caption', { count: data.total }) : t('common:loading')}
-          </caption>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('users.user')}</TableCell>
-              <TableCell>{t('users.role')}</TableCell>
-              <TableCell>{t('users.status')}</TableCell>
-              <TableCell>{t('users.actions')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {data?.items.length === 0 && (
+      {isError ? (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" loading={isFetching} onClick={() => void refetch()}>
+              {t('retry')}
+            </Button>
+          }
+        >
+          {errorMessage('GENERIC')}
+        </Alert>
+      ) : (
+        <Box role="region" aria-labelledby={captionId} tabIndex={0} sx={tableWrapperSx}>
+          <Table size="small">
+            <caption id={captionId} style={{ captionSide: 'top', textAlign: 'start', padding: '8px 0' }}>
+              {data ? t('users.caption', { count: data.total }) : t('common:loading')}
+            </caption>
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={4}>{t('users.empty')}</TableCell>
+                <TableCell>{t('users.user')}</TableCell>
+                <TableCell>{t('users.role')}</TableCell>
+                <TableCell>{t('users.status')}</TableCell>
+                <TableCell>{t('users.actions')}</TableCell>
               </TableRow>
-            )}
-            {data?.items.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell component="th" scope="row">
-                  <strong>{user.name}</strong>
-                  {user.id === me?.id && ` (${t('users.you')})`}
-                  <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>
-                    {user.email}
-                  </Typography>
-                </TableCell>
-                <TableCell data-label={t('users.role')}>
-                  <Chip size="small" label={t(`users.roles.${user.role}`)} color={user.role === 'admin' ? 'primary' : 'default'} />
-                </TableCell>
-                <TableCell data-label={t('users.status')}>
-                  <Chip size="small" variant="outlined" label={t(`users.statuses.${user.status}`)} color={user.status === 'locked' ? 'error' : 'success'} />
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                    {(['lock', 'unlock', 'makeAdmin', 'removeAdmin'] as const)
-                      .filter((action) => allowed(user, action))
-                      .map((action) => (
-                        <Button
-                          key={action}
-                          size="small"
-                          color={DESTRUCTIVE.includes(action) ? 'error' : 'primary'}
-                          aria-label={`${t(`users.${action}`)} ${user.name}`}
-                          onClick={() => setPending({ user, action })}
-                        >
-                          {t(`users.${action}`)}
-                        </Button>
-                      ))}
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Box>
+            </TableHead>
+            <TableBody>
+              {data?.items.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4}>{t('users.empty')}</TableCell>
+                </TableRow>
+              )}
+              {data?.items.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell component="th" scope="row">
+                    <strong>{user.name}</strong>
+                    {user.id === me?.id && ` (${t('users.you')})`}
+                    <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>
+                      {user.email}
+                    </Typography>
+                  </TableCell>
+                  <TableCell data-label={t('users.role')}>
+                    <Chip size="small" label={t(`users.roles.${user.role}`)} color={user.role === 'admin' ? 'primary' : 'default'} />
+                  </TableCell>
+                  <TableCell data-label={t('users.status')}>
+                    <Chip size="small" variant="outlined" label={t(`users.statuses.${user.status}`)} color={user.status === 'locked' ? 'error' : 'success'} />
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                      {(['lock', 'unlock', 'makeAdmin', 'removeAdmin'] as const)
+                        .filter((action) => allowed(user, action))
+                        .map((action) => (
+                          <Button
+                            key={action}
+                            size="small"
+                            color={DESTRUCTIVE.includes(action) ? 'error' : 'primary'}
+                            aria-label={`${t(`users.${action}`)} ${user.name}`}
+                            onClick={() => setPending({ user, action })}
+                          >
+                            {t(`users.${action}`)}
+                          </Button>
+                        ))}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+      )}
       {pageCount > 1 && (
         <Pagination
           sx={{ mt: 2 }}

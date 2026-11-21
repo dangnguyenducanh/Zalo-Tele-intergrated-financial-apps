@@ -2,7 +2,7 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { Alert, Button, Paper, Typography } from '@mui/material';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiErrorMessage } from '@/features/categories/helpers';
+import { errorCodeOf } from '@/features/admin/adminApi';
 import { errorMessage } from '@/i18n/errors';
 import { useUploadReceiptMutation } from './botApi';
 import { resizeImage } from './resizeImage';
@@ -15,21 +15,22 @@ export default function ReceiptUpload() {
   const input = useRef<HTMLInputElement>(null);
   const [uploadReceipt] = useUploadReceiptMutation();
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(''); // read out politely by screen readers
+  // Keys and error codes, not finished text: they are translated when shown, so they follow a language switch.
+  const [status, setStatus] = useState<'reading' | 'done' | null>(null); // read out politely by screen readers
   const [error, setError] = useState<string | null>(null);
 
   async function upload(file: File) {
     setBusy(true);
     setError(null);
-    setStatus(t('upload.reading'));
+    setStatus('reading');
     const image = await resizeImage(file).catch(() => null); // null: the browser cannot open it as an image
     const failure = image
       ? await uploadReceipt(image)
           .unwrap()
-          .then(() => null, apiErrorMessage) // KIE errors arrive as codes: RECEIPT_UNREADABLE, KIE_TIMEOUT, …
-      : errorMessage('UNSUPPORTED_MEDIA_TYPE');
+          .then(() => null, errorCodeOf) // KIE errors arrive as codes: RECEIPT_UNREADABLE, KIE_TIMEOUT, …
+      : 'UNSUPPORTED_MEDIA_TYPE';
     setBusy(false);
-    setStatus(failure ? '' : t('upload.done'));
+    setStatus(failure ? null : 'done');
     setError(failure);
   }
 
@@ -56,9 +57,9 @@ export default function ReceiptUpload() {
         {t('upload.button')}
       </Button>
       <Typography role="status" sx={{ mt: 1, minHeight: '1.5em' }}>
-        {status}
+        {status && t(`upload.${status}`)}
       </Typography>
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && <Alert severity="error">{errorMessage(error)}</Alert>}
     </Paper>
   );
 }

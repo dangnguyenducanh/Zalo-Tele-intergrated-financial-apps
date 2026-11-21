@@ -240,7 +240,7 @@ test('TC-F12-02 settings: English translates the page on Save and saves the lang
   expect(await screen.findByText('Preferences saved')).toBeInTheDocument();
 });
 
-test('TC-F12-02 settings: when the profile cannot be saved the choice still applies on this device, with a warning', async () => {
+test('TC-F12-02 settings: when the profile cannot be saved the choice applies for now, with a warning that a reload resets it', async () => {
   const user = userEvent.setup();
   server.use(http.patch('*/api/users/me', () => HttpResponse.json({ error: { code: 'INTERNAL', message: 'x' } }, { status: 500 })));
   renderApp('/settings');
@@ -249,7 +249,7 @@ test('TC-F12-02 settings: when the profile cannot be saved the choice still appl
   await user.click(within(form).getByRole('radio', { name: 'English' }));
   await user.click(within(form).getByRole('button', { name: 'Lưu tuỳ chọn' }));
 
-  expect(await screen.findByText('Could not save this choice to your account. It still applies on this device.')).toBeInTheDocument();
+  expect(await screen.findByText('Could not save this choice to your account. It only lasts until the page is reloaded – please try again.')).toBeInTheDocument();
   expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
 });
 

@@ -1,4 +1,5 @@
 {
+  "retry": "Retry",
   "users": {
     "title": "Manage users",
     "search": "Search by name or email",

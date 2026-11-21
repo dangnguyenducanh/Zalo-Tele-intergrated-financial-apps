@@ -6,7 +6,7 @@
   "cancel": "Huỷ",
   "confirm": "Đồng ý",
   "reload": "Tải lại trang",
-  "preferenceNotSaved": "Không lưu được lựa chọn vào tài khoản. Lựa chọn vẫn được áp dụng trên thiết bị này.",
+  "preferenceNotSaved": "Không lưu được lựa chọn vào tài khoản. Lựa chọn chỉ có hiệu lực đến khi tải lại trang – vui lòng thử lại.",
   "nav": {
     "label": "Điều hướng chính",
     "dashboard": "Tổng quan",

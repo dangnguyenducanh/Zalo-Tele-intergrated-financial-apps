@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { addTransaction, createAccount as createAccountWithData } from './helpers';
 
 // App shell journeys in a real browser against the real API (in-memory MongoDB, see playwright.config.ts):
 // login/register, silent refresh on reload, logout, theme, language and the responsive layout.
@@ -59,6 +60,28 @@ test('TC-F1-08 register, reload (still logged in), log out (back to /login)', as
   await page.goto('/');
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeVisible();
+});
+
+// BUG-013: logging out must not send the next person who logs in on this browser to the last user's page and filters.
+test('TC-F1-25 after a logout the next user lands on / and sees their own transactions', async ({ page, request }, testInfo) => {
+  const lan = await createAccountWithData(request, 'Lan');
+  const minh = await createAccountWithData(request, 'Minh');
+  await addTransaction(request, minh, 45000, 'Ăn uống', 'phở');
+  await logIn(page, lan.email);
+  await page.goto(`/transactions?walletId=${lan.walletId}`);
+  await page.getByRole('button', { name: 'Tài khoản' }).click();
+  await page.getByRole('menuitem', { name: 'Đăng xuất' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  // Minh logs in on the login page the logout left open.
+  await page.getByRole('textbox', { name: 'Email' }).fill(minh.email);
+  await page.getByLabel(/^Mật khẩu/).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Xin chào, Minh' })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await page.screenshot({ path: testInfo.outputPath('next-user-landing-1280.png'), animations: 'disabled' });
+  await page.goto('/transactions');
+  await expect(page.getByRole('row').filter({ hasText: 'phở' })).toBeVisible();
 });
 
 test('TC-F12-01 dark theme persists after reload (localStorage) and after login in a new browser (profile)', async ({ page, browser, request }) => {

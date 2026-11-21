@@ -119,6 +119,31 @@ test('TC-F11-08 users page: stats, search, lock behind a confirm dialog, and LAS
   expect(await screen.findByText('Không thể khoá hoặc hạ quyền quản trị viên cuối cùng.')).toBeInTheDocument();
 });
 
+// BUG-015: one failed GET /admin/users must not leave the list stuck; Retry and Tìm both load it again.
+test('TC-F11-09 users page: a failed load offers Retry, and pressing Tìm again with the same search reloads it', async () => {
+  const user = userEvent.setup();
+  const failOnce = () =>
+    server.use(http.get('*/api/admin/users', () => HttpResponse.json({ error: { code: 'INTERNAL', message: 'x' } }, { status: 500 }), { once: true }));
+  failOnce();
+  renderApp('/admin/users');
+
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Đã có lỗi xảy ra. Vui lòng thử lại.');
+  expect(screen.queryByText('Đang tải…')).not.toBeInTheDocument(); // not "loading" while showing an error
+  await user.click(within(alert).getByRole('button', { name: 'Thử lại' }));
+  await screen.findByRole('region', { name: 'Số người dùng tìm thấy: 2' });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+  // The same search again (nothing changed in the form) still asks the server.
+  failOnce();
+  await user.click(screen.getByRole('button', { name: 'Tìm' }));
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: /Số người dùng tìm thấy/ })).not.toBeInTheDocument(); // no stale rows under the error
+  await user.click(screen.getByRole('button', { name: 'Tìm' }));
+  await screen.findByRole('region', { name: 'Số người dùng tìm thấy: 2' });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
 test('TC-F11-08 users page: an action that empties the current page goes back to the last page', async () => {
   const user = userEvent.setup();
   // 20 other active users fill page 1, so Minh is alone on page 2 of the "active" list.
