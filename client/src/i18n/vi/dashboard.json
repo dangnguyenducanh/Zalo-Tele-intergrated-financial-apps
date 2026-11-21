@@ -12,8 +12,13 @@
     "noBudget": "Chưa đặt ngân sách tổng",
     "setBudget": "Đặt hạn mức"
   },
-  "drafts": "Có {{count}} giao dịch nháp đang chờ xác nhận.",
+  "drafts_one": "Có {{count}} giao dịch nháp đang chờ xác nhận.",
+  "drafts_other": "Có {{count}} giao dịch nháp đang chờ xác nhận.",
   "openInbox": "Xem các bản nháp",
+  "budgetAlert": {
+    "title": "Ngân sách cần chú ý",
+    "open": "Xem ngân sách"
+  },
   "byCategory": {
     "title": "Chi tiêu theo danh mục",
     "empty": "Tháng này chưa có khoản chi nào.",

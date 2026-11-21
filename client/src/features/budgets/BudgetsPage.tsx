@@ -14,17 +14,9 @@ import { categoryName, useGetCategoriesQuery } from '@/features/categories/categ
 import { apiErrorMessage } from '@/features/categories/helpers';
 import { formatMoney } from '@/i18n/format';
 import BudgetDialog from './BudgetDialog';
-import { useCopyBudgetsMutation, useDeleteBudgetMutation, useGetBudgetsQuery, type Budget } from './budgetsApi';
+import { budgetLevel, useCopyBudgetsMutation, useDeleteBudgetMutation, useGetBudgetsQuery, type Budget } from './budgetsApi';
 
-type Level = 'ok' | 'warn' | 'over';
 const LEVEL_COLOR = { ok: 'success', warn: 'warning', over: 'error' } as const; // theme palette keys
-
-// Green below 80 %, amber from 80 % to 100 %, red above 100 % (docs/05 §5.7). Compares the exact amounts,
-// not the rounded percent, so 79.6 % is still green.
-function levelOf({ spent, limit }: Budget): Level {
-  if (spent * 100 < limit * 80) return 'ok';
-  return spent <= limit ? 'warn' : 'over';
-}
 
 // "2026-11" → "2026-10" (January goes back to December of the year before).
 function previousMonth(month: string): string {
@@ -141,7 +133,7 @@ type CardProps = { budget: Budget; name: string; onEdit: () => void; onDelete: (
 function BudgetCard({ budget, name, onEdit, onDelete }: CardProps) {
   const { t } = useTranslation('budgets');
   const language = useAppSelector((s) => s.ui.language);
-  const level = levelOf(budget);
+  const level = budgetLevel(budget);
   const money = (amount: number) => formatMoney(amount, language);
   const left = budget.limit - budget.spent;
   const nameId = `budget-${budget.id}`;

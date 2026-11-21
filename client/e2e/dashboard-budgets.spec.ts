@@ -116,7 +116,7 @@ test('TC-F5-04 budget bars are green, amber and red with text labels; "Copy from
   await addBudget(request, headers, LAST_MONTH, category('Hoá đơn'), 800_000);
 
   await logIn(page, email);
-  await page.getByRole('link', { name: 'Ngân sách' }).click();
+  await page.getByRole('link', { name: 'Ngân sách', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Ngân sách' })).toBeVisible();
 
   const food = page.getByRole('article', { name: 'Ăn uống' });
@@ -143,4 +143,53 @@ test('TC-F5-04 budget bars are green, amber and red with text labels; "Copy from
   await expect(food).toContainText(/\/ 1\.000\.000\s₫/); // not overwritten by last month's 1,200,000
   await expect(page.getByRole('article')).toHaveCount(5);
   await page.screenshot({ path: testInfo.outputPath('budgets.png'), fullPage: true, animations: 'disabled' });
+});
+
+// Each figure amount is one line box: getClientRects() of an inline span gives one rectangle per line.
+const amountLines = (page: Page, card: string) =>
+  page
+    .getByRole('article', { name: card, exact: true })
+    .locator('p > span')
+    .evaluate((span) => span.getClientRects().length);
+
+test('TC-NF-16 at 375 px a 10-digit amount stays on one line in every figure card, in vi and en (BUG-021)', async ({ page, request }, testInfo) => {
+  const { email, headers, walletId, category } = await createAccount(request);
+  await addTransaction(request, headers, { type: 'expense', amount: 1_234_567_890, walletId, categoryId: category('Mua sắm'), occurredAt: `${THIS_MONTH}-01T10:00:00+07:00`, note: 'e2e' });
+  await addBudget(request, headers, THIS_MONTH, null, 1_000_000);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await logIn(page, email);
+
+  await expect(page.getByRole('article', { name: 'Chênh lệch (thu − chi)' })).toContainText(/-1\.234\.567\.890\s₫/);
+  for (const card of ['Thu nhập', 'Chi tiêu', 'Chênh lệch (thu − chi)', 'Ngân sách còn lại']) expect(await amountLines(page, card), card).toBe(1);
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.screenshot({ path: testInfo.outputPath(`dashboard-375-${scheme}-vi.png`), fullPage: true, animations: 'disabled' });
+  }
+
+  expect((await request.patch('/api/users/me', { headers, data: { language: 'en' } })).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole('article', { name: 'Net (income − expenses)' })).toContainText('-₫1,234,567,890');
+  for (const card of ['Income', 'Expenses', 'Net (income − expenses)', 'Budget left']) expect(await amountLines(page, card), card).toBe(1);
+  await expect.poll(() => page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), { message: 'no sideways scroll' }).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('dashboard-375-light-en.png'), fullPage: true, animations: 'disabled' });
+});
+
+test('TC-NF-17 Tab goes from the spending/income switch straight to "See all": the chart adds no unnamed stops (BUG-023)', async ({ page, request }, testInfo) => {
+  const { email, headers, walletId, category } = await createAccount(request);
+  await addTransaction(request, headers, { type: 'expense', amount: 450_000, walletId, categoryId: category('Ăn uống'), occurredAt: `${THIS_MONTH}-01T10:00:00+07:00`, note: 'e2e' });
+  await addTransaction(request, headers, { type: 'expense', amount: 300_000, walletId, categoryId: category('Đi lại'), occurredAt: `${LAST_MONTH}-01T10:00:00+07:00`, note: 'e2e' });
+  await addBudget(request, headers, THIS_MONTH, category('Ăn uống'), 500_000); // 90 %: the dashboard warns (BUG-020)
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await logIn(page, email);
+
+  const compare = page.getByRole('figure', { name: 'Chi tiêu tháng này' });
+  await expect(compare.locator('.recharts-bar-rectangle').first()).toBeVisible();
+  await compare.getByRole('button', { name: 'Thu nhập' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Xem tất cả' })).toBeFocused();
+  await expect(page.getByRole('status', { name: 'Ngân sách cần chú ý' })).toContainText(/Ăn uống: Sắp hết · Đã chi 450\.000\s₫ \/ 500\.000\s₫ \(90%\)/);
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.screenshot({ path: testInfo.outputPath(`dashboard-1280-${scheme}.png`), fullPage: true, animations: 'disabled' });
+  }
 });

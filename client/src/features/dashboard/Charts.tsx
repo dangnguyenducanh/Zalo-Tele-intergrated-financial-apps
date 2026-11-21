@@ -1,5 +1,5 @@
 import { alpha, Box, Paper, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAppSelector } from '@/app/hooks';
@@ -42,6 +42,25 @@ function ChartFigure({ title, aside, children, summary }: { title: string; aside
   );
 }
 
+// Keeps the chart out of the Tab order; its figcaption already says the numbers (docs/05 §5.8). `accessibilityLayer`
+// off drops the svg's own stop. Recharts 3 also portals the grid, bars and axes into bare <g> layers, and React's
+// focus listeners on those portal containers make Chromium stop on each of them, with no name and no focus ring
+// (BUG-023). tabindex="-1" takes them out of the Tab order and keeps the mouse tooltip (unlike `inert`). The
+// layers come and go after render (resize, hover), so a MutationObserver re-applies it.
+function useNoTabStops<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const untab = () => box.querySelectorAll('g[class*="zIndex-layer"]').forEach((layer) => layer.setAttribute('tabindex', '-1'));
+    untab();
+    const observer = new MutationObserver(untab); // watches nodes, not attributes, so setting tabindex does not loop
+    observer.observe(box, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+  return ref;
+}
+
 const Dot = ({ color }: { color: string }) => <Box aria-hidden sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />;
 
 // This month against last month, in four weekly columns each (the student asked for columns here, T18).
@@ -55,6 +74,7 @@ export function MonthCompare({ days, previousDays }: { days: DayTotal[]; previou
   const before = weekTotals(previousDays, flow);
   const total = now.reduce((a, b) => a + b, 0);
   const totalBefore = before.reduce((a, b) => a + b, 0);
+  const chartBox = useNoTabStops<HTMLDivElement>();
   const color = flow === 'expense' ? palette.spend : palette.income;
   // Last month in a neutral slate that keeps 3:1 against the card (WCAG 1.4.11), this month in its own colour.
   const previous = palette.mode === 'dark' ? '#7a8aa3' : '#64748b';
@@ -104,26 +124,36 @@ export function MonthCompare({ days, previousDays }: { days: DayTotal[]; previou
           </Stack>
         </Stack>
       </Stack>
-      <BarChart responsive style={CHART_STYLE} data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }} barGap={4} barCategoryGap="28%">
-        <CartesianGrid vertical={false} stroke={palette.divider} strokeDasharray="3 4" />
-        <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fill: palette.text.secondary, fontSize: 12 }} />
-        <YAxis
-          width={46}
-          tickLine={false}
-          axisLine={false}
-          tick={{ fill: palette.text.secondary, fontSize: 11 }}
-          tickFormatter={(value: number) => new Intl.NumberFormat(language === 'vi' ? 'vi-VN' : 'en-US', { notation: 'compact' }).format(value)}
-        />
-        <Tooltip
-          cursor={{ fill: alpha(color, 0.08), radius: 10 }}
-          contentStyle={{ backgroundColor: '#0f2a5f', border: 0, borderRadius: 12, color: '#fff', fontSize: 12 }}
-          labelStyle={{ color: '#bae6fd' }}
-          itemStyle={{ color: '#fff' }}
-          formatter={(value) => money(Number(value))}
-        />
-        <Bar dataKey="before" name={t('compare.lastMonth')} fill={previous} radius={[8, 8, 8, 8]} maxBarSize={22} />
-        <Bar dataKey="now" name={t('compare.thisMonth')} fill={color} radius={[8, 8, 8, 8]} maxBarSize={22} />
-      </BarChart>
+      <Box ref={chartBox}>
+        <BarChart
+          responsive
+          accessibilityLayer={false}
+          style={CHART_STYLE}
+          data={data}
+          margin={{ top: 8, right: 0, bottom: 0, left: 0 }}
+          barGap={4}
+          barCategoryGap="28%"
+        >
+          <CartesianGrid vertical={false} stroke={palette.divider} strokeDasharray="3 4" />
+          <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fill: palette.text.secondary, fontSize: 12 }} />
+          <YAxis
+            width={46}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: palette.text.secondary, fontSize: 11 }}
+            tickFormatter={(value: number) => new Intl.NumberFormat(language === 'vi' ? 'vi-VN' : 'en-US', { notation: 'compact' }).format(value)}
+          />
+          <Tooltip
+            cursor={{ fill: alpha(color, 0.08), radius: 10 }}
+            contentStyle={{ backgroundColor: '#0f2a5f', border: 0, borderRadius: 12, color: '#fff', fontSize: 12 }}
+            labelStyle={{ color: '#bae6fd' }}
+            itemStyle={{ color: '#fff' }}
+            formatter={(value) => money(Number(value))}
+          />
+          <Bar dataKey="before" name={t('compare.lastMonth')} fill={previous} radius={[8, 8, 8, 8]} maxBarSize={22} />
+          <Bar dataKey="now" name={t('compare.thisMonth')} fill={color} radius={[8, 8, 8, 8]} maxBarSize={22} />
+        </BarChart>
+      </Box>
     </ChartFigure>
   );
 }
