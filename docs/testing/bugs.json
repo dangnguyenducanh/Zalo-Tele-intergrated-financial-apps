@@ -88,5 +88,23 @@
     "status": "Closed",
     "dateClosed": "2026-11-21",
     "evidence": "found: MT-05_phone-dark-en-dashboard-full.png vs …-after-reload.png; retest on staging with the fix deployed: charter-runs/2026-11-21/retest-T20/ (BUG-005_*.png, retest-T20.mp4): English names right after the switch"
+  },
+  {
+    "id": "BUG-006",
+    "dateFound": "2026-11-21",
+    "foundBy": "Code review S2 of PR #47 (T21)",
+    "feature": "F1 Auth",
+    "severity": "S3 Minor",
+    "title": "A refresh running in parallel with \"revoke every session\" keeps its new session alive",
+    "stepsToReproduce": "1. Log in, refresh A → B.\n2. Within 30 s send two refreshes with A at the same moment (or a reuse of A in parallel with a refresh of B).\n3. Count the user's active sessions.",
+    "expected": "One request is treated as theft, so every session of the user is revoked and none stays active.",
+    "actual": "The winner's new session stays active after the \"revoke all\" (about 3 runs in 5 in the reviewer's repro).",
+    "rootCause": "revokeAllSessions is one updateMany on revokedAt: null. A parallel refresh that had already claimed its old session called openSession() after that updateMany had passed, so its new row was never matched (server/src/services/sessions.js, auth.js rotate()).",
+    "fix": "revokeAllSessions first stamps users.sessionsRevokedAt, then revokes. Every session carries chainStartedAt (the time of the login that began its rotation chain, copied forward on each rotation). rotate() re-reads the stamp and status after openSession(); if the stamp is not older than the chain's login, it revokes the new session and answers 401 INVALID_REFRESH (403 ACCOUNT_LOCKED after an admin lock). Comparing with the chain's login rather than the newest session also closes the gap the PR #50 review found: a session created while the stamp was being written is younger than the stamp, but its chain is not.",
+    "filesOrCommit": "server/src/services/{auth,sessions}.js, server/src/models/{User,Session}.js; T22 (#49), PR #50",
+    "regressionTest": "TC-F1-20",
+    "status": "Closed",
+    "dateClosed": "2026-11-21",
+    "evidence": "TC-F1-20 (4 cases): pausing Session.create makes the interleaving deterministic; the 2 interleaving cases failed before the fix (200, one session alive), and the 'session younger than the stamp' case failed against the first version of the fix (200). All pass now; 40 real parallel retries left 0 active sessions."
   }
 ]

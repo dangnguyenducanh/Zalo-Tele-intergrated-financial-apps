@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import app from '../src/app.js';
 import { env } from '../src/config/env.js';
 import { Session } from '../src/models/Session.js';
 import { User } from '../src/models/User.js';
+import { revokeAllSessions } from '../src/services/sessions.js';
 import { clearTestDb, startTestDb, stopTestDb } from './helpers/db.js';
 import { claimsOf, loginAs, refresh, refreshCookie, registerUser, resetLoginLimit } from './helpers/auth.js';
 
@@ -241,6 +242,60 @@ describe('refresh and logout', () => {
     expect((await refresh(other.cookie)).status).toBe(200);
     // A third try with A is theft now (its replacement C was used): every session is revoked.
     expect((await refresh(cookieA)).status).toBe(401);
+    expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  // BUG-006: "revoke every session" must win against a rotation running at the same moment. The rotation has
+  // already claimed its old session; just before it opens the new one, a reuse of A is caught as theft and revokes
+  // everything. Session.create is paused there so the interleaving happens on every run, not 3 runs in 5.
+  test.each([
+    ['a second retry of A inside the grace window', (cookies) => cookies.A],
+    ['a refresh of B', (cookies) => cookies.B],
+  ])('TC-F1-20 revoke-all landing between the claim and the new session of %s leaves no session alive (BUG-006)', async (_, rotating) => {
+    const { cookie: cookieA, user, email, password } = await registerUser();
+    await loginAs({ email, password }); // a second device, which the theft must log out too
+    const cookieB = refreshCookie(await refresh(cookieA)); // A → B
+
+    const realCreate = Session.create.bind(Session);
+    let theft;
+    const pause = vi.spyOn(Session, 'create').mockImplementationOnce(async (...args) => {
+      theft = await refresh(cookieA); // B is claimed already, so this reuse of A is theft: revoke all
+      return realCreate(...args);
+    });
+    const rotation = await refresh(rotating({ A: cookieA, B: cookieB }));
+    pause.mockRestore();
+
+    expect(theft.status).toBe(401);
+    expect([rotation.status, rotation.body.error?.code]).toEqual([401, 'INVALID_REFRESH']);
+    expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  // Review of #50: revoke-all picks its stamp time before writing it, so a rotation can create C in that gap.
+  // C is younger than the stamp, yet its chain began at login A, before the revoke-all. This is the state that
+  // gap leaves behind (stamp between A and C, C still active), and C must not be refreshed into a live session.
+  test('TC-F1-20 a chain that began before a revoke-all cannot continue, even from a session younger than the stamp (BUG-006)', async () => {
+    const { cookie: cookieA, user } = await registerUser();
+    const cookieB = refreshCookie(await refresh(cookieA));
+    const cookieC = refreshCookie(await refresh(cookieB));
+    const sessionC = await Session.findOne({ tokenHash: sha256(cookieC.slice(3)) });
+    await User.updateOne({ _id: user.id }, { sessionsRevokedAt: new Date(sessionC.createdAt - 1) });
+
+    expect((await refresh(cookieC)).status).toBe(401);
+    expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  test('TC-F1-20 an admin lock landing in the middle of a refresh answers 403 ACCOUNT_LOCKED and leaves no session alive', async () => {
+    const { cookie, user } = await registerUser();
+    const realCreate = Session.create.bind(Session);
+    const pause = vi.spyOn(Session, 'create').mockImplementationOnce(async (...args) => {
+      await User.updateOne({ _id: user.id }, { status: 'locked' }); // what PATCH /admin/users/:id does (services/admin.js)
+      await revokeAllSessions(user.id);
+      return realCreate(...args);
+    });
+    const res = await refresh(cookie);
+    pause.mockRestore();
+
+    expect([res.status, res.body.error?.code]).toEqual([403, 'ACCOUNT_LOCKED']);
     expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
   });
 

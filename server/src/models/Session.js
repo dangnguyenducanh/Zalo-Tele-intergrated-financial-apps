@@ -12,6 +12,8 @@ const sessionSchema = new mongoose.Schema(
     lastUsedAt: { type: Date, default: Date.now },
     revokedAt: { type: Date, default: null },
     replacedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', default: null },
+    // When the login that began this rotation chain happened; every rotation copies it forward (BUG-006).
+    chainStartedAt: { type: Date },
   },
   { timestamps: true },
 );
