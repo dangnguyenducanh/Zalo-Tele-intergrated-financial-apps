@@ -229,8 +229,13 @@ describe('refresh and logout', () => {
     const cookieC = refreshCookie(again);
     expect(cookieC).not.toBe(cookieB);
 
-    // The unused B is revoked so only one chain stays alive; C keeps working; the other device was not touched.
-    expect((await Session.findOne({ tokenHash: sha256(cookieB.slice(3)) })).revokedAt).not.toBeNull();
+    // The unused B is revoked so only one chain stays alive, and both A and B point at C, so a later reuse of
+    // either is still caught; C keeps working; the other device was not touched.
+    const sessionB = await Session.findOne({ tokenHash: sha256(cookieB.slice(3)) });
+    const sessionC = await Session.findOne({ tokenHash: sha256(cookieC.slice(3)) });
+    expect(sessionB.revokedAt).not.toBeNull();
+    expect(String(sessionB.replacedBy)).toBe(String(sessionC._id));
+    expect(String((await Session.findOne({ tokenHash: sha256(cookieA.slice(3)) })).replacedBy)).toBe(String(sessionC._id));
     const cookieD = refreshCookie(await refresh(cookieC));
     expect(cookieD).toMatch(/^rt=/);
     expect((await refresh(other.cookie)).status).toBe(200);

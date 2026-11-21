@@ -91,7 +91,7 @@ export async function refresh(refreshToken, client) {
   const used = await Session.findOne({ tokenHash });
   if (!used?.replacedBy) throw invalidRefresh(); // unknown, expired, or revoked by logout: just 401
 
-  // A token that was already rotated is back. If that happened moments ago and its replacement was never used,
+  // A token that was already rotated is back. If that happened moments ago and its replacement was never refreshed,
   // the browser most likely never got the answer (navigation, reload, network drop): revoke the unused
   // replacement and rotate again, so one valid chain remains.
   const replacement =
