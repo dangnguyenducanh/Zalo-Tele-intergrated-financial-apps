@@ -43,7 +43,7 @@ erDiagram
 | `language` | String | `vi` \| `en`, default `vi` |
 | `theme` | String | `light` \| `dark` \| `system`, default `system` |
 | `defaultWalletId` | ObjectId → Wallet | used by the bot parser |
-| `sessionsRevokedAt` | Date \| null | set by "revoke every session" (theft, admin lock) **before** it revokes them; a refresh that was already rotating re-reads it after opening its new session and revokes that session too if the stamp is not older than its chain (BUG-006). Never sent to the client. |
+| `sessionsRevokedAt` | Date \| null | set by "revoke every session" (theft, admin lock) **before** it revokes them; a refresh that was already rotating re-reads it after opening its new session and revokes that session too if the stamp is not older than the chain's login (`sessions.chainStartedAt`) (BUG-006). Never sent to the client. |
 
 Indexes: `{ email: 1 }` unique.
 
@@ -58,6 +58,7 @@ Indexes: `{ email: 1 }` unique.
 | `lastUsedAt` | Date | updated on refresh |
 | `revokedAt` | Date \| null | set by logout, "log out others", admin lock, reuse detection |
 | `replacedBy` | ObjectId → Session | rotation chain, used to detect a stolen token being reused |
+| `chainStartedAt` | Date | when the login that began this rotation chain happened; set at login/register and copied forward by every rotation. A revoke-all kills every chain whose login is not newer than `users.sessionsRevokedAt` (BUG-006). Rows from before T22 lack it and fall back to `createdAt`. |
 
 Indexes: `{ tokenHash: 1 }` unique; `{ userId: 1, revokedAt: 1 }`; **TTL** `{ expiresAt: 1 }, expireAfterSeconds: 0` (Atlas deletes expired sessions automatically).
 

@@ -35,13 +35,15 @@ export async function onUserRegistered(user) {
 
 // Creates a session row (one per device) and returns the tokens the client gets:
 // a 15-minute JWT access token and a 7-day random refresh token for the `rt` cookie.
-async function openSession(user, { userAgent, ip }) {
+// A login starts a new chain; a rotation passes on the `chainStartedAt` of the session it replaces.
+async function openSession(user, { userAgent, ip }, chainStartedAt = new Date()) {
   const refreshToken = randomBytes(32).toString('base64url');
   const session = await Session.create({
     userId: user._id,
     tokenHash: hashToken(refreshToken),
     userAgent,
     ip,
+    chainStartedAt,
     expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * DAY_MS),
   });
   const accessToken = jwt.sign({ role: user.role, sid: String(session._id) }, env.JWT_ACCESS_SECRET, {
@@ -86,7 +88,7 @@ export async function refresh(refreshToken, client) {
     { tokenHash, revokedAt: null, expiresAt: mongoose.trusted({ $gt: now }) },
     { revokedAt: now, lastUsedAt: now },
   );
-  if (old) return rotate(old.userId, client, [old._id], old.createdAt);
+  if (old) return rotate(old.userId, client, [old._id], chainStart(old));
 
   const used = await Session.findOne({ tokenHash });
   if (!used?.replacedBy) throw invalidRefresh(); // unknown, expired, or revoked by logout: just 401
@@ -96,29 +98,32 @@ export async function refresh(refreshToken, client) {
   // replacement and rotate again, so one valid chain remains.
   const replacement =
     now - used.revokedAt <= REUSE_GRACE_MS && (await Session.findOneAndUpdate({ _id: used.replacedBy, revokedAt: null }, { revokedAt: now }));
-  if (replacement) return rotate(used.userId, client, [used._id, replacement._id], used.createdAt);
+  if (replacement) return rotate(used.userId, client, [used._id, replacement._id], chainStart(used));
 
   // Otherwise either the user or a thief holds a copy, and we can't tell which: log out every device of that user.
   await revokeAllSessions(used.userId);
   throw invalidRefresh();
 }
 
+// Sessions created before T22 have no chainStartedAt; their own creation time is the best we know.
+const chainStart = (session) => session.chainStartedAt ?? session.createdAt;
+
 // Opens the next session and points the revoked ones at it (`replacedBy`), so a later reuse of any of them is caught.
-// `chainCreatedAt` is when the first session in `revokedIds` was created.
-async function rotate(userId, client, revokedIds, chainCreatedAt) {
+async function rotate(userId, client, revokedIds, chainStartedAt) {
   const user = await User.findById(userId);
   if (!user) throw invalidRefresh();
   if (user.status === 'locked') throw accountLocked();
-  const next = await openSession(user, client);
+  const next = await openSession(user, client, chainStartedAt);
 
   // BUG-006: a "revoke every session" (theft, admin lock) may have run while we were between the claim above and
   // this new session, so its updateMany could not see it. It stamps the user first, so read the stamp again now:
-  // if every session was revoked after this chain began, the chain was meant to die, and the new session with it.
-  // ponytail: compares two server clocks; a skew of a few ms only matters for a chain created in those same ms.
-  const { sessionsRevokedAt } = await User.findById(userId).select('sessionsRevokedAt').lean();
-  if (sessionsRevokedAt && sessionsRevokedAt >= chainCreatedAt) {
+  // if every session was revoked after this chain's login, the chain was meant to die, and the new session with it.
+  // ponytail: compares two server clocks; a skew of a few ms only matters for a login made in those same ms.
+  const now = await User.findById(userId).select('status sessionsRevokedAt').lean();
+  const locked = now?.status === 'locked';
+  if (!now || locked || (now.sessionsRevokedAt && now.sessionsRevokedAt >= chainStartedAt)) {
     await Session.updateOne({ _id: next.session._id }, { revokedAt: new Date() });
-    throw invalidRefresh();
+    throw locked ? accountLocked() : invalidRefresh();
   }
   await Session.updateMany({ _id: mongoose.trusted({ $in: revokedIds }) }, { replacedBy: next.session._id });
   return next;

@@ -100,11 +100,11 @@
     "expected": "One request is treated as theft, so every session of the user is revoked and none stays active.",
     "actual": "The winner's new session stays active after the \"revoke all\" (about 3 runs in 5 in the reviewer's repro).",
     "rootCause": "revokeAllSessions is one updateMany on revokedAt: null. A parallel refresh that had already claimed its old session called openSession() after that updateMany had passed, so its new row was never matched (server/src/services/sessions.js, auth.js rotate()).",
-    "fix": "revokeAllSessions first stamps users.sessionsRevokedAt, then revokes. rotate() re-reads the stamp after openSession(); if it is not older than the session being rotated away from, it revokes the new session and answers 401 INVALID_REFRESH.",
-    "filesOrCommit": "server/src/services/{auth,sessions}.js, server/src/models/User.js; T22 (#49)",
+    "fix": "revokeAllSessions first stamps users.sessionsRevokedAt, then revokes. Every session carries chainStartedAt (the time of the login that began its rotation chain, copied forward on each rotation). rotate() re-reads the stamp and status after openSession(); if the stamp is not older than the chain's login, it revokes the new session and answers 401 INVALID_REFRESH (403 ACCOUNT_LOCKED after an admin lock). Comparing with the chain's login rather than the newest session also closes the gap the PR #50 review found: a session created while the stamp was being written is younger than the stamp, but its chain is not.",
+    "filesOrCommit": "server/src/services/{auth,sessions}.js, server/src/models/{User,Session}.js; T22 (#49), PR #50",
     "regressionTest": "TC-F1-20",
     "status": "Closed",
     "dateClosed": "2026-11-21",
-    "evidence": "TC-F1-20 pauses Session.create inside the rotation so the interleaving is deterministic: 2/2 cases failed before the fix (200, one session alive), pass after it."
+    "evidence": "TC-F1-20 (4 cases): pausing Session.create makes the interleaving deterministic; the 2 interleaving cases failed before the fix (200, one session alive), and the 'session younger than the stamp' case failed against the first version of the fix (200). All pass now; 40 real parallel retries left 0 active sessions."
   }
 ]

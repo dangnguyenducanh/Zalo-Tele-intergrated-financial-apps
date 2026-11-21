@@ -6,6 +6,7 @@ import app from '../src/app.js';
 import { env } from '../src/config/env.js';
 import { Session } from '../src/models/Session.js';
 import { User } from '../src/models/User.js';
+import { revokeAllSessions } from '../src/services/sessions.js';
 import { clearTestDb, startTestDb, stopTestDb } from './helpers/db.js';
 import { claimsOf, loginAs, refresh, refreshCookie, registerUser, resetLoginLimit } from './helpers/auth.js';
 
@@ -266,6 +267,35 @@ describe('refresh and logout', () => {
 
     expect(theft.status).toBe(401);
     expect([rotation.status, rotation.body.error?.code]).toEqual([401, 'INVALID_REFRESH']);
+    expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  // Review of #50: revoke-all picks its stamp time before writing it, so a rotation can create C in that gap.
+  // C is younger than the stamp, yet its chain began at login A, before the revoke-all. This is the state that
+  // gap leaves behind (stamp between A and C, C still active), and C must not be refreshed into a live session.
+  test('TC-F1-20 a chain that began before a revoke-all cannot continue, even from a session younger than the stamp (BUG-006)', async () => {
+    const { cookie: cookieA, user } = await registerUser();
+    const cookieB = refreshCookie(await refresh(cookieA));
+    const cookieC = refreshCookie(await refresh(cookieB));
+    const sessionC = await Session.findOne({ tokenHash: sha256(cookieC.slice(3)) });
+    await User.updateOne({ _id: user.id }, { sessionsRevokedAt: new Date(sessionC.createdAt - 1) });
+
+    expect((await refresh(cookieC)).status).toBe(401);
+    expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
+  });
+
+  test('TC-F1-20 an admin lock landing in the middle of a refresh answers 403 ACCOUNT_LOCKED and leaves no session alive', async () => {
+    const { cookie, user } = await registerUser();
+    const realCreate = Session.create.bind(Session);
+    const pause = vi.spyOn(Session, 'create').mockImplementationOnce(async (...args) => {
+      await User.updateOne({ _id: user.id }, { status: 'locked' }); // what PATCH /admin/users/:id does (services/admin.js)
+      await revokeAllSessions(user.id);
+      return realCreate(...args);
+    });
+    const res = await refresh(cookie);
+    pause.mockRestore();
+
+    expect([res.status, res.body.error?.code]).toEqual([403, 'ACCOUNT_LOCKED']);
     expect(await Session.countDocuments({ userId: user.id, revokedAt: null })).toBe(0);
   });
 
