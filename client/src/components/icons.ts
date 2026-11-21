@@ -20,3 +20,4 @@ export { default as Tags } from 'lucide-react/icons/tags';
 export { default as Trash2 } from 'lucide-react/icons/trash-2';
 export { default as Wallet } from 'lucide-react/icons/wallet';
 export { default as X } from 'lucide-react/icons/x';
+export { default as Sparkles } from 'lucide-react/icons/sparkles';

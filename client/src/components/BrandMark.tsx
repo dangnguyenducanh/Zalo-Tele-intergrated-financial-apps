@@ -1,13 +1,19 @@
-import { Box, Stack, Typography, useTheme } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
-// The app's own mark: three ledger lines on a square blue tile (index.html uses the same SVG as its icon).
+// The app's own mark: three ledger lines on a rounded sky-to-pink tile (index.html uses the same SVG as its icon).
 export function BrandMark({ size = 28 }: { size?: number }) {
-  const { palette } = useTheme();
-  return (
+    return (
     <Box component="svg" viewBox="0 0 32 32" aria-hidden sx={{ width: size, height: size, flexShrink: 0, display: 'block' }}>
-      <rect width="32" height="32" rx="6" fill={palette.primary.main} />
-      <path d="M8 10.5h16M8 16h16M8 21.5h9" stroke="#fff" strokeWidth="2.6" strokeLinecap="square" fill="none" />
+      <defs>
+        <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#0369a1" />
+          <stop offset="0.55" stopColor="#2563eb" />
+          <stop offset="1" stopColor="#be185d" />
+        </linearGradient>
+      </defs>
+      <rect width="32" height="32" rx="10" fill="url(#brand-grad)" />
+      <path d="M8 10.5h16M8 16h16M8 21.5h9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" fill="none" />
     </Box>
   );
 }

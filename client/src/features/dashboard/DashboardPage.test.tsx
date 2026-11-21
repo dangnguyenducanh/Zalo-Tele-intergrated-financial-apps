@@ -83,9 +83,11 @@ test('TC-F6-05 dashboard: greeting, four month cards, charts with text summaries
     expect.stringMatching(/^Ăn uống: 1\.500\.000\s₫ \(63%\)$/),
     expect.stringMatching(/^Đi lại: 900\.000\s₫ \(38%\)$/),
   ]);
-  const bars = screen.getByRole('figure', { name: 'Thu chi theo ngày' });
-  expect(bars).toHaveTextContent(/Tổng thu 15\.000\.000\s₫, tổng chi 2\.400\.000\s₫\./);
-  expect(bars).toHaveTextContent(/Ngày chi nhiều nhất: 12 tháng \d+, 2\.000\.000\s₫\./);
+  // This month against last month in weekly columns (TC-NF-14): day 12 is in week 2, day 20 in week 3.
+  const compare = screen.getByRole('figure', { name: 'Chi tiêu tháng này' });
+  expect(compare).toHaveTextContent(/Tháng này chi 2\.400\.000\s₫, nhiều hơn tháng trước 2\.400\.000\s₫\. Tuần cao nhất: tuần 2, 2\.000\.000\s₫\./);
+  await userEvent.setup().click(within(compare).getByRole('button', { name: 'Thu nhập' }));
+  expect(screen.getByRole('figure', { name: 'Thu nhập tháng này' })).toHaveTextContent(/Tháng này thu 15\.000\.000\s₫.*Tuần cao nhất: tuần 1, 15\.000\.000\s₫\./);
 
   expect(await screen.findByText('Có 2 giao dịch nháp đang chờ xác nhận.')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Xem các bản nháp' })).toHaveAttribute('href', '/bot');
@@ -109,7 +111,7 @@ test('TC-F6-05 switching the month reloads the cards and charts; an empty month 
   expect(budget).toHaveTextContent('Chưa đặt ngân sách tổng');
   expect(within(budget).getByRole('link', { name: 'Đặt hạn mức' })).toHaveAttribute('href', '/budgets');
   expect(screen.getByRole('figure', { name: 'Chi tiêu theo danh mục' })).toHaveTextContent('Tháng này chưa có khoản chi nào.');
-  expect(screen.getByRole('figure', { name: 'Thu chi theo ngày' })).toHaveTextContent('Tháng này chưa có giao dịch nào.');
+  expect(screen.getByRole('figure', { name: 'Chi tiêu tháng này' })).toHaveTextContent('Hai tháng này chưa có giao dịch nào.');
 });
 
 test('TC-F6-05 a failed statistics request shows a translated error with Retry', async () => {

@@ -38,7 +38,7 @@ export default function AppLayout() {
         </Toolbar>
       </AppBar>
       {isDesktop && <NavDrawer />}
-      <Box component="main" id="main" tabIndex={-1} sx={{ flexGrow: 1, minWidth: 0, pb: { xs: 10, md: 4 }, outline: 'none' }}>
+      <Box component="main" id="main" tabIndex={-1} sx={{ flexGrow: 1, minWidth: 0, pb: { xs: 13, md: 4 }, outline: 'none' }}>
         <Toolbar />
         <Container maxWidth="xl" disableGutters sx={{ py: { xs: 2.5, md: 3 }, px: { xs: 2, sm: 3 } }}>
           <Outlet />
