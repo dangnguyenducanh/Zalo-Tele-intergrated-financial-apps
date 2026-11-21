@@ -32,24 +32,24 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**128 cases**: 120 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**159 cases**: 151 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
-| F1 Auth | 20 | TC-F1-01 passwords stored as bcrypt hashes; TC-F1-05 refresh rotation + stolen-token reuse detection; TC-F1-06 logout really revokes server-side; TC-F1-08 reload keeps you logged in (silent refresh) |
-| F2 Wallets | 6 | TC-F2-02 user B can't touch user A's wallet (404); TC-F2-04 balance excludes drafts and deleted items |
+| F1 Auth | 25 | TC-F1-01 passwords stored as bcrypt hashes; TC-F1-05 refresh rotation + stolen-token reuse detection; TC-F1-06 logout really revokes server-side; TC-F1-08 reload keeps you logged in (silent refresh) |
+| F2 Wallets | 8 | TC-F2-02 user B can't touch user A's wallet (404); TC-F2-04 balance excludes drafts and deleted items |
 | F3 Categories | 6 | TC-F3-01 defaults seeded on register; TC-F3-03 deleting a category moves its transactions to "Other" |
-| F4 Transactions | 11 | TC-F4-02 only positive integer VND accepted; TC-F4-07 month boundaries use Vietnam time |
-| F5 Budgets | 6 | TC-F5-01 one budget per category per month (409); TC-F5-03 80 %/100 % warnings on web and bot |
-| F6 Statistics | 5 | TC-F6-01 totals equal hand-computed fixture; TC-F6-03 daily grouping in VN time |
-| F7 Bot linking | 8 | TC-F7-02 link codes are single-use and expire; TC-F7-03 one chat account → one web account |
-| F8 Bot capture | 18 | TC-F8-01 parser table; TC-F8-03 bad webhook secret rejected; TC-F8-05 duplicate delivery → one draft; TC-F8-08 Zalo photo → KIE → draft |
-| F9 Bot inbox | 4 | TC-F9-01 edit + confirm a draft from the web |
-| F10 Receipt upload | 5 | TC-F10-01 real KIE output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit |
-| F11 Admin | 8 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
-| F12 Preferences | 4 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
-| F13 Quick add | 4 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
-| Non-functional | 15 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-15 the bot-e2e tool's `--help` and bad options |
+| F4 Transactions | 13 | TC-F4-02 only positive integer VND accepted; TC-F4-07 month boundaries use Vietnam time |
+| F5 Budgets | 7 | TC-F5-01 one budget per category per month (409); TC-F5-03 80 %/100 % warnings on web and bot |
+| F6 Statistics | 7 | TC-F6-01 totals equal hand-computed fixture; TC-F6-03 daily grouping in VN time |
+| F7 Bot linking | 9 | TC-F7-02 link codes are single-use and expire; TC-F7-03 one chat account → one web account |
+| F8 Bot capture | 23 | TC-F8-01 parser table; TC-F8-03 bad webhook secret rejected; TC-F8-05 duplicate delivery → one draft; TC-F8-08 Zalo photo → KIE → draft |
+| F9 Bot inbox | 6 | TC-F9-01 edit + confirm a draft from the web |
+| F10 Receipt upload | 6 | TC-F10-01 real KIE output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit |
+| F11 Admin | 9 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
+| F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
+| F13 Quick add | 7 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
+| Non-functional | 18 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-15 the bot-e2e tool's `--help` and bad options |
 | Manual charters | 8 | MT-01…MT-08 below |
 
 ## 7.4 Manual testing in the browser (recorded)
@@ -118,9 +118,11 @@ Rules:
 | S1 Critical | Data loss, security hole, or a core flow broken | User B can read user A's transactions |
 | S2 Major | A feature doesn't work, with no workaround | Zalo `ok` doesn't confirm the draft |
 | S3 Minor | Works, but wrong in some cases | Daily chart off by one day at midnight |
-| S4 Cosmetic | Visual or text only | Untranslated label in English mode |
+| S4 Trivial | Visual or text only | Untranslated label in English mode |
 
 Statuses: `Open → In progress → Fixed (awaiting retest) → Closed`, or `Won't fix` / `Blocked` (each with a reason).
+
+Bug log on 2026-11-22: **33 bugs** (BUG-001…BUG-033), **all Closed**, none open: 2 S2 Major, 19 S3 Minor, 12 S4 Trivial. Run history: **22 runs** (RUN-001…RUN-022).
 
 **Exit criteria for the demo:** no open S1/S2 bugs, all P0 cases passing, MT-01…MT-04 recorded on Vercel.
 
@@ -157,5 +159,5 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (128 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (159 cases, last results from results.json)
 ```
