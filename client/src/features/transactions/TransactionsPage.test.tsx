@@ -354,3 +354,21 @@ test('TC-F13-04 quick add: a chip changes the draft before saving; Shift+Enter o
   expect(posted()[1]).toEqual({ type: 'expense', amount: 30000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'cafe' }); // time untouched → exact
   expect(quickAdd()).toHaveValue('');
 });
+
+test('TC-F4-13 an amount over 10^13 ₫ is marked at the field with the maximum, and nothing is sent (BUG-032)', async () => {
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  await screen.findByRole('row', { name: /phở/ });
+
+  await user.click(screen.getByRole('button', { name: 'Thêm giao dịch' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Thêm giao dịch' });
+  const amount = within(dialog).getByRole('textbox', { name: 'Số tiền (₫)' });
+  await user.type(amount, '10000000000001');
+  await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Danh mục' }), 'Ăn uống');
+  await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+
+  expect(amount).toHaveAccessibleDescription(/^Tối đa 10\.000\.000\.000\.000\s₫$/);
+  expect(amount).toHaveAttribute('aria-invalid', 'true');
+  expect(amount).toHaveFocus();
+  expect(posted()).toEqual([]);
+});

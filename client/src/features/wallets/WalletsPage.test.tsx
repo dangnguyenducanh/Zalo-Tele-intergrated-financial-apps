@@ -137,3 +137,19 @@ test('TC-F2-08 archiving the default wallet clears the default in the app too, s
   await waitFor(() => expect(users.at(-1)).toBeNull()); // the server cleared it as well (TC-F2-07)
   stop();
 });
+
+test('TC-F4-13 an opening balance beyond ±10^13 ₫ is marked at the field with the range, and nothing is sent (BUG-032)', async () => {
+  const user = userEvent.setup();
+  renderApp('/wallets');
+
+  await user.click(await screen.findByRole('button', { name: 'Thêm ví' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Thêm ví' });
+  await user.type(within(dialog).getByRole('textbox', { name: 'Tên ví' }), 'Thẻ lớn');
+  const balance = within(dialog).getByRole('textbox', { name: 'Số dư ban đầu (₫)' });
+  await user.type(balance, '-10000000000001');
+  await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+
+  expect(balance).toHaveAccessibleDescription(/^Từ -10\.000\.000\.000\.000\s₫ đến 10\.000\.000\.000\.000\s₫$/);
+  expect(balance).toHaveFocus();
+  expect(sent).toEqual([]);
+});

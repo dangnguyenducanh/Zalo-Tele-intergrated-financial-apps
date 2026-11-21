@@ -178,3 +178,18 @@ test('TC-F5-06 an empty month: add an overall budget, then copy the rest from la
   expect(await screen.findByRole('article', { name: 'Ăn uống' })).toHaveTextContent(/Đã chi 0\s₫ \/ 1\.000\.000\s₫/);
   expect(screen.getAllByRole('article')).toHaveLength(4);
 });
+
+test('TC-F4-13 a budget limit over 10^13 ₫ is marked at the field with the maximum, and nothing is sent (BUG-032)', async () => {
+  const user = userEvent.setup();
+  renderApp('/budgets');
+
+  await user.click(await screen.findByRole('button', { name: 'Thêm ngân sách' }));
+  const add = await screen.findByRole('dialog', { name: 'Thêm ngân sách' });
+  const limit = within(add).getByRole('textbox', { name: 'Hạn mức (₫)' });
+  await user.type(limit, '10000001tr');
+  await user.click(within(add).getByRole('button', { name: 'Lưu' }));
+
+  expect(limit).toHaveAccessibleDescription(/^Tối đa 10\.000\.000\.000\.000\s₫$/);
+  expect(limit).toHaveFocus();
+  expect(sent).toEqual([]);
+});

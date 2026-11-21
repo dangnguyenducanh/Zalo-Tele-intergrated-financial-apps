@@ -35,7 +35,8 @@
   },
   "validation": {
     "name": "Tên ví từ 1 đến 40 ký tự",
-    "initialBalance": "Nhập số tiền nguyên, ví dụ 200000"
+    "initialBalance": "Nhập số tiền nguyên, ví dụ 200000",
+    "initialBalanceMax": "Từ {{min}} đến {{max}}"
   },
   "deleteConfirm": {
     "title": "Xoá ví?",

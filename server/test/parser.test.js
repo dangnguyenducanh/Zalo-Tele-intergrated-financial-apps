@@ -150,3 +150,17 @@ describe('TC-F8-02 parser edge cases', () => {
     expect(parseText('', ctx)).toEqual([]);
   });
 });
+
+describe('TC-F8-23 an amount over the 10^13 ₫ ceiling is not an amount (BUG-033)', () => {
+  test('TC-F8-23 10^13 ₫ is read, one more is not, in every notation', () => {
+    expect(parse('cafe 10000000000000').amount).toBe(10_000_000_000_000);
+    expect(parse('cafe 10000000tr').amount).toBe(10_000_000_000_000);
+    for (const text of ['cafe 10000000000001', 'cafe 20000000000000', 'cafe 20.000.000.000.000', 'cafe 10000001tr', 'cafe 9007199254740991']) {
+      expect(parse(text), text).toBeNull();
+    }
+  });
+
+  test('TC-F8-23 the other lines of the message still count', () => {
+    expect(parseText('cafe 20000000000000\ncafe 45k', ctx).map((d) => d?.amount ?? null)).toEqual([null, 45_000]);
+  });
+});

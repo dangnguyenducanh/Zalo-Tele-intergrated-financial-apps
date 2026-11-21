@@ -22,6 +22,7 @@ export default {
   readingReceipt: '🧾 Reading receipt…',
   receiptItems: ({ count, reconciled }) => `🧾 ${count} line items · ${reconciled ? 'they add up to the total' : 'they do not add up to the total, please check'}`,
   receiptUnavailable: "Couldn't read the receipt because the receipt reader is not answering. Please type the amount, e.g. groceries 125k",
+  noAmountLines: ({ lines, max }) => `⚠️ Line ${lines} not recorded: no amount I could read (at most ${max}), e.g. coffee 30k`,
   receiptUnreadable: "Couldn't find a total on this photo. Please type the amount, e.g. groceries 125k",
   saved: (summary) => `✅ Saved: ${summary}`,
   discarded: (summary) => `❌ Discarded: ${summary}`,

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { formatNumber, fromDateTimeInput, parseAmount, signedMoney, toDateTimeInput } from './helpers';
+import { formatNumber, fromDateTimeInput, isOverMax, MAX_MONEY, parseAmount, signedMoney, toDateTimeInput } from './helpers';
 
 test.each([
   ['45000', 45000],
@@ -35,4 +35,18 @@ test('TC-F4-11 date-time field is Vietnam time whatever the browser time zone', 
   expect(toDateTimeInput('2026-11-30T17:10:00.000Z')).toBe('2026-12-01T00:10'); // already December in Vietnam
   expect(fromDateTimeInput('2026-12-01T00:10')).toBe('2026-12-01T00:10:00+07:00');
   expect(new Date(fromDateTimeInput('2026-12-01T00:10')).toISOString()).toBe('2026-11-30T17:10:00.000Z');
+});
+
+test.each([
+  ['10000000000000', 10_000_000_000_000, false],
+  ['10.000.000.000.000', 10_000_000_000_000, false],
+  ['10000000tr', 10_000_000_000_000, false],
+  ['10000000000001', null, true],
+  ['10000001tr', null, true],
+  ['9007199254740991', null, true],
+  ['abc', null, false],
+])('TC-F4-13 the 10^13 ₫ ceiling: %j → %j, over the maximum: %j (BUG-032)', (text, amount, over) => {
+  expect(MAX_MONEY).toBe(10_000_000_000_000); // the server's ceiling (docs/03)
+  expect(parseAmount(text)).toBe(amount);
+  expect(isOverMax(text)).toBe(over);
 });

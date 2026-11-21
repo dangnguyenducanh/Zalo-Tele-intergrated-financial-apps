@@ -110,7 +110,10 @@ function BalanceCard({ summary, wallets }: { summary: MonthSummary; wallets: Wal
   const { t } = useTranslation('dashboard');
   const language = useAppSelector((s) => s.ui.language);
   const active = wallets.filter((wallet) => !wallet.archived);
-  const total = active.reduce((sum, wallet) => sum + wallet.balance, 0);
+  const total = formatMoney(active.reduce((sum, wallet) => sum + wallet.balance, 0), language);
+  // A sum of capped amounts can be 14+ digits, so the total shrinks to fit the card on one line (BUG-018): a
+  // character is at most ~0.6 em wide, so a font of 160 / length % of the width (cqi) fits, up to the usual 2rem / 2.375rem.
+  const fit = `${(160 / total.length).toFixed(2)}cqi`;
   const titleId = useId();
   return (
     <Box
@@ -140,15 +143,19 @@ function BalanceCard({ summary, wallets }: { summary: MonthSummary; wallets: Wal
         <span id={titleId}>{t('wallet.title')}</span>
         <span>{t('wallet.count', { count: active.length })}</span>
       </Stack>
-      <Box sx={{ position: 'relative' }}>
-        <Typography component="p" sx={{ ...moneySx, fontSize: { xs: '2rem', sm: '2.375rem' }, fontWeight: 400, lineHeight: 1.1 }}>
-          {formatMoney(total, language)}
+      <Box sx={{ position: 'relative', containerType: 'inline-size' }}>
+        <Typography
+          component="p"
+          sx={{ ...moneySx, whiteSpace: 'nowrap', fontSize: { xs: `min(2rem, ${fit})`, sm: `min(2.375rem, ${fit})` }, fontWeight: 400, lineHeight: 1.1 }}
+        >
+          {total}
         </Typography>
         <Typography noWrap sx={{ fontSize: '0.8125rem', mt: 0.5 }}>
           {active.map((wallet) => wallet.name).join(' · ')}
         </Typography>
       </Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', fontSize: '0.8125rem', position: 'relative', ...moneySx }}>
+      {/* Each half keeps its words together; on a narrow card "chi" moves down with its amount, never alone. */}
+      <Stack direction="row" sx={{ justifyContent: 'space-between', flexWrap: 'wrap', columnGap: 2, fontSize: '0.8125rem', position: 'relative', whiteSpace: 'nowrap', ...moneySx }}>
         <span>
           {t('wallet.month')} +{formatMoney(summary.income, language)} {t('wallet.in')}
         </span>

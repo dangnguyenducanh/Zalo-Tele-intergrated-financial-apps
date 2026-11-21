@@ -16,7 +16,7 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { showSnackbar } from '@/app/uiSlice';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
 import { apiErrorMessage } from '@/features/categories/helpers';
-import { formatNumber, parseAmount } from '@/features/transactions/helpers';
+import { formatNumber, isOverMax, MAX_MONEY, parseAmount } from '@/features/transactions/helpers';
 import { formatDate, formatMoney } from '@/i18n/format';
 import { useCreateBudgetMutation, useUpdateBudgetMutation, type Budget } from './budgetsApi';
 
@@ -115,7 +115,12 @@ export default function BudgetDialog({ month, budget, taken, onClose }: Props) {
             onChange={(event) => setLimitText(event.target.value)}
             onBlur={() => limit !== null && setLimitText(formatNumber(limit, language))}
             error={errors.limit}
-            helperText={errors.limit ? t('validation.limit') : limit !== null ? `= ${formatMoney(limit, language)}` : t('fields.limitHelp')}
+            helperText={
+              errors.limit
+                ? isOverMax(limitText)
+                  ? t('validation.limitMax', { max: formatMoney(MAX_MONEY, language) })
+                  : t('validation.limit')
+                : limit !== null ? `= ${formatMoney(limit, language)}` : t('fields.limitHelp')}
             required
             autoFocus={Boolean(budget)}
             fullWidth

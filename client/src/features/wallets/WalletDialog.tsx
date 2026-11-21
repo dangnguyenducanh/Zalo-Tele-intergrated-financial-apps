@@ -16,10 +16,12 @@ import {
 } from '@mui/material';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAppDispatch } from '@/app/hooks';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { showSnackbar } from '@/app/uiSlice';
 import { apiErrorMessage } from '@/features/categories/helpers';
 import KeywordInput from '@/features/categories/KeywordInput';
+import { MAX_MONEY } from '@/features/transactions/helpers';
+import { formatMoney } from '@/i18n/format';
 import { useCreateWalletMutation, useUpdateWalletMutation, type Wallet, type WalletType } from './walletsApi';
 
 const WALLET_TYPES: WalletType[] = ['cash', 'bank', 'ewallet', 'credit'];
@@ -28,8 +30,7 @@ const WALLET_TYPES: WalletType[] = ['cash', 'bank', 'ewallet', 'credit'];
 function parseVnd(text: string): number | null {
   const digits = text.replace(/[\s.,]/g, '');
   if (digits === '') return 0;
-  const amount = Number(digits);
-  return /^-?\d+$/.test(digits) && Number.isSafeInteger(amount) ? amount : null;
+  return /^-?\d+$/.test(digits) ? Number(digits) : null;
 }
 
 type Props = { wallet?: Wallet; onClose: () => void }; // no wallet = add a new one
@@ -38,6 +39,7 @@ type Props = { wallet?: Wallet; onClose: () => void }; // no wallet = add a new 
 export default function WalletDialog({ wallet, onClose }: Props) {
   const { t } = useTranslation('wallets');
   const dispatch = useAppDispatch();
+  const language = useAppSelector((s) => s.ui.language);
   const fullScreen = useMediaQuery(useTheme().breakpoints.down('sm'));
   const [createWallet, created] = useCreateWalletMutation();
   const [updateWallet, updated] = useUpdateWalletMutation();
@@ -46,16 +48,18 @@ export default function WalletDialog({ wallet, onClose }: Props) {
   const [type, setType] = useState<WalletType>(wallet?.type ?? 'cash');
   const [initialBalance, setInitialBalance] = useState(String(wallet?.initialBalance ?? ''));
   const [aliases, setAliases] = useState(wallet?.aliases ?? []);
-  const [errors, setErrors] = useState<{ name?: boolean; initialBalance?: boolean }>({});
+  // initialBalance holds the message key of what is wrong with it: not a whole number, or beyond ±MAX_MONEY.
+  const [errors, setErrors] = useState<{ name?: boolean; initialBalance?: 'initialBalance' | 'initialBalanceMax' }>({});
   const [serverError, setServerError] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = name.trim();
     const amount = parseVnd(initialBalance);
-    const found = { name: trimmed.length < 1 || trimmed.length > 40, initialBalance: amount === null };
+    const overMax = amount !== null && Math.abs(amount) > MAX_MONEY;
+    const found = { name: trimmed.length < 1 || trimmed.length > 40, initialBalance: amount === null ? 'initialBalance' : overMax ? 'initialBalanceMax' : undefined } as const;
     setErrors(found);
-    if (found.name || amount === null) {
+    if (found.name || found.initialBalance || amount === null) {
       // Focus the first wrong field so keyboard and screen reader users land on the problem.
       (event.currentTarget.elements.namedItem(found.name ? 'name' : 'initialBalance') as HTMLElement | null)?.focus();
       return;
@@ -110,8 +114,12 @@ export default function WalletDialog({ wallet, onClose }: Props) {
             label={t('fields.initialBalance')}
             value={initialBalance}
             onChange={(event) => setInitialBalance(event.target.value)}
-            error={errors.initialBalance}
-            helperText={t(errors.initialBalance ? 'validation.initialBalance' : 'fields.initialBalanceHelp')}
+            error={!!errors.initialBalance}
+            helperText={
+              errors.initialBalance
+                ? t(`validation.${errors.initialBalance}`, { min: formatMoney(-MAX_MONEY, language), max: formatMoney(MAX_MONEY, language) })
+                : t('fields.initialBalanceHelp')
+            }
             fullWidth
             margin="normal"
             slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'off' } }}
