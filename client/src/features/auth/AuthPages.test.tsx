@@ -97,8 +97,8 @@ test('TC-F1-24 register flags e-mails and passwords the API would reject on thei
   expect(password).toHaveAccessibleDescription('Từ 8 ký tự, tối đa 72 ký tự không dấu (chữ có dấu tính 2–3 ký tự)');
   await user.type(screen.getByRole('textbox', { name: 'Họ tên' }), 'Minh');
   for (const bad of ['nguyễn-1@example.com', 'a@b.c', 'a..b@example.com', 'a@example.com.', 'user@exämple.com', 'x@example.co1']) {
-    await user.clear(email);
-    await user.type(email, bad);
+    await user.clear(email); // clear() leaves the focus here; paste() is one input event, not one per key
+    await user.paste(bad);
     await user.click(screen.getByRole('button', { name: 'Đăng ký' }));
     expect(email).toHaveAccessibleDescription('Email không hợp lệ');
   }
@@ -108,9 +108,9 @@ test('TC-F1-24 register flags e-mails and passwords the API would reject on thei
   // 73 plain characters, then 48 Vietnamese ones (84 bytes): both are longer than bcrypt reads (BUG-009).
   for (const tooLong of ['a'.repeat(73), `${'ư'.repeat(36)}a1b2c3d4e5f6`]) {
     await user.clear(password);
-    await user.type(password, tooLong);
+    await user.paste(tooLong);
     await user.clear(screen.getByLabelText(/^Nhập lại mật khẩu/));
-    await user.type(screen.getByLabelText(/^Nhập lại mật khẩu/), tooLong);
+    await user.paste(tooLong);
     await user.click(screen.getByRole('button', { name: 'Đăng ký' }));
     expect(password).toHaveAttribute('aria-invalid', 'true');
     expect(password).toHaveAccessibleDescription('Mật khẩu quá dài: tối đa 72 ký tự không dấu (chữ có dấu tính 2–3 ký tự)');
