@@ -12,7 +12,7 @@
 //                                                     (receipt steps also take --photo <file>: its true total is expected)
 //   node tools/bot-e2e/bot-e2e.mjs state              the e2e user's server state as JSON
 //   node tools/bot-e2e/bot-e2e.mjs reset              delete the e2e user's transactions and unlink its chats
-// Options: --target prod|staging|<https URL> (default prod), --out <dir> for results.jsonl
+// Options: -h/--help this usage, --target prod|staging|<https URL> (default prod), --out <dir> for results.jsonl
 //          (default charter-runs/<VN date>/bot-e2e/ in the repo, which git ignores).
 // The e2e user's login is generated on first use and kept in ~/.config/bot-e2e/<host>.json (0600), never in the repo.
 import { randomBytes } from 'node:crypto';
@@ -25,16 +25,36 @@ import { parseArgs } from 'node:util';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TARGETS = { prod: 'https://sochitieu-btl.vercel.app', staging: 'https://sochitieu-btl-staging.vercel.app' };
 
-const { values: opts, positionals } = parseArgs({
-  allowPositionals: true,
-  options: {
-    target: { type: 'string', default: 'prod' },
-    reply: { type: 'string', multiple: true, default: [] },
-    button: { type: 'string', multiple: true, default: [] },
-    photo: { type: 'string' },
-    out: { type: 'string' },
-  },
-});
+// The usage is the comment block at the top of this file.
+function usage() {
+  return readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').filter((l) => /^\/\/ {3}|^\/\/ Options|^\/\/ {10}/.test(l)).join('\n');
+}
+
+let args;
+try {
+  args = parseArgs({
+    allowPositionals: true,
+    options: {
+      target: { type: 'string', default: 'prod' },
+      reply: { type: 'string', multiple: true, default: [] },
+      button: { type: 'string', multiple: true, default: [] },
+      photo: { type: 'string' },
+      out: { type: 'string' },
+      help: { type: 'boolean', short: 'h' },
+    },
+  });
+} catch (error) {
+  // An unknown option or a missing value: one line and the usage, like an unknown command (BUG-007).
+  if (!error.code?.startsWith('ERR_PARSE_ARGS_')) throw error;
+  console.error(`${error.message}\n`);
+  console.log(usage());
+  process.exit(1);
+}
+const { values: opts, positionals } = args;
+if (opts.help) {
+  console.log(usage());
+  process.exit(0);
+}
 const [command = 'help', stepId] = positionals;
 const base = TARGETS[opts.target] ?? opts.target;
 if (!/^https?:\/\//.test(base)) fail(`--target must be prod, staging or a URL, not "${opts.target}"`);
@@ -183,6 +203,6 @@ const commands = {
 if (commands[command]) await commands[command]();
 else {
   if (command !== 'help') console.error(`Unknown command "${command}".\n`);
-  console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').filter((l) => /^\/\/ {3}|^\/\/ Options|^\/\/ {10}/.test(l)).join('\n'));
+  console.log(usage());
   if (command !== 'help') process.exit(1);
 }
