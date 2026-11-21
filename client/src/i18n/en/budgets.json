@@ -36,6 +36,7 @@
   },
   "validation": {
     "limit": "Enter an amount above 0, for example 2tr or 2,000,000",
+    "limitMax": "At most {{max}}",
     "category": "Every expense category already has a budget this month."
   },
   "deleteConfirm": {

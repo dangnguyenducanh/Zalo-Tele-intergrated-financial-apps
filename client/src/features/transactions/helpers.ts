@@ -1,9 +1,20 @@
 import { formatMoney } from '@/i18n/format';
 import type { Language } from '@/types/api';
 
+// One amount, opening balance or budget limit is at most 10^13 ₫, the same ceiling as the API (docs/03).
+export const MAX_MONEY = 10_000_000_000_000;
+
 // Amount field → whole VND, with the bot's shortcuts (docs/02 §2.5): "45k" → 45000, "1.5tr" / "1tr5" → 1500000,
-// "150.000" / "150,000" / "150000" → 150000. null when it is not a positive whole amount.
+// "150.000" / "150,000" / "150000" → 150000. null when it is not a whole amount from 1 ₫ to MAX_MONEY.
 export function parseAmount(text: string): number | null {
+  const amount = readAmount(text);
+  return amount !== null && amount <= MAX_MONEY ? amount : null;
+}
+
+// True for a well-formed amount above MAX_MONEY, so the field can say the maximum instead of "enter an amount".
+export const isOverMax = (text: string) => (readAmount(text) ?? 0) > MAX_MONEY;
+
+function readAmount(text: string): number | null {
   const key = text.toLowerCase().replace(/\s+/g, '').replace(/(đ|vnd)$/, '');
   let m = key.match(/^(\d+)(?:[.,](\d+))?k$/);
   if (m) return whole(Number(`${m[1]}.${m[2] ?? 0}`) * 1e3);
@@ -15,7 +26,7 @@ export function parseAmount(text: string): number | null {
 
 function whole(value: number): number | null {
   const amount = Math.round(value);
-  return amount > 0 && Number.isSafeInteger(amount) ? amount : null;
+  return amount > 0 ? amount : null;
 }
 
 // 45000 → "45.000" (vi) or "45,000" (en): the amount field shows thousand separators.

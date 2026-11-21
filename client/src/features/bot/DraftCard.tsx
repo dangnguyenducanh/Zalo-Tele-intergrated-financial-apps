@@ -6,7 +6,7 @@ import { showSnackbar } from '@/app/uiSlice';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
 import { apiErrorMessage } from '@/features/categories/helpers';
-import { formatNumber, fromDateTimeInput, parseAmount, toDateTimeInput } from '@/features/transactions/helpers';
+import { formatNumber, fromDateTimeInput, isOverMax, MAX_MONEY, parseAmount, toDateTimeInput } from '@/features/transactions/helpers';
 import { useDeleteTransactionMutation, type TransactionInput, type TransactionType } from '@/features/transactions/transactionsApi';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
 import { formatMoney } from '@/i18n/format';
@@ -127,7 +127,12 @@ export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () 
           onChange={(event) => setAmountText(event.target.value)}
           onBlur={() => amount !== null && setAmountText(formatNumber(amount, language))}
           error={errors.amount}
-          helperText={errors.amount ? t('transactions:validation.amount') : amount !== null ? `= ${formatMoney(amount, language)}` : ' '}
+          helperText={
+            errors.amount
+              ? isOverMax(amountText)
+                ? t('transactions:validation.amountMax', { max: formatMoney(MAX_MONEY, language) })
+                : t('transactions:validation.amount')
+              : amount !== null ? `= ${formatMoney(amount, language)}` : ' '}
           required
           slotProps={{ htmlInput: { autoComplete: 'off' } }}
         />
