@@ -1,5 +1,6 @@
 // Rule-based text parser (docs/02 §2.5). No AI, no database: the caller passes the user's
 // categories and wallets. Used by both bots and the web quick add (POST /transactions/parse).
+import { MAX_MONEY } from '../models/Transaction.js';
 import { normalize } from '../utils/normalize.js';
 import { dayRange, vnDate, vnParts } from '../utils/vnTime.js';
 
@@ -119,10 +120,11 @@ function readAmount(key) {
   return null;
 }
 
-// Only whole, positive, safe amounts count ("0k" or a 30-digit number is not an amount).
+// Only whole amounts from 1 ₫ to the 10^13 ₫ ceiling count ("0k" or a 14-digit number is not an amount), so a
+// line the API would refuse is named as unreadable by every caller: both bots and the web quick add (BUG-033).
 function checked(value, guessed = false) {
   const rounded = Math.round(value);
-  return rounded > 0 && Number.isSafeInteger(rounded) ? { value: rounded, guessed } : null;
+  return rounded > 0 && rounded <= MAX_MONEY ? { value: rounded, guessed } : null;
 }
 
 // The category whose keyword is the longest whole-word match in the text, or null.
