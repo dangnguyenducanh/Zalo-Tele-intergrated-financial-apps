@@ -86,6 +86,8 @@
     "noCategory": "No category",
     "noWallet": "No wallet",
     "incomplete": "Choose a wallet and a category: click a preview chip to change it.",
+    "noAmountLines": "Lines without an amount: {{lines}}. Fix or remove them, then save.",
+    "tooManyLines": "Up to 10 lines can be saved at once. Save the rest afterwards.",
     "saved": "Transactions saved: {{count}}"
   }
 }

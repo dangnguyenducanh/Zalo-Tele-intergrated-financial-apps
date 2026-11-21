@@ -90,9 +90,12 @@ beforeEach(() => {
     http.post('*/api/transactions/parse', async ({ request }) => {
       const { text } = (await request.json()) as { text: string };
       parseCalls.push(text);
-      const drafts = text.split('\n').map(parseLine).filter(Boolean);
+      const lines = text.split('\n');
+      const results = lines.slice(0, 10).map(parseLine); // like the server: 10 lines at most
+      const drafts = results.filter(Boolean);
       if (drafts.length === 0) return HttpResponse.json({ error: { code: 'NO_AMOUNT_FOUND', message: 'no amount' } }, { status: 422 });
-      return HttpResponse.json({ drafts });
+      const noAmountLines = results.flatMap((result, i) => (result ? [] : [i + 1]));
+      return HttpResponse.json({ drafts, noAmountLines, truncated: lines.length > 10 });
     }),
     http.post('*/api/transactions', async ({ request }) => {
       const body = (await request.json()) as Transaction;
@@ -300,6 +303,27 @@ test('TC-F13-04 quick add: several pasted lines save several transactions, in or
     { amount: 50000, categoryId: 'c2', note: 'xăng' },
   ]);
   expect(await screen.findByText('Đã lưu giao dịch: 3')).toBeInTheDocument();
+});
+
+test('TC-F13-06 quick add names a line with no amount, or past the 10th, and saves nothing until it is fixed (BUG-017)', async () => {
+  const user = userEvent.setup();
+  renderApp('/transactions');
+
+  await user.click(await screen.findByRole('textbox', { name: 'Thêm nhanh' }));
+  await user.paste('phở 45k\ncafe không tiền\ngrab 30k');
+  expect(within(await screen.findByRole('list', { name: 'Xem trước' })).getAllByRole('listitem')).toHaveLength(2);
+  await waitFor(() => expect(quickAdd()).toHaveAccessibleDescription('Dòng 2 không có số tiền. Hãy sửa hoặc xoá dòng đó rồi lưu.'));
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(quickAdd()).toHaveAttribute('aria-invalid', 'true'));
+  expect(quickAdd()).toHaveValue('phở 45k\ncafe không tiền\ngrab 30k'); // nothing the user typed is lost
+  expect(posted()).toEqual([]);
+
+  await user.clear(quickAdd());
+  await user.paste(Array.from({ length: 11 }, (_, i) => `món ${i + 1}k`).join('\n'));
+  await waitFor(() => expect(quickAdd()).toHaveAccessibleDescription('Mỗi lần chỉ lưu được 10 dòng. Hãy lưu phần còn lại sau.'));
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(quickAdd()).toHaveAttribute('aria-invalid', 'true'));
+  expect(posted()).toEqual([]);
 });
 
 test('TC-F13-04 quick add: a chip changes the draft before saving; Shift+Enter opens the full form pre-filled', async () => {

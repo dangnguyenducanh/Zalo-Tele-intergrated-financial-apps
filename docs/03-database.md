@@ -3,7 +3,7 @@
 ## 3.1 Rules that apply to every collection
 
 - **Ownership:** every user-owned document has `userId` (ref `User`). Every query filters by the `userId` from the JWT.
-- **Money:** integer **VND** (`Number`, validated `Number.isSafeInteger`, `> 0` for amounts). No floats, no currency field.
+- **Money:** integer **VND** (`Number`, validated `Number.isSafeInteger`, `> 0` for amounts). One value (amount, opening balance, budget limit) is at most **10^13 ₫** (±10^13 for an opening balance), so sums of them stay below 2^53 and exact. No floats, no currency field.
 - **Soft delete:** user data has `deletedAt: Date | null`. Normal queries add `deletedAt: null`, and "delete" sets the date (as in ezBookkeeping).
 - **Timestamps:** `timestamps: true` on all schemas (`createdAt`, `updatedAt`).
 - **IDs:** MongoDB `ObjectId`.
@@ -73,7 +73,7 @@ Indexes: `{ tokenHash: 1 }` unique; `{ userId: 1, revokedAt: 1 }`; **TTL** `{ ex
 | `initialBalance` | Number (int) | may be 0 or negative (credit) |
 | `aliases` | [String] | bot shortcuts, e.g. `["mm","momo"]` |
 | `color`, `icon` | String | UI only |
-| `archived` | Boolean | hidden from pickers, kept in stats |
+| `archived` | Boolean | hidden from pickers, kept in stats; archiving the user's default wallet clears `users.defaultWalletId` |
 | `deletedAt` | Date \| null | soft delete; blocked (409) while confirmed transactions use it |
 
 Current balance is computed, not stored: `initialBalance + Σincome − Σexpense` over confirmed, non-deleted transactions (one aggregation).

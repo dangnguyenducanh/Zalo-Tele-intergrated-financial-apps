@@ -1,5 +1,5 @@
 import { api } from '@/app/api';
-import type { Transaction } from '@/features/transactions/transactionsApi';
+import type { Transaction, TransactionInput } from '@/features/transactions/transactionsApi';
 
 // Response shapes of /api/chat-links and /api/receipts, and of drafts (docs/04 §4.4, server/src/models/Transaction.js).
 export type ChatLink = { id: string; platform: 'telegram' | 'zalo'; displayName: string; createdAt: string };
@@ -37,9 +37,10 @@ export const botApi = api.injectEndpoints({
       query: () => ({ url: '/transactions', params: { status: 'draft', limit: 100 } }),
       providesTags: ['Transaction', 'Draft'],
     }),
+    // `changes` are the inline edits, saved by the server in the same step and only while it is still a draft.
     // Tags are invalidated after an error answer too, so a draft already confirmed in the chat (409) leaves the list.
-    confirmDraft: builder.mutation<{ transaction: Transaction; budgetWarning?: BudgetWarning }, string>({
-      query: (id) => ({ url: `/transactions/${id}/confirm`, method: 'POST' }),
+    confirmDraft: builder.mutation<{ transaction: Transaction; budgetWarning?: BudgetWarning }, { id: string; changes?: TransactionInput }>({
+      query: ({ id, changes }) => ({ url: `/transactions/${id}/confirm`, method: 'POST', body: changes }),
       invalidatesTags: [...CHANGED],
     }),
     // multipart/form-data with the resized photo in field "image" → a new receipt draft.

@@ -101,7 +101,7 @@ test('TC-F4-01 PATCH /transactions/:id edits the editable fields', async () => {
   expect(ignored.body).toMatchObject({ status: 'confirmed', type: 'income' });
 });
 
-test('TC-F4-02 only positive safe integer VND amounts are accepted', async () => {
+test('TC-F4-02 only positive whole VND amounts up to 10^13 are accepted', async () => {
   const { me, walletId, food } = await newUser();
   const body = { type: 'expense', walletId, categoryId: food, occurredAt: '2026-11-20T05:30:00Z' };
   const { body: tx } = await me.post('/transactions', { ...body, amount: 1 });
@@ -112,7 +112,7 @@ test('TC-F4-02 only positive safe integer VND amounts are accepted', async () =>
     const edited = await me.patch(`/transactions/${tx.id}`, { amount });
     expect([amount, edited.status, edited.body.error?.code]).toEqual([amount, 400, 'VALIDATION_ERROR']);
   }
-  expect((await me.post('/transactions', { ...body, amount: Number.MAX_SAFE_INTEGER })).status).toBe(201);
+  expect((await me.post('/transactions', { ...body, amount: 10_000_000_000_000 })).status).toBe(201); // the ceiling, TC-F4-12
   expect(await Transaction.countDocuments()).toBe(2);
   expect((await Transaction.findById(tx.id)).amount).toBe(1);
 });
@@ -313,6 +313,8 @@ test('TC-F13-01 POST /transactions/parse previews drafts and saves nothing', asy
   expect(res.status).toBe(200);
   expect(res.body).toEqual({
     drafts: [{ type: 'expense', amount: 45_000, categoryId: food, walletId, occurredAt: expect.any(String), note: 'phở' }],
+    noAmountLines: [],
+    truncated: false,
   });
   expect(Math.abs(Date.parse(res.body.drafts[0].occurredAt) - Date.now())).toBeLessThan(60_000); // "now"
   expect(await Transaction.countDocuments()).toBe(0);
@@ -329,4 +331,59 @@ test('TC-F13-01 POST /transactions/parse previews drafts and saves nothing', asy
     expect((await me.post('/transactions/parse', bad)).status).toBe(400);
   }
   expect(await Transaction.countDocuments()).toBe(0);
+});
+
+test('TC-F9-05 confirm with edits applies them to a draft only; a draft confirmed in the chat meanwhile is not changed', async () => {
+  const { me, user, walletId, food, salary } = await newUser();
+  const newDraft = () =>
+    Transaction.create({ userId: user.id, walletId, categoryId: food, type: 'expense', amount: 40_000, occurredAt: new Date(), note: 'bún chả', status: 'draft', source: 'telegram' });
+
+  // The inbox sends its edits with the confirm: one write, checked like a PATCH.
+  const draft = await newDraft();
+  expect((await me.post(`/transactions/${draft.id}/confirm`, { amount: 12.5 })).status).toBe(400);
+  expect((await me.post(`/transactions/${draft.id}/confirm`, { type: 'income' })).status).toBe(400); // "Ăn uống" is an expense category
+  const edited = await me.post(`/transactions/${draft.id}/confirm`, { amount: 45_000, note: ' bún chả Hà Nội ' });
+  expect(edited.status).toBe(200);
+  expect(edited.body.transaction).toMatchObject({ status: 'confirmed', amount: 45_000, note: 'bún chả Hà Nội' });
+
+  // BUG-008: ✅ in the chat confirmed the draft at 40.000; a stale inbox card then confirms with 99.000.
+  const stale = await newDraft();
+  expect((await me.post(`/transactions/${stale.id}/confirm`)).status).toBe(200); // the bot calls the same service
+  const late = await me.post(`/transactions/${stale.id}/confirm`, { amount: 99_000, type: 'income', categoryId: salary });
+  expect([late.status, late.body.error.code]).toEqual([409, 'ALREADY_CONFIRMED']);
+  expect(await Transaction.findById(stale.id).lean()).toMatchObject({ amount: 40_000, type: 'expense', status: 'confirmed' });
+  expect(await balanceOf(me, walletId)).toBe(-85_000);
+});
+
+test('TC-F13-05 POST /transactions/parse names the lines it cannot save: no amount, or past the 10-line limit', async () => {
+  const { me } = await newUser();
+
+  const mixed = await me.post('/transactions/parse', { text: 'phở 45k\n\ncafe không tiền\ngrab 30k' });
+  expect(mixed.status).toBe(200);
+  expect(mixed.body).toMatchObject({ noAmountLines: [3], truncated: false }); // line numbers as typed, blank lines counted
+  expect(mixed.body.drafts.map((d) => d.note)).toEqual(['phở', 'grab']);
+
+  const eleven = Array.from({ length: 11 }, (_, i) => `món ${i + 1} ${i + 1}k`).join('\n');
+  const long = await me.post('/transactions/parse', { text: eleven });
+  expect([long.body.drafts.length, long.body.noAmountLines, long.body.truncated]).toEqual([10, [], true]);
+});
+
+test('TC-F4-12 one money value is at most 10^13 ₫, so wallet and month totals stay exact integers', async () => {
+  const { me, walletId, food } = await newUser();
+  const MAX = 10_000_000_000_000;
+  const body = { type: 'expense', walletId, categoryId: food, occurredAt: '2026-10-20T05:30:00Z' };
+
+  const { body: tx } = await me.post('/transactions', { ...body, amount: MAX });
+  expect(tx.amount).toBe(MAX);
+  for (const amount of [MAX + 1, Number.MAX_SAFE_INTEGER]) {
+    expect((await me.post('/transactions', { ...body, amount })).status).toBe(400);
+    expect((await me.patch(`/transactions/${tx.id}`, { amount })).status).toBe(400);
+    expect((await me.post('/budgets', { month: '2026-10', categoryId: null, limit: amount })).status).toBe(400);
+  }
+  for (const initialBalance of [MAX + 1, -MAX - 1]) {
+    expect((await me.post('/wallets', { name: `Big ${initialBalance}`, type: 'bank', initialBalance })).status).toBe(400);
+  }
+  expect((await me.post('/wallets', { name: 'Big', type: 'credit', initialBalance: -MAX })).status).toBe(201);
+  expect((await me.post('/budgets', { month: '2026-10', categoryId: null, limit: MAX })).status).toBe(201);
+  await expect(Transaction.create({ ...body, userId: tx.userId, amount: MAX + 1 })).rejects.toThrow(/amount/); // the model agrees
 });

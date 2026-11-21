@@ -99,14 +99,24 @@ export async function restoreTransaction(userId, transactionId) {
   return transaction.save();
 }
 
+const alreadyConfirmed = () => new AppError(409, 'ALREADY_CONFIRMED', 'This transaction is already confirmed');
+
 // POST /transactions/:id/confirm: a bot or receipt draft becomes real money. The bots call it too.
+// `changes` are the Bot inbox's edits (same fields as PATCH). They are saved in the same write as the confirm,
+// and that write only matches a draft: if the chat confirmed it a moment earlier, nothing changes (409).
 // After an expense, `budgetWarning` is added when its category or overall budget for that month is ≥ 80 % used.
-export async function confirmTransaction(userId, transactionId) {
-  const transaction = await findOwnTransaction(userId, transactionId);
-  if (transaction.status === 'confirmed') throw new AppError(409, 'ALREADY_CONFIRMED', 'This transaction is already confirmed');
-  await checkReferences(userId, transaction); // a draft may point at a wallet deleted since it was made
-  transaction.status = 'confirmed';
-  await transaction.save();
+export async function confirmTransaction(userId, transactionId, changes = {}) {
+  const draft = await findOwnTransaction(userId, transactionId);
+  if (draft.status === 'confirmed') throw alreadyConfirmed();
+  draft.set(changes);
+  await checkReferences(userId, draft); // a draft may point at a wallet deleted since it was made
+  await draft.validate();
+  const transaction = await Transaction.findOneAndUpdate(
+    { _id: draft._id, userId, status: 'draft', deletedAt: null },
+    { ...changes, status: 'confirmed' },
+    { returnDocument: 'after' },
+  );
+  if (!transaction) throw alreadyConfirmed(); // confirmed (or discarded) by a chat between the read and this write
   const warning = transaction.type === 'expense' && (await budgetWarning(userId, transaction.categoryId, monthKey(transaction.occurredAt)));
   return warning ? { transaction, budgetWarning: warning } : { transaction };
 }
@@ -118,7 +128,13 @@ export async function parseTransactions(userId, text, now = new Date()) {
     Wallet.find({ userId, deletedAt: null, archived: false }).sort({ createdAt: 1, _id: 1 }).lean(),
     User.findById(userId).lean(),
   ]);
-  const drafts = parseText(text, { categories, wallets, defaultWalletId: user?.defaultWalletId, now }).filter(Boolean);
+  // An archived default (set before archiving cleared it) is ignored, like a deleted one: new money goes to an active wallet.
+  const defaultWalletId = wallets.find((wallet) => wallet._id.equals(user?.defaultWalletId))?._id;
+  const results = parseText(text, { categories, wallets, defaultWalletId, now }); // null where a line has no amount
+  const drafts = results.filter(Boolean);
   if (drafts.length === 0) throw new AppError(422, 'NO_AMOUNT_FOUND', 'No amount found, e.g. "phở 45k"');
-  return { drafts };
+  // So the quick add can say which lines would not be saved: line numbers as typed (1 = first line).
+  const lineNumbers = text.split(/\r?\n/).flatMap((line, i) => (line.trim() ? [i + 1] : []));
+  const noAmountLines = results.flatMap((result, i) => (result ? [] : [lineNumbers[i]]));
+  return { drafts, noAmountLines, truncated: lineNumbers.length > results.length }; // the parser reads 10 lines at most
 }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { MAX_MONEY } from '../models/Transaction.js';
 import {
   confirmTransaction,
   createTransaction,
@@ -20,7 +21,7 @@ const type = z.enum(['expense', 'income']);
 
 const fields = {
   type,
-  amount: z.int().positive(), // whole VND, 1 … Number.MAX_SAFE_INTEGER: no 12.5, no "45k", no 2^53
+  amount: z.int().positive().max(MAX_MONEY), // whole VND, 1 … 10^13: no 12.5, no "45k"
   walletId: objectId,
   categoryId: objectId,
   occurredAt: z.iso.datetime({ offset: true }).transform((value) => new Date(value)),
@@ -74,8 +75,9 @@ router.post('/:id/restore', async (req, res) => {
   res.json(await restoreTransaction(req.user.id, req.params.id));
 });
 
+// The body may carry the Bot inbox's edits (as for PATCH); they are only applied to a draft.
 router.post('/:id/confirm', async (req, res) => {
-  res.json(await confirmTransaction(req.user.id, req.params.id));
+  res.json(await confirmTransaction(req.user.id, req.params.id, updateBody.parse(req.body ?? {})));
 });
 
 export default router;

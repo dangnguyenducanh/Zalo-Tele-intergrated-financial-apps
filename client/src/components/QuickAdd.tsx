@@ -12,6 +12,7 @@ import {
   useLazyParseTransactionsQuery,
   useParseTransactionsQuery,
   type ParsedDraft,
+  type ParseResult,
   type TransactionInput,
 } from '@/features/transactions/transactionsApi';
 import { useDebounced } from '@/features/transactions/useDebounced';
@@ -48,7 +49,11 @@ export default function QuickAdd() {
   const withEdits = (drafts: ParsedDraft[], forText: string) =>
     drafts.map((draft, i) => (edits.text === forText && edits.drafts[i]) || draft);
   const shown = value ? withEdits(preview.currentData?.drafts ?? [], settled) : []; // an emptied box hides it at once
-  const hint = preview.error && value === settled ? apiErrorMessage(preview.error) : t('quickAdd.hint');
+  // Lines the parser could not use. Saving only the others would silently lose them, so they are named and Enter waits.
+  const skipped = ({ noAmountLines, truncated }: ParseResult) =>
+    noAmountLines.length > 0 ? t('quickAdd.noAmountLines', { lines: noAmountLines.join(', ') }) : truncated ? t('quickAdd.tooManyLines') : null;
+  const warning = preview.currentData && value === settled ? skipped(preview.currentData) : null;
+  const hint = preview.error && value === settled ? apiErrorMessage(preview.error) : (warning ?? t('quickAdd.hint'));
 
   function reset(count: number) {
     setText('');
@@ -70,7 +75,10 @@ export default function QuickAdd() {
   async function saveAll() {
     if (!value) return;
     try {
-      const drafts = withEdits((await parse(value, true).unwrap()).drafts, value);
+      const result = await parse(value, true).unwrap();
+      const problem = skipped(result);
+      if (problem) return setError(problem);
+      const drafts = withEdits(result.drafts, value);
       if (!drafts.every(isComplete)) return setError(t('quickAdd.incomplete'));
       // ponytail: one request per line; if one fails midway the earlier lines stay saved and the text stays.
       for (const draft of drafts) await createTransaction(draft).unwrap();
