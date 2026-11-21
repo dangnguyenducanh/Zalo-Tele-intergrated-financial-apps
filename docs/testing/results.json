@@ -1,473 +1,473 @@
 {
   "TC-F11-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F11-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F11-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F11-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F11-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F11-07": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-07": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-09": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-10": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-10": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F5-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F5-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F5-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F3-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F3-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F3-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F3-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-09": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-07": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F10-01": {
     "result": "Skipped",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-08": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-09": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F10-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F10-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F6-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F6-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F6-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F7-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F7-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F7-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F7-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-10": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-11": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F5-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-15": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-14": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-08": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-09": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F13-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-11": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-12": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-13": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-14": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-07": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F2-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F2-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F2-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F2-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F8-07": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-08": {
     "result": "Pass",
-    "run": "RUN-009",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-17": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F12-01": {
     "result": "Pass",
-    "run": "RUN-009",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F12-02": {
     "result": "Pass",
-    "run": "RUN-009",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-15": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F11-08": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-16": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F3-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F3-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F2-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F12-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-10": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F13-04": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F4-11": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F5-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F6-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F9-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F9-02": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F7-06": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F10-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F7-07": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F10-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-01": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-05": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-NF-03": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F1-18": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F11-05": {
     "result": "Pass",
@@ -516,27 +516,267 @@
   },
   "TC-NF-11": {
     "result": "Pass",
-    "run": "RUN-008",
-    "date": "2026-11-20 14:46"
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   },
   "TC-F7-08": {
     "result": "Pass",
-    "run": "RUN-010",
-    "date": "2026-11-21 18:57"
+    "run": "RUN-020",
+    "date": "2026-11-21 17:22",
+    "evidence": "charter-runs/2026-11-21/round2/bot-chat-after-fixes/e2e/results.jsonl (local)"
   },
   "TC-F8-16": {
     "result": "Pass",
-    "run": "RUN-010",
-    "date": "2026-11-21 18:57"
+    "run": "RUN-020",
+    "date": "2026-11-21 17:22",
+    "evidence": "charter-runs/2026-11-21/round2/bot-chat-after-fixes/e2e/results.jsonl (local)"
   },
   "TC-F8-17": {
     "result": "Pass",
-    "run": "RUN-010",
-    "date": "2026-11-21 18:57"
+    "run": "RUN-020",
+    "date": "2026-11-21 17:22",
+    "evidence": "charter-runs/2026-11-21/round2/bot-chat-after-fixes/e2e/results.jsonl (local)"
   },
   "TC-F8-18": {
     "result": "Pass",
-    "run": "RUN-010",
-    "date": "2026-11-21 18:57"
+    "run": "RUN-020",
+    "date": "2026-11-21 17:22",
+    "evidence": "charter-runs/2026-11-21/round2/bot-chat-after-fixes/e2e/results.jsonl (local)"
+  },
+  "MT-01": {
+    "result": "Pass",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "charter-runs/2026-11-21/round2/R0-regression/ (MT-0x.log, .mp4; local)"
+  },
+  "MT-02": {
+    "result": "Pass",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "charter-runs/2026-11-21/round2/R0-regression/ (MT-0x.log, .mp4; local)"
+  },
+  "MT-03": {
+    "result": "Pass",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "charter-runs/2026-11-21/round2/R0-regression/ (MT-0x.log, .mp4; local)"
+  },
+  "MT-05": {
+    "result": "Pass",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "charter-runs/2026-11-21/round2/R0-regression/ (MT-0x.log, .mp4; local)"
+  },
+  "MT-06": {
+    "result": "Pass",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "charter-runs/2026-11-21/round2/R0-regression/ (MT-0x.log, .mp4; local)"
+  },
+  "MT-07": {
+    "result": "Pass",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "charter-runs/2026-11-21/round2/R0-regression/ (MT-0x.log, .mp4; local)"
+  },
+  "MT-04": {
+    "result": "Skipped",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "Blocked part: the Zalo receipt webhook got no draft within 150 s (KIE tunnel); web upload and the KIE-down message passed. charter-runs/2026-11-21/round2/R0-regression/MT-04.log (local)"
+  },
+  "MT-08": {
+    "result": "Skipped",
+    "run": "RUN-011",
+    "date": "2026-11-21 14:22",
+    "evidence": "Blocked part: 'zero errors in Vercel logs' not checked (no log access); the demo script itself passed. charter-runs/2026-11-21/round2/R0-regression/MT-08.log (local)"
+  },
+  "TC-NF-16": {
+    "result": "Pass",
+    "run": "RUN-019",
+    "date": "2026-11-21 15:36",
+    "evidence": "Staging retest of BUG-021 / BUG-023 with the fix deployed: charter-runs/2026-11-21/round2/retest/ (local); the Playwright spec passed in PR #61's gates"
+  },
+  "TC-NF-17": {
+    "result": "Pass",
+    "run": "RUN-019",
+    "date": "2026-11-21 15:36",
+    "evidence": "Staging retest of BUG-021 / BUG-023 with the fix deployed: charter-runs/2026-11-21/round2/retest/ (local); the Playwright spec passed in PR #61's gates"
+  },
+  "TC-NF-18": {
+    "result": "Pass",
+    "run": "RUN-021",
+    "date": "2026-11-21 17:30",
+    "evidence": "Staging retest of BUG-018 after T29: charter-runs/2026-11-21/round2/retest/BUG-018/ (local); the Playwright spec passed in PR #64's gates"
+  },
+  "TC-F1-21": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F1-19": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F1-20": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F1-22": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F1-23": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F8-23": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F8-22": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F9-05": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F13-05": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F13-07": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F4-12": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F2-07": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F8-19": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F8-20": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F8-21": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F1-25": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F12-07": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F12-06": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F11-09": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F1-24": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F9-06": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F10-06": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F7-09": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F9-04": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F4-13": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F12-04": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F6-06": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F5-07": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F6-07": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F12-05": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-NF-12": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-NF-14": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F13-06": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
+  },
+  "TC-F2-08": {
+    "result": "Pass",
+    "run": "RUN-022",
+    "date": "2026-11-21 17:55"
   }
 }

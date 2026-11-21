@@ -79,7 +79,7 @@ const AMBER = { type: 'pattern', pattern: 'solid', bgColor: { argb: 'FFFFF3CD' }
 const MAX_ROWS = 1000;
 
 const RESULTS = ['Pass', 'Fail', 'Skipped', 'Not run'];
-const SEVERITIES = ['S1 Critical', 'S2 Major', 'S3 Minor', 'S4 Cosmetic'];
+const SEVERITIES = ['S1 Critical', 'S2 Major', 'S3 Minor', 'S4 Trivial'];
 const STATUSES = ['Open', 'In progress', 'Fixed (awaiting retest)', 'Closed', "Won't fix", 'Blocked'];
 
 function table(ws, columns, rows) {
@@ -244,7 +244,7 @@ lrow('Severity', 'Meaning', true);
 lrow('S1 Critical', "Data loss, security hole, or a core flow broken (e.g. user B can read user A's transactions)");
 lrow('S2 Major', 'A feature doesn\'t work and there is no workaround (e.g. Zalo "ok" doesn\'t confirm)');
 lrow('S3 Minor', 'Works but wrong in some cases (e.g. daily chart off by one day at midnight)');
-lrow('S4 Cosmetic', 'Visual or text only (e.g. untranslated label)');
+lrow('S4 Trivial', 'Visual or text only (e.g. untranslated label)');
 lrow('Status', 'Meaning', true);
 lrow('Open', 'Seen and logged, not yet worked on');
 lrow('In progress', 'Reproduced with a failing test; fix being made');
