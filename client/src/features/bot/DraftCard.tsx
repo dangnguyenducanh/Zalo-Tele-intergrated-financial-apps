@@ -7,19 +7,15 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
 import { apiErrorMessage } from '@/features/categories/helpers';
 import { formatNumber, fromDateTimeInput, parseAmount, toDateTimeInput } from '@/features/transactions/helpers';
-import {
-  useDeleteTransactionMutation,
-  useUpdateTransactionMutation,
-  type TransactionInput,
-  type TransactionType,
-} from '@/features/transactions/transactionsApi';
+import { useDeleteTransactionMutation, type TransactionInput, type TransactionType } from '@/features/transactions/transactionsApi';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
 import { formatMoney } from '@/i18n/format';
 import { useConfirmDraftMutation, type Draft } from './botApi';
 import { sourceIcon } from './sourceIcon';
 
 // One draft as a small inline form (docs/05 §5.7): the parsed fields can be corrected in place.
-// Confirm = PATCH /transactions/:id (only if something changed) then POST /transactions/:id/confirm.
+// Confirm = POST /transactions/:id/confirm with the changed fields (if any): one step, so a draft confirmed in
+// the chat meanwhile is refused (409) without its saved amount being overwritten.
 // Discard = DELETE /transactions/:id. Either way the list refetches and the card goes away, so onGone()
 // moves focus out of it first.
 export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () => void }) {
@@ -29,7 +25,6 @@ export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () 
   const language = useAppSelector((s) => s.ui.language);
   const { data: categories = [] } = useGetCategoriesQuery();
   const { data: wallets = [] } = useGetWalletsQuery({ includeArchived: true });
-  const [updateTransaction] = useUpdateTransactionMutation();
   const [deleteTransaction] = useDeleteTransactionMutation();
   const [confirmDraft] = useConfirmDraftMutation();
 
@@ -77,8 +72,7 @@ export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () 
     const changed = (Object.keys(fields) as (keyof TransactionInput)[]).some((key) => fields[key] !== draft[key]);
     setBusy(true);
     try {
-      if (changed) await updateTransaction({ id: draft.id, ...fields }).unwrap();
-      const { budgetWarning } = await confirmDraft(draft.id).unwrap();
+      const { budgetWarning } = await confirmDraft({ id: draft.id, changes: changed ? fields : undefined }).unwrap();
       if (budgetWarning) say(t('drafts.budgetWarning', { percent: budgetWarning.percent }), 'warning');
       else say(t('drafts.confirmed'), 'success');
       onGone();

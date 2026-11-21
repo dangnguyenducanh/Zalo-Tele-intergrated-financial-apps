@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { MAX_MONEY } from '../models/Transaction.js';
 import { createWallet, deleteWallet, getWallet, listWallets, updateWallet } from '../services/wallets.js';
 import { keywordList, uiText } from './categories.js';
 
@@ -10,7 +11,7 @@ router.use(requireAuth);
 const fields = {
   name: z.string().trim().min(1).max(40),
   type: z.enum(['cash', 'bank', 'ewallet', 'credit']),
-  initialBalance: z.int(), // whole VND within the safe-integer range; may be 0 or negative (credit)
+  initialBalance: z.int().min(-MAX_MONEY).max(MAX_MONEY), // whole VND, may be 0 or negative (credit)
   aliases: keywordList.optional(),
   color: uiText.optional(),
   icon: uiText.optional(),

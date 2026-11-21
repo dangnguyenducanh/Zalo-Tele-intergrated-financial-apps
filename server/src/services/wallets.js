@@ -68,6 +68,8 @@ export async function updateWallet(userId, walletId, changes) {
   const wallet = await findOwnWallet(userId, walletId);
   wallet.set(changes);
   await saveWallet(wallet);
+  // An archived wallet is hidden from pickers, so it cannot stay the default either (as on delete below).
+  if (changes.archived) await User.updateOne({ _id: userId, defaultWalletId: wallet._id }, { defaultWalletId: null });
   return withBalance(wallet, await netByWallet(userId));
 }
 

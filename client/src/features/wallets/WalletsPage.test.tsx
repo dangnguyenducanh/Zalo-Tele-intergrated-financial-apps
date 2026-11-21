@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { beforeEach, expect, test } from 'vitest';
+import { onSessionChange } from '@/auth/session';
 import { LAN, resetFake, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 import type { Wallet } from './walletsApi';
@@ -123,4 +124,16 @@ test('TC-F2-06 edit a wallet, archive it, and a wallet in use cannot be deleted 
   expect(sent.at(-1)).toEqual({ method: 'PATCH', body: { archived: true } });
   const archived = screen.getByRole('region', { name: 'Ví đã lưu trữ' });
   expect(await within(archived).findByRole('article', { name: 'Ví tiền' })).toBeInTheDocument();
+});
+
+test('TC-F2-08 archiving the default wallet clears the default in the app too, so the Add form stops preselecting it (BUG-016)', async () => {
+  resetFake({ ...LAN, defaultWalletId: 'w1' }, true);
+  const users: (string | null | undefined)[] = [];
+  const stop = onSessionChange((session) => users.push(session?.user.defaultWalletId));
+  const user = userEvent.setup();
+  renderApp('/wallets');
+
+  await user.click(within(await screen.findByRole('article', { name: 'Tiền mặt' })).getByRole('button', { name: 'Lưu trữ ví Tiền mặt' }));
+  await waitFor(() => expect(users.at(-1)).toBeNull()); // the server cleared it as well (TC-F2-07)
+  stop();
 });

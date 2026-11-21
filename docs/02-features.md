@@ -33,7 +33,7 @@ Each feature is a complete slice (screen → API → collection), and most have 
 | F10 | **Receipt upload (web)**: upload a photo on the web; KIE → draft | C | Bot inbox |
 | F11 | **Admin**: users (lock/unlock, role), default categories, system stats | C R U D | Admin users, Admin categories |
 | F12 | **Preferences**: language vi/en, theme light/dark/system; saved per user and in localStorage | U | Settings, app bar |
-| F13 | **Web quick add**: a text box on the Dashboard and Transactions pages. You type `phở 45k` (same syntax as the bot), see a live preview (amount, category, wallet, date), and press Enter to save. The full form is one click away | C | Dashboard, Transactions |
+| F13 | **Web quick add**: a text box on the Dashboard and Transactions pages. You type `phở 45k` (same syntax as the bot), see a live preview (amount, category, wallet, date), and press Enter to save. A line with no amount, or past the 10th, is named inline and nothing is saved until it is fixed. The full form is one click away | C | Dashboard, Transactions |
 
 > **The web app works without the bots.** Customers who don't use Telegram or Zalo record everything on the website, with the quick-add box (F13) or the full add/edit form (F4). The bots are an extra way in, not the only one.
 

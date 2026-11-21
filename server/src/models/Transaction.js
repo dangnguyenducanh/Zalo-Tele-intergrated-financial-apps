@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 
 const { ObjectId } = mongoose.Schema.Types;
 
+// The largest single money value (10 nghìn tỷ ₫) for an amount, an opening balance or a budget limit.
+// Totals are summed as doubles, which are exact only up to 2^53 ≈ 9 × 10^15: about 900 values this large still add up exactly.
+export const MAX_MONEY = 10_000_000_000_000;
+
 // Where a bot draft came from: used to edit the bot's reply and to ignore a webhook delivered twice.
 const chatRefSchema = new mongoose.Schema(
   {
@@ -34,7 +38,7 @@ const transactionSchema = new mongoose.Schema(
     walletId: { type: ObjectId, ref: 'Wallet', required: true },
     categoryId: { type: ObjectId, ref: 'Category', required: true },
     type: { type: String, enum: ['expense', 'income'], required: true },
-    amount: { type: Number, required: true, validate: (v) => Number.isSafeInteger(v) && v > 0 },
+    amount: { type: Number, required: true, validate: (v) => Number.isSafeInteger(v) && v > 0 && v <= MAX_MONEY },
     note: { type: String, trim: true, maxlength: 200, default: '' },
     occurredAt: { type: Date, required: true },
     status: { type: String, enum: ['draft', 'confirmed'], default: 'confirmed' }, // bots create drafts
