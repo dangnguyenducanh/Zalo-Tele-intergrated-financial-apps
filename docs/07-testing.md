@@ -12,7 +12,7 @@ How we prove that every feature in [02-features.md](02-features.md) works, find 
 | **Webhook contract** | Vitest + Supertest, recorded Telegram/Zalo payloads, outbound `fetch` mocked with MSW | Secret checks, linking, parse → draft → confirm, idempotency, KIE errors | Every commit | The bots work without a phone, and the exact JSON both platforms send is handled |
 | **Component** | Vitest + React Testing Library + jsdom + MSW | Forms, QuickAdd, theme/language switch, error states | Every commit | Screens render loading/empty/error/data states and validate input |
 | **KIE contract** | Vitest, real KIE container, sample receipts from the KIE repo (`data/test_degraded/*.jpg`) | `/analyze` response → draft mapping | Before demo, after KIE changes | Our mapping works on real OCR output, not just mocks |
-| **End-to-end (E2E)** | Playwright (TypeScript), Chromium; **video + trace on** | Full user journeys in a real browser against local stack and the Vercel deployment | Before each deploy; nightly on Vercel | Frontend + API + DB work together the way a customer uses them |
+| **End-to-end (E2E)** | Playwright (TypeScript), Chromium; **video + trace on** | Full user journeys in a real browser against local stack and the Vercel deployment | Before each deploy, run locally (CI runs only the Vitest suites, see [06-deployment.md](06-deployment.md)) | Frontend + API + DB work together the way a customer uses them |
 | **Manual exploratory** | Claude in Chrome on your browser (recorded GIF, console + network capture), Vercel runtime logs, Atlas Data Explorer, real phones for Telegram/Zalo | Charters MT-01…MT-08 (§7.4) | Before demo, after big changes | Real-world use: real chat apps, real receipts, real devices |
 | **Non-functional** | Playwright viewports, axe/Lighthouse, security probes | Responsive, dark mode, accessibility, injection, secrets, deploy smoke | Before demo | Slide requirements on responsiveness, security and deployment |
 
@@ -25,10 +25,11 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 | Env | Web/API | Database | Bots | Used for |
 |---|---|---|---|---|
 | Unit/API/component | none / Supertest | mongodb-memory-server (fresh per file) | mocked | Fast automated suites |
-| Local | `localhost:5173` + `:3000` | Atlas `finance_dev` | dev bots via Cloudflare quick tunnel | E2E, debugging |
-| Production | `https://<project>.vercel.app` | Atlas `finance` | `@sochitieu_btl_bot` + Zalo bot | Manual charters, demo smoke |
+| Local | `localhost:5300` + API `:4100` (+10 per worktree slot, `tools/wt-env.sh`) | Atlas `finance_wt<slot>` | dev bots via Cloudflare quick tunnel | E2E, debugging |
+| Staging | `https://sochitieu-btl-staging.vercel.app` | Atlas `finance_staging` | none (the bots' one webhook points at production) | Charter runs and recorded retests with the test accounts |
+| Production | `https://sochitieu-btl.vercel.app` | Atlas `finance` | `@sochitieu_btl_bot` + Zalo bot | Manual charters, demo smoke |
 
-`npm run seed:test` creates **userA** (data owner), **userB** (attacker for ownership tests) and **admin**, plus a fixed set of transactions whose totals are worked out by hand in `server/test/fixtures/expected-stats.json`.
+`npm run seed:test` creates **userA** (data owner), **userB** (attacker for ownership tests) and **admin** from the `TEST_USER_A_*`, `TEST_USER_B_*` and `SEED_ADMIN_*` variables. The fixed transactions whose totals are worked out by hand in `server/test/fixtures/expected-stats.json` are loaded by the statistics tests into the in-memory database, not by the seed.
 
 ## 7.3 Test catalogue
 

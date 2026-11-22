@@ -22,11 +22,11 @@ Each feature is a complete slice (screen → API → collection), and most have 
 | # | Feature | Create / Read / Update / Delete | Screen(s) |
 |---|---|---|---|
 | F1 | **Account & auth**: register, login, logout, silent refresh, change password, sessions list, log out other devices | C R U D (sessions) | Login, Register, Settings |
-| F2 | **Wallets**: cash, bank, e-wallet; opening balance; computed current balance; archive | C R U D | Wallets |
+| F2 | **Wallets**: cash, bank, e-wallet, credit card; opening balance (may be negative for a credit card); computed current balance; archive | C R U D | Wallets |
 | F3 | **Categories**: expense/income, icon, colour, **bot keywords**; seeded from defaults on register | C R U D | Categories |
 | F4 | **Transactions**: add/edit/delete; filter by date range, type, wallet, category, status, text; pagination | C R U D | Transactions |
 | F5 | **Monthly budgets**: limit per category (or overall) per month; progress bars; over-budget warnings (web + bot) | C R U D | Budgets, Dashboard |
-| F6 | **Statistics**: month summary (income, expense, net), spending by category (pie), daily trend (bar), budget usage | R | Dashboard |
+| F6 | **Statistics**: total balance of active wallets; month figures (income, expense, net, budget left); this month vs last month in weekly columns (spending or income); spending by category as a ranked list; category budgets to watch | R | Dashboard |
 | F7 | **Bot linking**: one-time code / Telegram deep link; list and unlink chat accounts | C R D | Bot inbox |
 | F8 | **Bot capture (Telegram + Zalo)**: text → draft → confirm; receipt photo → KIE → draft → confirm; `/today`, `/month` | C U D (drafts) | (chat) + Bot inbox |
 | F9 | **Bot inbox (web)**: review drafts from any source; edit, confirm or discard; see receipt line items | R U D | Bot inbox |
@@ -48,15 +48,15 @@ Each feature is a complete slice (screen → API → collection), and most have 
 | Route | Screen | Main content |
 |---|---|---|
 | `/login` | Login | Email + password, language and theme switch |
-| `/register` | Register | Name, email, password (+confirm), language |
-| `/` | Dashboard | **Quick-add box** at the top; month picker; cards (income, expense, net, budget left); pie by category; daily bar chart; latest 5 transactions; pending drafts badge |
+| `/register` | Register | Name, email, password (+confirm; at least 8 characters, at most 72 bytes); the language picked in the corner switch becomes the profile language |
+| `/` | Dashboard | **Quick-add box** at the top; month picker; "Drafts waiting" banner linking to Bot inbox; "Budgets to watch" banner (category budgets past 80 % / 100 %); total-balance card beside four figure cards (income, expense, net, budget left); this month vs last month in weekly columns with a Chi tiêu / Thu nhập switch; ranked category list; latest 5 transactions; one error banner with Retry for every query whose numbers the page shows |
 | `/transactions` | Transactions | **Quick-add box**, filter bar, paginated table (cards on mobile), add/edit dialog, delete with undo snackbar |
 | `/wallets` | Wallets | Wallet cards with balance; add/edit/archive/delete |
 | `/categories` | Categories | Tabs expense/income; list with icon/colour/keywords; add/edit/delete |
-| `/budgets` | Budgets | Month picker; per-category limit with progress bar; add/edit/delete; copy last month |
+| `/budgets` | Budgets | Month picker; overall and per-category limits with progress bar; add/edit/delete; copy last month |
 | `/bot` | Bot inbox | Link Telegram/Zalo (code, deep link, QR), linked accounts, drafts list (source icon, receipt items), upload receipt |
 | `/settings` | Settings | Profile, password, language, theme, sessions (current + others, revoke) |
-| `/admin/users` | Admin · Users | Search, role/status chips, lock/unlock, change role |
+| `/admin/users` | Admin · Users | System stats (F11), search, role/status chips, lock/unlock, change role |
 | `/admin/categories` | Admin · Default categories | Template list (vi/en names, keywords), add/edit/delete |
 | `*` | 404 | Link home |
 
@@ -76,7 +76,9 @@ The same **bot core** serves both platforms. Only sending/receiving and confirm 
 
 **Unlinked chats** get: "Please link your account: open <app>/bot and send `/link CODE`" (in both languages).
 
-**Budget alert:** after a confirmed expense, if that category's budget for the month passes 80 % or 100 %, the bot adds a warning line and the dashboard shows it.
+**Locked accounts:** when an admin locks the web account, its linked chats get "account locked" for every other message and button press (only `/start CODE` and `/link CODE` still answer "already linked"), and nothing is recorded.
+
+**Budget alert:** after an expense draft is confirmed, the category's budget or the overall budget for that month, whichever is fuller, is checked. At ≥ 80 % or ≥ 100 % used, the bot adds a warning line, and on the web the Bot inbox shows a warning snackbar. The Dashboard lists category budgets past 80 % in its "Budgets to watch" banner (the overall budget has its own card).
 
 ## 2.5 Text parser rules (rule-based, no AI)
 
@@ -92,13 +94,13 @@ Input is one line per transaction (up to 10 lines per message). Text is lower-ca
 | `150.000`, `150,000`, `150000`, `150000đ`, `150000 vnd` | 150,000 |
 | bare number below 1,000, e.g. `phở 45` | 45,000 *(proposed: treated as thousands; the confirm message shows the value, so a wrong guess is caught)* |
 
-If no amount is found, the bot replies with help text and examples.
+The amount is rounded to whole đồng and must be from 1 ₫ to 10^13 ₫. A line whose amount is 0 or above that ceiling counts as having no amount. If no line in the message has an amount, the bot replies with help text and examples. Otherwise it saves the lines it can read and names the line numbers it did not record. Lines after the 10th are ignored without a message (the web quick add says so).
 
 **Type:** **income** if the line starts with `+`, or contains an income keyword (`lương`, `thưởng`, `nhận`, `salary`, `bonus`, `received`) or a keyword of an income category. Otherwise it's an **expense**.
 
-**Category:** the longest keyword match across the user's categories of that type (e.g. `grab` → Đi lại, `phở` → Ăn uống). Otherwise the **Khác / Other** category.
+**Category:** the longest keyword match across the user's categories of that type (e.g. `grab` → Đi lại, `phở` → Ăn uống). Otherwise the fallback category of that type: **Khác / Other** for expenses, **Thu khác / Other income** for income.
 
-**Wallet:** matches a wallet alias (`mm`/`momo` → MoMo, `tm` → Tiền mặt, `ck`/`bank` → bank); otherwise the user's default wallet.
+**Wallet:** matches an alias the user gave a wallet (e.g. `mm` on a MoMo wallet). After register the only wallet is **Tiền mặt / Cash**, with aliases `tm` and `cash`. Otherwise the user's default wallet if it is still active, else the oldest active wallet.
 
 **Date:** `hôm qua`, `hqua`, `yesterday` → yesterday; `dd/mm` or `dd/mm/yyyy` → that date; otherwise now. All dates use the **Asia/Ho_Chi_Minh** time zone.
 
@@ -109,7 +111,7 @@ Examples:
 | Message | Draft |
 |---|---|
 | `phở 45k` | expense · 45,000 · Ăn uống · default wallet · now · "phở" |
-| `grab 32k hôm qua mm` | expense · 32,000 · Đi lại · MoMo · yesterday · "grab" |
+| `grab 32k hôm qua mm` | expense · 32,000 · Đi lại · MoMo (if a wallet has alias `mm`) · yesterday · "grab" |
 | `+lương 15tr` | income · 15,000,000 · Lương · default wallet · now · "lương" |
 | `coffee 30k` | expense · 30,000 · Ăn uống (English keyword) · now · "coffee" |
 
@@ -123,11 +125,11 @@ Examples:
 
 ## 2.7 Languages and themes
 
-- **UI languages:** Vietnamese (default) and English. All UI strings live in `client/src/i18n/{vi,en}.json`. Numbers and dates are formatted with `Intl` (`vi-VN` / `en-US`, currency VND).
+- **UI languages:** Vietnamese (default) and English. All UI strings live in `client/src/i18n/{vi,en}/<namespace>.json` (one namespace per feature, e.g. `dashboard`, `errors`). Numbers and dates are formatted with `Intl` (`vi-VN` / `en-US`, currency VND).
 - **API errors** return a stable `code` (e.g. `WALLET_NOT_FOUND`) that the frontend translates; `message` is English for logs.
 - **Bot replies** use the user's `language` (changeable with `/lang` or in Settings).
 - **Default categories** have names in both languages; user-created categories have one name.
-- **Themes:** light, dark, or system. A toggle in the app bar stores the choice in localStorage (instant) and in the user profile (follows the user across devices). Charts use theme colours.
+- **Themes:** light, dark, or system. The app bar button switches between light and dark (picking the OS scheme stores "system"); the full three-way choice is in Settings. The choice is stored in localStorage (instant) and in the user profile (follows the user across devices). Charts use theme colours.
 - **Report language:** English.
 
 ## 2.8 Slide requirements checklist

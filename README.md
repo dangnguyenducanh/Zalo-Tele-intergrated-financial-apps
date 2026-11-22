@@ -2,7 +2,7 @@
 
 A personal finance web app (topic #16, *Quản lý chi tiêu cá nhân*) with **Telegram and Zalo bots**: send `phở 45k` or a receipt photo to the bot, confirm the draft, and it becomes a transaction. The web app has wallets, categories, monthly budgets and statistics. It supports Vietnamese and English and has light and dark themes.
 
-> Status: **live** since 2026-11-21. 23 task cards built, reviewed and merged (T17–T18 are the UI redesigns, T19–T23 the real-chat bot e2e and the fixes found while running it live); 312 automated tests pass (176 server, 96 client, 36 end-to-end, 4 tool self-tests). Two of them, the receipt tests TC-F10-01 and TC-F10-03, need the live KIE service: they pass against it and skip without it (as in CI). 7 bugs logged (2 found by automated tests, 3 by manual charter runs, 1 by code review, 1 by a deploy check), all fixed and closed. Final-term web class project (BTL), done by one student.
+> Status: **live** since 2026-11-21. 29 task cards built, reviewed and merged (T17–T18 are the UI redesigns, T19 the real-chat bot e2e, T20–T29 the bug fixes found by charter runs, recorded retests, code review, the deploy check and real-chat runs). 366 automated tests: 195 server and 126 client (Vitest), 41 end-to-end (Playwright), 4 tool self-tests. The last logged run (RUN-022, Vitest on the merged code) passed 320 with 1 skipped; CI runs only the Vitest suites, and the last logged Playwright run (RUN-008/009) predates round 2. Two receipt tests, TC-F10-01 (Vitest) and TC-F10-03 (Playwright), need the live KIE service and skip without it; TC-F10-01 is the one skipped in CI. 159 test cases and 22 test runs are logged. 33 bugs (2 found by automated tests, 25 by manual charter runs, 2 by real-chat bot runs, 2 by recorded retests, 1 by code review, 1 by a deploy check), all fixed and closed. Final-term web class project (BTL), done by one student.
 
 | | |
 |---|---|
@@ -38,7 +38,7 @@ The last command rebuilds the Excel report: test cases with what each one proves
 
 ## Team (Phân công)
 
-One member did every part: requirements and design, frontend, backend, database, both bots, receipt reading, testing and deployment. The build was split into 23 task cards (T01–T23) plus one bug card, each implemented, reviewed and merged as its own pull request ([docs/08](docs/08-agent-workflow.md)).
+One member did every part: requirements and design, frontend, backend, database, both bots, receipt reading, testing and deployment. The build was split into 29 task cards (T01–T29) plus one bug card (#34, BUG-002), each implemented, reviewed and merged as its own pull request; T20–T29 are bug-fix cards ([docs/08](docs/08-agent-workflow.md)).
 
 ## Documentation
 
