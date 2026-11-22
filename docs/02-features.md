@@ -74,7 +74,7 @@ The same **bot core** serves both platforms. Only sending/receiving and confirm 
 
 **Commands:** `/start` (welcome or link), `/link CODE`, `/help`, `/today` (today's spending), `/month` (month total, the overall budget and each category budget with its usage, fullest first), `/lang vi|en`.
 
-**Unlinked chats** get: "Please link your account: open <app>/bot and send `/link CODE`" (in both languages).
+**Unlinked chats** get: "Please link your account: open `<app>/bot` and send `/link CODE`" (in both languages).
 
 **Locked accounts:** when an admin locks the web account, its linked chats get "account locked" for every other message and button press (only `/start CODE` and `/link CODE` still answer "already linked"), and nothing is recorded.
 

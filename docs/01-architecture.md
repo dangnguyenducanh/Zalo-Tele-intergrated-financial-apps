@@ -140,7 +140,7 @@ Versions are pinned exactly in the `package.json` files (root, `client/`, `serve
 | Icons | lucide-react | 1.66.0 | Line icons, imported one file each (`components/icons.ts`) |
 | Font | @fontsource/be-vietnam-pro | 5.3.0 | Self-hosted Be Vietnam Pro (Vietnamese glyphs), no font CDN |
 | i18n | i18next + react-i18next + browser language detector | 27.2.2 / 18.0.3 / 8.3.1 | vi/en UI strings, plus number and date formatting |
-| Charts | Recharts | 3.11.0 | Pie (by category) and bar (daily trend) |
+| Charts | Recharts | 3.11.0 | Bar chart (this month vs last month, weekly columns); the category breakdown is a ranked list |
 
 ### Backend (`server/`)
 
@@ -216,7 +216,7 @@ Zalo-Tele-intergrated-financial-apps/
 ├── eslint.config.js
 ├── treehouse.toml          # worktree pool settings
 ├── .worktreeinclude        # git-ignored files copied into each worktree (server/.env)
-├── .env.example            # the app's variables, no values; tool-only keys (VERCEL_*, PROD_URL, ...) are listed in 06-deployment.md §6.3
+├── .env.example            # the app's variables, no values; tool-only keys (VERCEL_*, PROD_URL, KIE_PUBLIC_URL, ...) are listed in 06-deployment.md §6.3
 ├── vercel.json             # npm ci, build client, output client/dist, maxDuration 300; rewrites /api/* → api/index.js, SPA fallback
 └── package.json            # npm workspaces: client, server
 ```

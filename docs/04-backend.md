@@ -106,7 +106,7 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 | PATCH | `/categories/:id` | 🔒 | same fields except `type` (fixed) | **200** | 400, 404, 409 `NAME_TAKEN` |
 | DELETE | `/categories/:id` | 🔒 | — | **204** (its transactions move to the fallback category) | 404, 409 `FALLBACK_CATEGORY` |
 | GET | `/budgets` | 🔒 | `?month=YYYY-MM` (optional, default the current Vietnamese month) | **200** `[{…, spent, percent}]` | 400 |
-| POST | `/budgets` | 🔒 | `{month, categoryId|null, limit}` | **201** | 400 (also when the category is not an expense category), 404, 409 `BUDGET_EXISTS` |
+| POST | `/budgets` | 🔒 | `{month, categoryId\|null, limit}` | **201** | 400 (also when the category is not an expense category), 404, 409 `BUDGET_EXISTS` |
 | POST | `/budgets/copy` | 🔒 | `{from: 'YYYY-MM', to: 'YYYY-MM'}` | **201** `{created: n}` | 400 |
 | PATCH | `/budgets/:id` | 🔒 | `{limit}` | **200** | 400, 404 |
 | DELETE | `/budgets/:id` | 🔒 | — | **204** | 404 |
