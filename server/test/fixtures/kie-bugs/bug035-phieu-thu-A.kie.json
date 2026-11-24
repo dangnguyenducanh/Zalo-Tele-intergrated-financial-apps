@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "merchant": "CÔNG TY TNHH THUONG MAI HOÀNG PHÁT",
+    "date": "",
+    "total": "2500000",
+    "address": "Đa chi: 25 Lê Loi, P. Bén Nghé, Q.1, TP.HCM"
+  },
+  "line_items": [
+    {
+      "name": "Ngày 25 tháng 09 năm 2023",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2023,
+      "confidence": 0.9891199469566345,
+      "line_index": 3,
+      "bbox": [
+        423.3333435058594,
+        585,
+        776.6666870117188,
+        623.3333129882812
+      ],
+      "raw_text": "Ngày 25 tháng 09 năm 2023"
+    },
+    {
+      "name": "Ső: PT-09/2023",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2023,
+      "confidence": 0.9685702323913574,
+      "line_index": 4,
+      "bbox": [
+        500,
+        623.3333129882812,
+        701.6666870117188,
+        656.6666870117188
+      ],
+      "raw_text": "Ső: PT-09/2023"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 4046,
+    "extracted_total": 2500000,
+    "difference": 2495954,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      4
+    ]
+  },
+  "full_text": "CÔNG TY TNHH THUONG MAI HOÀNG PHÁT\nĐa chi: 25 Lê Loi, P. Bén Nghé, Q.1, TP.HCM\nPHIÉU THU\nNgày 25 tháng 09 năm 2023\nSő: PT-09/2023\nHo tên nguòi np tién: Trán Thi Mai\nĐa chi: 112 Nguyn Trãi, P.3, Q.5, TP.HCM\nLý do np: Thanh toán tin hàng đt 2 theo hp đng\nSó tién: 2.500.000 VND\nBăng ch: Hai triu năm trăm nghìn đông chån\nKèm theo: 01 chúng tù gőc\nNgày 25 tháng 09 năm 2023\nGlám dóc Ké toán truóng Nguòi nôp tién Nguòi lâp phiu Thú quý\n(Ký, ho tên, đóng (Ký, ho tên) (Ký, ho tên) (Ký, ho tên) (Ký, ho tên)\ndáu)\nHoàng Văn Phát Lý Thį Hóng Trán Thi Mai Đo Minh Tú Ngô Thu Trang",
+  "lines": [
+    "CÔNG TY TNHH THUONG MAI HOÀNG PHÁT",
+    "Đa chi: 25 Lê Loi, P. Bén Nghé, Q.1, TP.HCM",
+    "PHIÉU THU",
+    "Ngày 25 tháng 09 năm 2023",
+    "Ső: PT-09/2023",
+    "Ho tên nguòi np tién: Trán Thi Mai",
+    "Đa chi: 112 Nguyn Trãi, P.3, Q.5, TP.HCM",
+    "Lý do np: Thanh toán tin hàng đt 2 theo hp đng",
+    "Só tién: 2.500.000 VND",
+    "Băng ch: Hai triu năm trăm nghìn đông chån",
+    "Kèm theo: 01 chúng tù gőc",
+    "Ngày 25 tháng 09 năm 2023",
+    "Glám dóc Ké toán truóng Nguòi nôp tién Nguòi lâp phiu Thú quý",
+    "(Ký, ho tên, đóng (Ký, ho tên) (Ký, ho tên) (Ký, ho tên) (Ký, ho tên)",
+    "dáu)",
+    "Hoàng Văn Phát Lý Thį Hóng Trán Thi Mai Đo Minh Tú Ngô Thu Trang"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 64.54,
+    "ocr_ms": 16244.37,
+    "kie_ms": 18.87
+  }
+}

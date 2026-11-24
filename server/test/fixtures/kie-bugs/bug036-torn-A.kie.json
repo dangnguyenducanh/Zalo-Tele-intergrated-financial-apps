@@ -1,0 +1,63 @@
+{
+  "fields": {
+    "merchant": "CA HÀNG TIÊN LOI MINH KHANG",
+    "date": "14/05/2024",
+    "total": "20000",
+    "address": "123 Trn Hung Đo, P. Nguyn Cu Trinh, Q.1"
+  },
+  "line_items": [
+    {
+      "name": "DT: 0283 838 4567",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 4567,
+      "confidence": 0.9960819482803345,
+      "line_index": 2,
+      "bbox": [
+        503.08447265625,
+        579.4781494140625,
+        747.7820434570312,
+        608.5374755859375
+      ],
+      "raw_text": "DT: 0283 838 4567"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 4567,
+    "extracted_total": 20000,
+    "difference": 15433,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      2
+    ]
+  },
+  "full_text": "CA HÀNG TIÊN LOI MINH KHANG\n123 Trn Hung Đo, P. Nguyn Cu Trinh, Q.1\nDT: 0283 838 4567\nHÓA DON BÁN LÉ\nNgày: 14/05/2024 Già: 18:42\nSő HD: 004829 Thu ngân: Lan\nTên hàng Thành tin\nSa chua ung Probi (lc 5) 20.000\nBánh mì sandwich 15.000\nNuc cam ép Twister 1L 18.000\nTÔNG CÔNG:\nTin khách đua\nTin thi",
+  "lines": [
+    "CA HÀNG TIÊN LOI MINH KHANG",
+    "123 Trn Hung Đo, P. Nguyn Cu Trinh, Q.1",
+    "DT: 0283 838 4567",
+    "HÓA DON BÁN LÉ",
+    "Ngày: 14/05/2024 Già: 18:42",
+    "Ső HD: 004829 Thu ngân: Lan",
+    "Tên hàng Thành tin",
+    "Sa chua ung Probi (lc 5) 20.000",
+    "Bánh mì sandwich 15.000",
+    "Nuc cam ép Twister 1L 18.000",
+    "TÔNG CÔNG:",
+    "Tin khách đua",
+    "Tin thi"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_hough(-2.03)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 107.78,
+    "ocr_ms": 17170.51,
+    "kie_ms": 5.28
+  }
+}

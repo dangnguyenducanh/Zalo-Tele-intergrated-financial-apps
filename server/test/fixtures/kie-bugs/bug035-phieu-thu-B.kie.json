@@ -1,0 +1,157 @@
+{
+  "fields": {
+    "merchant": "Đon vļ: CÔNG TY CP DICH VU AN KHANG (Ban hành theo Thông tu só 200/2014/TT-BTC Mãu só 01 - TT",
+    "date": "22/12/2014",
+    "total": "1111",
+    "address": "B phn: Ké toán Ngày 22/12/2014 cua B Tài chính) Đa chi: 41 Phan Đình Phùng, Ba Đình, Hà Ni PHIU THU Quyên só: 03"
+  },
+  "line_items": [
+    {
+      "name": "Đon vļ: CÔNG TY CP DICH VU AN KHANG",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2014,
+      "confidence": 0.9375450015068054,
+      "line_index": 0,
+      "bbox": [
+        95,
+        428.3333435058594,
+        1080,
+        493.3333435058594
+      ],
+      "raw_text": "Đon vļ: CÔNG TY CP DICH VU AN KHANG (Ban hành theo Thông tu só 200/2014/TT-BTC Mãu só 01 - TT"
+    },
+    {
+      "name": "PHIU THU",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 1111,
+      "confidence": 0.9952328205108643,
+      "line_index": 4,
+      "bbox": [
+        458.3333435058594,
+        563.3333129882812,
+        1001.6666870117188,
+        638.3333129882812
+      ],
+      "raw_text": "PHIU THU Quyên só: 03 No: 1111"
+    },
+    {
+      "name": "Ngày 25 tháng 09 năm 2023",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2023,
+      "confidence": 0.9832867383956909,
+      "line_index": 5,
+      "bbox": [
+        426.6666564941406,
+        623.3333129882812,
+        951.6666870117188,
+        670
+      ],
+      "raw_text": "Ngày 25 tháng 09 năm 2023 Có: 131"
+    },
+    {
+      "name": "Ső: PT-09/2023",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2023,
+      "confidence": 0.9400309920310974,
+      "line_index": 6,
+      "bbox": [
+        506.6666564941406,
+        661.6666870117188,
+        681.6666870117188,
+        696.6666870117188
+      ],
+      "raw_text": "Ső: PT-09/2023"
+    },
+    {
+      "name": "Lý do np: Hoàn tam úmg công tác phí tháng 09/2023",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2023,
+      "confidence": 0.9845301508903503,
+      "line_index": 9,
+      "bbox": [
+        96.66666412353516,
+        783.3333129882812,
+        705,
+        835
+      ],
+      "raw_text": "Lý do np: Hoàn tam úmg công tác phí tháng 09/2023"
+    },
+    {
+      "name": "Ső tin: 2.500.000 d (Vit băng ch): Hai triu năm trăm nghìn đóng chån",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2500000,
+      "confidence": 0.9531288743019104,
+      "line_index": 10,
+      "bbox": [
+        98.33333587646484,
+        810,
+        971.6666870117188,
+        868.3333129882812
+      ],
+      "raw_text": "Ső tin: 2.500.000 d (Vit băng ch): Hai triu năm trăm nghìn đóng chån."
+    },
+    {
+      "name": "Kèm theo: 02 Chúng tù góc",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 2023,
+      "confidence": 0.9565934538841248,
+      "line_index": 12,
+      "bbox": [
+        96.66666412353516,
+        861.6666870117188,
+        1105,
+        933.3333129882812
+      ],
+      "raw_text": "Kèm theo: 02 Chúng tù góc. Ngày 25 tháng 09 năm 2023"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 2511217,
+    "extracted_total": 1111,
+    "difference": 2510106,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      0
+    ]
+  },
+  "full_text": "Đon vļ: CÔNG TY CP DICH VU AN KHANG (Ban hành theo Thông tu só 200/2014/TT-BTC Mãu só 01 - TT\nB phn: Ké toán Ngày 22/12/2014 cua B Tài chính)\nĐa chi: 41 Phan Đình Phùng, Ba Đình, Hà Ni\nPHIU THU Quyên só: 03\nNo: 1111\nNgày 25 tháng 09 năm 2023 Có: 131\nSő: PT-09/2023\nHo và tên nguòi np tin: Phm Quc Huy\nĐa chi: Phòng kinh doanh - chi nhánh Cáu Giáy\nLý do np: Hoàn tam úmg công tác phí tháng 09/2023\nSő tin: 2.500.000 d (Vit băng ch): Hai triu năm trăm nghìn đóng chån.\nKèm theo: 02 Chúng tù góc.\nNgày 25 tháng 09 năm 2023\nGiám dóc Ké toán truóng Nguòi nôp tién Nguòt lp phiéu Thú quű\n(Ký, ho tên, đóng dáu) (Ký, ho tên) (Ký, ho tên) (Ký, ho tên) (Ký, ho tên)\nVǔ Đúc Tháng Mai Lan Anh Pham Quóc Huy Đinh Thi Hoa Bùi Văn Long\nĐã nhn đù ső tin (vit băng ch): Hai triu năm trăm nghìn đóng chăn.",
+  "lines": [
+    "Đon vļ: CÔNG TY CP DICH VU AN KHANG (Ban hành theo Thông tu só 200/2014/TT-BTC Mãu só 01 - TT",
+    "B phn: Ké toán Ngày 22/12/2014 cua B Tài chính)",
+    "Đa chi: 41 Phan Đình Phùng, Ba Đình, Hà Ni",
+    "PHIU THU Quyên só: 03",
+    "No: 1111",
+    "Ngày 25 tháng 09 năm 2023 Có: 131",
+    "Ső: PT-09/2023",
+    "Ho và tên nguòi np tin: Phm Quc Huy",
+    "Đa chi: Phòng kinh doanh - chi nhánh Cáu Giáy",
+    "Lý do np: Hoàn tam úmg công tác phí tháng 09/2023",
+    "Ső tin: 2.500.000 d (Vit băng ch): Hai triu năm trăm nghìn đóng chån.",
+    "Kèm theo: 02 Chúng tù góc.",
+    "Ngày 25 tháng 09 năm 2023",
+    "Giám dóc Ké toán truóng Nguòi nôp tién Nguòt lp phiéu Thú quű",
+    "(Ký, ho tên, đóng dáu) (Ký, ho tên) (Ký, ho tên) (Ký, ho tên) (Ký, ho tên)",
+    "Vǔ Đúc Tháng Mai Lan Anh Pham Quóc Huy Đinh Thi Hoa Bùi Văn Long",
+    "Đã nhn đù ső tin (vit băng ch): Hai triu năm trăm nghìn đóng chăn."
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 88.34,
+    "ocr_ms": 19836.29,
+    "kie_ms": 11.63
+  }
+}

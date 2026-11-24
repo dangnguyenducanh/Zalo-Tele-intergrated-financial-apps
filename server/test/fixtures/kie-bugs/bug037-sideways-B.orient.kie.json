@@ -1,0 +1,84 @@
+{
+  "fields": {
+    "merchant": "WinMart+",
+    "date": "22/11/2026",
+    "total": "22700",
+    "address": "PHIÊU TÍNH TIÊN"
+  },
+  "line_items": [
+    {
+      "name": "Cá basa phi lê 500g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 29900,
+      "confidence": 0.9761192798614502,
+      "line_index": 7,
+      "bbox": [
+        298.3333435058594,
+        751.6666870117188,
+        901.6666870117188,
+        805.0
+      ],
+      "raw_text": "Cá basa phi lê 500g 0,5 29.900"
+    },
+    {
+      "name": "Bánh quy bo 300g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 27800,
+      "confidence": 0.9831883907318115,
+      "line_index": 10,
+      "bbox": [
+        295.0,
+        816.6666870117188,
+        901.6666870117188,
+        868.3333129882812
+      ],
+      "raw_text": "Bánh quy bo 300g 1 27.800"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 57700,
+    "extracted_total": 22700,
+    "difference": 35000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      7
+    ]
+  },
+  "full_text": "WinMart+\nWM+ HNI 12 Trung Kính, Yên Hòa, Câù Giâý\nPHIÊU TÍNH TIÊN\nHD: 00731-2611\nThài gian: 22/11/2026 08:31 Quây 03\nTên hàng\nTáo Envy NZ (kg) SL T.Tiên\nCá basa phi lê 500g 0,5 29.900\n1 35.500\nBōt giǎt 400g\nBánh quy bo 300g 1 27.800\n1 21.900\nTÔNG TIÊN HÀNG:\nDIÊM TICH LÜY: 115.100\nTIÊN CÂN THANH TOÁN: -22.700\nThě ngân hàng 92.400\n92.400\nGiű hóa don dê'đôi trà trong 7 ngày",
+  "lines": [
+    "WinMart+",
+    "WM+ HNI 12 Trung Kính, Yên Hòa, Câù Giâý",
+    "PHIÊU TÍNH TIÊN",
+    "HD: 00731-2611",
+    "Thài gian: 22/11/2026 08:31 Quây 03",
+    "Tên hàng",
+    "Táo Envy NZ (kg) SL T.Tiên",
+    "Cá basa phi lê 500g 0,5 29.900",
+    "1 35.500",
+    "Bōt giǎt 400g",
+    "Bánh quy bo 300g 1 27.800",
+    "1 21.900",
+    "TÔNG TIÊN HÀNG:",
+    "DIÊM TICH LÜY: 115.100",
+    "TIÊN CÂN THANH TOÁN: -22.700",
+    "Thě ngân hàng 92.400",
+    "92.400",
+    "Giű hóa don dê'đôi trà trong 7 ngày"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 35.95,
+    "ocr_ms": 4591.83,
+    "kie_ms": 6.73
+  },
+  "wall_ms": 4651
+}

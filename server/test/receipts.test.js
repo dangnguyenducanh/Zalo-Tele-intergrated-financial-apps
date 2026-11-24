@@ -11,6 +11,9 @@ import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
 import { User } from '../src/models/User.js';
+import { DEFAULT_CATEGORIES } from '../src/seed/templates.js';
+import { wordsToNumber } from '../src/services/receiptTotal.js';
+import { analyzeReceipt, receiptToDraft } from '../src/services/receipts.js';
 import { vnParts } from '../src/utils/vnTime.js';
 import recorded from './fixtures/kie-analyze.json' with { type: 'json' };
 import telegramFixtures from './fixtures/telegram-updates.json' with { type: 'json' };
@@ -34,6 +37,9 @@ vi.mock('@vercel/functions', async (importOriginal) => ({
 
 // The receipt photo KIE read for the recorded answer in fixtures/kie-analyze.json.
 const PHOTO = await readFile(new URL('./fixtures/receipts/mcocr_public_145014khrvg.jpg', import.meta.url));
+// A photo with nothing usable on it: no total from KIE, and no total or item line in the text it read
+// (KIE's fields.total is only one candidate: a total printed in the text is still found, TC-F10-07…10).
+const NOTHING_READ = { ...recorded, fields: { ...recorded.fields, total: '' }, line_items: [], full_text: '', lines: [] };
 const ZALO_PHOTO_URL = 'https://photo.zalo.example/receipt-42.jpg';
 const TELEGRAM_FILE_PATH = 'photos/file_42.jpg';
 
@@ -253,7 +259,7 @@ test('TC-F8-09 KIE unreachable, or no total on the photo: the chat is asked to t
   await linkedZaloUser();
   outbound.use(http.post(KIE, () => HttpResponse.error())); // network error
   await zaloPhoto();
-  outbound.use(http.post(KIE, () => HttpResponse.json({ ...recorded, fields: { ...recorded.fields, total: '' } })));
+  outbound.use(http.post(KIE, () => HttpResponse.json(NOTHING_READ)));
   await zaloPhoto();
 
   expect(zaloSent).toEqual([viText.readingReceipt, viText.receiptUnavailable, viText.readingReceipt, viText.receiptUnreadable]);
@@ -340,7 +346,7 @@ test('TC-F10-04 POST /api/receipts turns a photo into a receipt draft; KIE failu
   const failures = [
     [() => HttpResponse.error(), 502, 'KIE_UNAVAILABLE'], // tunnel down
     [() => HttpResponse.json({ detail: 'Missing or invalid X-KIE-Key header.' }, { status: 401 }), 502, 'KIE_UNAVAILABLE'],
-    [() => HttpResponse.json({ ...recorded, fields: { ...recorded.fields, total: '' } }), 422, 'RECEIPT_UNREADABLE'],
+    [() => HttpResponse.json(NOTHING_READ), 422, 'RECEIPT_UNREADABLE'],
     [() => HttpResponse.json({ detail: 'The uploaded file is not a valid image.' }, { status: 400 }), 422, 'RECEIPT_UNREADABLE'],
   ];
   for (const [answer, status, code] of failures) {
@@ -356,4 +362,94 @@ test('TC-F10-04 POST /api/receipts turns a photo into a receipt draft; KIE failu
   expect(await Transaction.countDocuments()).toBe(1);
   expect(errorLog).toHaveBeenCalledTimes(3); // the two 502s and the 504
   errorLog.mockClear();
+});
+
+// --- The tester's receipts (BUG-034…037) ---------------------------------------------------------------------
+// KIE's answers for synthetic receipts made after the tester's bug sheet, recorded from the KIE service on 2026-11-25
+// (fixtures/kie-bugs). *.orient.kie.json: KIE with its page-orientation classifier switched on.
+const CATEGORIES = DEFAULT_CATEGORIES.filter((c) => c.type === 'expense').map((c) => ({ ...c, _id: c.names.en }));
+const kieAnswer = async (name) => JSON.parse(await readFile(new URL(`./fixtures/kie-bugs/${name}.kie.json`, import.meta.url), 'utf8'));
+
+// KIE answers `answer` → what analyzeReceipt keeps of it → the draft's fields (receiptToDraft).
+async function draftFrom(answer) {
+  outbound.use(http.post(KIE, () => HttpResponse.json(answer)));
+  return receiptToDraft(await analyzeReceipt(PHOTO, 'image/jpeg'), { categories: CATEGORIES });
+}
+const draftFor = async (name) => draftFrom(await kieAnswer(name));
+
+test('TC-F10-07 a VAT invoice gives the total payable with VAT, not the goods subtotal; a tech invoice is not food or film (BUG-034)', async () => {
+  // A: value printed above its label, B: label and value on one line, C: bilingual, where KIE took "Total amount" 6.800.000.
+  for (const name of ['bug034-vat-invoice-A', 'bug034-vat-invoice-B', 'bug034-vat-invoice-C']) {
+    const draft = await draftFor(name);
+    expect(draft.amount, name).toBe(7480000); // "Tổng cộng tiền thanh toán" = 6.800.000 + 680.000 VAT
+    expect(draft.receipt, name).toMatchObject({ total: 7480000, reconciled: false }); // the items add up to 6.800.000
+    expect(draft.receipt.estimated, name).toBeUndefined();
+    expect(draft.categoryId, name).toBe('Other'); // "Bàn phím" (keyboard) is not "phim" (film)
+  }
+});
+
+test('TC-F10-08 a Phiếu thu gives "Số tiền" 2.500.000, never the year of PT-09/2023 or the account code "Nợ: 1111" (BUG-035)', async () => {
+  for (const name of ['bug035-phieu-thu-A', 'bug035-phieu-thu-B']) {
+    const draft = await draftFor(name);
+    expect([draft.type, draft.amount, draft.receipt.total], name).toEqual(['expense', 2500000, 2500000]);
+  }
+});
+
+test('TC-F10-08 an amount in words ("Bằng chữ"), accents dropped and as OCR reads it, becomes the number', () => {
+  const cases = [
+    ['hai trieu nam tram nghin dong chan', 2500000],
+    ['bay triu bon tram tam muoi nghin dong', 7480000], // OCR dropped the "ệ" of "triệu"
+    ['amount in words chin muoi hai nghin bon tram dong', 92400],
+    ['mot tram muoi lam nghin', 115000],
+    ['hai muoi mot nghin', 21000],
+    ['mot tram linh nam nghin', 105000],
+    ['mot ty hai tram trieu', 1200000000],
+    ['dong chan', 0],
+  ];
+  for (const [words, number] of cases) expect(wordsToNumber(words), words).toBe(number);
+});
+
+test('TC-F10-09 a torn receipt with no total: the sum of its readable item lines, marked as an estimate; nothing readable → 422 (BUG-036)', async () => {
+  // A: torn below the items (KIE took the first item), B: KIE took "Số HĐ: 004829" as 4.829.
+  for (const name of ['bug036-torn-A', 'bug036-torn-B']) {
+    const draft = await draftFor(name);
+    expect(draft.amount, name).toBe(53000); // 20.000 + 15.000 + 18.000
+    expect(draft.receipt, name).toMatchObject({ total: 53000, estimated: true, reconciled: true });
+    expect(draft.receipt.items.map((item) => item.amount), name).toEqual([20000, 15000, 18000]);
+  }
+  expect((await draftFor('bug036-torn-A')).categoryId).toBe('Food & drinks'); // the item lines it summed: "Bánh mì sandwich"
+
+  // Torn above the items: KIE's 20.000 is not printed anywhere that is left, and there is no item to add up.
+  const header = await kieAnswer('bug036-torn-A');
+  header.lines = header.lines.slice(0, 6);
+  header.full_text = header.lines.join('\n');
+  const error = await draftFrom(header).catch((err) => err);
+  expect(error).toMatchObject({ status: 422, code: 'RECEIPT_UNREADABLE' });
+});
+
+test('TC-F10-10 a sideways WinMart+ photo gives "Tiền cần thanh toán" 92.400, with or without KIE reading it upright (BUG-037)', async () => {
+  // KIE with the orientation flag on reads the sideways photos upright, but each value lands one row off its label
+  // (A: "Tiền cần thanh toán 100.000", B: "TIỀN CẦN THANH TOÁN: -22.700"). Without the flag (KIE as it runs today) the
+  // amounts come out as one column with no labels next to them (A: KIE took 115.100, B: no total). The upright photos
+  // are the controls.
+  const answers = ['sideways-A', 'sideways-B', 'sideways-A.orient', 'sideways-B.orient', 'unrotated-A.orient', 'unrotated-B.orient'];
+  for (const name of answers.map((answer) => `bug037-${answer}`)) {
+    const draft = await draftFor(name);
+    expect(draft.amount, name).toBe(92400); // "Tổng tiền hàng" 115.100 − 22.700 points, not the subtotal KIE picks
+    expect(draft.receipt.estimated, name).toBeUndefined();
+    expect(draft.categoryId, name).toBe('Shopping'); // "WinMart+"
+  }
+});
+
+test('TC-F8-24 a receipt whose total is torn off: the bot says the amount is an estimate from the item lines (BUG-036)', async () => {
+  await linkedZaloUser();
+  outbound.use(http.post(KIE, async () => HttpResponse.json(await kieAnswer('bug036-torn-B'))));
+  await zaloPhoto();
+
+  const [draft] = await Transaction.find().lean();
+  expect(draft).toMatchObject({ amount: 53000, status: 'draft', source: 'zalo', receipt: { total: 53000, estimated: true } });
+  expect(zaloSent).toHaveLength(2);
+  expect(zaloSent[1]).toContain('53.000');
+  expect(zaloSent[1]).toContain(viText.receiptEstimated({ count: 3 }));
+  expect(zaloSent[1]).not.toContain('dòng hàng ·'); // the "items add up / do not add up" line is replaced
 });

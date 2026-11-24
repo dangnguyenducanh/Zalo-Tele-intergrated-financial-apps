@@ -25,6 +25,7 @@ const receiptSchema = new mongoose.Schema(
     total: Number,
     items: [{ _id: false, name: String, quantity: Number, unitPrice: Number, amount: Number }],
     reconciled: Boolean, // the line items add up to the total
+    estimated: Boolean, // true: no total left on the receipt, the amount is the sum of the item lines
     kieMs: Number, // how long KIE took
     fileRef: String, // the chat platform's file reference; the image itself is not stored
   },

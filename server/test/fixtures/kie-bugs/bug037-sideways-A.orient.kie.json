@@ -1,0 +1,149 @@
+{
+  "fields": {
+    "merchant": "WinMart+",
+    "date": "24/11/2026",
+    "total": "100000",
+    "address": "WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Cãù Kho, Q.1"
+  },
+  "line_items": [
+    {
+      "name": "Sô'CT: 2611240045789 NV: 30451",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 30451,
+      "confidence": 0.94242924451828,
+      "line_index": 4,
+      "bbox": [
+        307.09686279296875,
+        561.1426391601562,
+        924.7218627929688,
+        610.9075927734375
+      ],
+      "raw_text": "Sô'CT: 2611240045789 NV: 30451"
+    },
+    {
+      "name": "Rau muôńg VietGAP 500g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 18900,
+      "confidence": 0.9757968783378601,
+      "line_index": 6,
+      "bbox": [
+        310.52813720703125,
+        655.5244750976562,
+        933.2999877929688,
+        705.2894287109375
+      ],
+      "raw_text": "Rau muôńg VietGAP 500g 18.900"
+    },
+    {
+      "name": "Thit heo xay 300g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 45900,
+      "confidence": 0.9965338110923767,
+      "line_index": 8,
+      "bbox": [
+        313.9593811035156,
+        725.8817749023438,
+        938.4468994140625,
+        773.9307250976562
+      ],
+      "raw_text": "Thit heo xay 300g 45.900"
+    },
+    {
+      "name": "Süa tugi tiêt trùng 1L",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 32900,
+      "confidence": 0.950497031211853,
+      "line_index": 10,
+      "bbox": [
+        317.390625,
+        792.8070678710938,
+        943.59375,
+        842.572021484375
+      ],
+      "raw_text": "Süa tugi tiêt trùng 1L 32.900"
+    },
+    {
+      "name": "Nuc tuong 500ml",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 17400,
+      "confidence": 0.997389554977417,
+      "line_index": 12,
+      "bbox": [
+        319.10626220703125,
+        864.8804321289062,
+        948.7406005859375,
+        911.2133178710938
+      ],
+      "raw_text": "Nuc tuong 500ml 17.400"
+    },
+    {
+      "name": "1 × 17.400",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 115100,
+      "confidence": 0.9848450422286987,
+      "line_index": 14,
+      "bbox": [
+        348.2718811035156,
+        902.6331787109375,
+        953.8875122070312,
+        976.4225463867188
+      ],
+      "raw_text": "1 × 17.400 115.100"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 260651,
+    "extracted_total": 100000,
+    "difference": 160651,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      4
+    ]
+  },
+  "full_text": "WinMart+\nWM+ HCM 45 Nguyêñ Vǎn Cùr, P. Cãù Kho, Q.1\nHotline: 024 7106 6866\nHÓA DON BÁN HÀNG\nSô'CT: 2611240045789 NV: 30451\nNgày: 24/11/2026 19:05\nRau muôńg VietGAP 500g 18.900\n1 × 18.900\nThit heo xay 300g 45.900\n1 × 45.900\nSüa tugi tiêt trùng 1L 32.900\n1 × 32.900\nNuc tuong 500ml 17.400\n1 × 17.400\n115.100\nTông tiên hàng -22.700\nĐiêm tích lüy 92.400\nTiên cân thanh toán 100.000\nTiên khách đua 7.600\nTiên thôi lai\nKhách hàng: 09xx xxx 512\nĐiêm còn lai: θ\nCăm on Quý khách. Hęn gǎp li!",
+  "lines": [
+    "WinMart+",
+    "WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Cãù Kho, Q.1",
+    "Hotline: 024 7106 6866",
+    "HÓA DON BÁN HÀNG",
+    "Sô'CT: 2611240045789 NV: 30451",
+    "Ngày: 24/11/2026 19:05",
+    "Rau muôńg VietGAP 500g 18.900",
+    "1 × 18.900",
+    "Thit heo xay 300g 45.900",
+    "1 × 45.900",
+    "Süa tugi tiêt trùng 1L 32.900",
+    "1 × 32.900",
+    "Nuc tuong 500ml 17.400",
+    "1 × 17.400",
+    "115.100",
+    "Tông tiên hàng -22.700",
+    "Điêm tích lüy 92.400",
+    "Tiên cân thanh toán 100.000",
+    "Tiên khách đua 7.600",
+    "Tiên thôi lai",
+    "Khách hàng: 09xx xxx 512",
+    "Điêm còn lai: θ",
+    "Căm on Quý khách. Hęn gǎp li!"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_minAreaRect(2.32)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 107.7,
+    "ocr_ms": 4769.71,
+    "kie_ms": 9.16
+  },
+  "wall_ms": 4915
+}

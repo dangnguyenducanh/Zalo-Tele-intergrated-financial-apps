@@ -1,0 +1,54 @@
+{
+  "fields": {
+    "merchant": "WinMart+ WM+ HNI 12 Trung Kính, Yên Hòa, Câù Giàý PHIÊU TÍNH TIÊN Thài gian: 22/11/2026 08:31 Cá basa phi lê 500g TIÊN CÂN THANH TOÁN: Giū hóa don dê'dôi trà trong 7 ngày",
+    "date": "22/11/2026",
+    "total": "",
+    "address": "Quây 03 T.Tiên 29.900 35.500 27.800 21.900 115.100 -22.700 92.400 92.400 HD: 00731-2611 Tên hàng Táo Envy NZ (kg) Bōt giǎt 400g Bánh quy bo 300g TÔNG TIÊN HÀNG: DIÊM TICH LÜY: Thè ngân hàng"
+  },
+  "line_items": [
+    {
+      "name": "Quây 03 T.Tiên",
+      "quantity": null,
+      "unit_price": 92400,
+      "amount": 92400,
+      "confidence": 0.9043687582015991,
+      "line_index": 0,
+      "bbox": [
+        631.6666870117188,
+        290,
+        1055,
+        403.3333435058594
+      ],
+      "raw_text": "Quây 03 T.Tiên 29.900 35.500 27.800 21.900 115.100 -22.700 92.400 92.400"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 92400,
+    "extracted_total": null,
+    "difference": null,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      0
+    ]
+  },
+  "full_text": "Quây 03 T.Tiên 29.900 35.500 27.800 21.900 115.100 -22.700 92.400 92.400\nTS 0,5 1\nWinMart+ WM+ HNI 12 Trung Kính, Yên Hòa, Câù Giàý PHIÊU TÍNH TIÊN Thài gian: 22/11/2026 08:31 Cá basa phi lê 500g TIÊN CÂN THANH TOÁN: Giū hóa don dê'dôi trà trong 7 ngày\nHD: 00731-2611 Tên hàng Táo Envy NZ (kg) Bōt giǎt 400g Bánh quy bo 300g TÔNG TIÊN HÀNG: DIÊM TICH LÜY: Thè ngân hàng",
+  "lines": [
+    "Quây 03 T.Tiên 29.900 35.500 27.800 21.900 115.100 -22.700 92.400 92.400",
+    "TS 0,5 1",
+    "WinMart+ WM+ HNI 12 Trung Kính, Yên Hòa, Câù Giàý PHIÊU TÍNH TIÊN Thài gian: 22/11/2026 08:31 Cá basa phi lê 500g TIÊN CÂN THANH TOÁN: Giū hóa don dê'dôi trà trong 7 ngày",
+    "HD: 00731-2611 Tên hàng Táo Envy NZ (kg) Bōt giǎt 400g Bánh quy bo 300g TÔNG TIÊN HÀNG: DIÊM TICH LÜY: Thè ngân hàng"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 137.65,
+    "ocr_ms": 19255.3,
+    "kie_ms": 7.04
+  }
+}

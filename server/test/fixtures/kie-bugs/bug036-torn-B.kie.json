@@ -1,0 +1,92 @@
+{
+  "fields": {
+    "merchant": "CÜA HÀNG TIEN LOI",
+    "date": "14/05/2024",
+    "total": "004829",
+    "address": "Chi nhánh 2 - 58 Vō Vǎn Tàn, Q.3"
+  },
+  "line_items": [
+    {
+      "name": "Trúng gà vi 10",
+      "quantity": null,
+      "unit_price": 20000,
+      "amount": 20000,
+      "confidence": 0.9994183778762817,
+      "line_index": 8,
+      "bbox": [
+        271.3628845214844,
+        883.8375244140625,
+        976.2237548828125,
+        914.5499877929688
+      ],
+      "raw_text": "Trúng gà vi 10 1 20.000 20.000"
+    },
+    {
+      "name": "Mi Omachi bò",
+      "quantity": null,
+      "unit_price": 5000,
+      "amount": 15000,
+      "confidence": 0.9913017153739929,
+      "line_index": 9,
+      "bbox": [
+        271.3628845214844,
+        914.5499877929688,
+        976.2237548828125,
+        986.2125244140625
+      ],
+      "raw_text": "Mi Omachi bò 32 5.000 15.000"
+    },
+    {
+      "name": "Pepsi lon 320ml",
+      "quantity": null,
+      "unit_price": 9000,
+      "amount": 18000,
+      "confidence": 0.9989635348320007,
+      "line_index": 10,
+      "bbox": [
+        269.6562194824219,
+        957.2062377929688,
+        979.6370849609375,
+        986.2125244140625
+      ],
+      "raw_text": "Pepsi lon 320ml 9.000 18.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 53000,
+    "extracted_total": 4829,
+    "difference": 48171,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      9
+    ]
+  },
+  "full_text": "CÜA HÀNG TIEN LOI\nMINH KHANG\nChi nhánh 2 - 58 Vō Vǎn Tàn, Q.3\nPHIÉU THANH TOÁN\nSô HD: 004829\nNgày bán: 14/05/2024 07:15\nQuy: 02 - NV: Tuân\nMät hàng SL D.Giá T.Tiên\nTrúng gà vi 10 1 20.000 20.000\nMi Omachi bò 32 5.000 15.000\nPepsi lon 320ml 9.000 18.000\nTong SL: 6",
+  "lines": [
+    "CÜA HÀNG TIEN LOI",
+    "MINH KHANG",
+    "Chi nhánh 2 - 58 Vō Vǎn Tàn, Q.3",
+    "PHIÉU THANH TOÁN",
+    "Sô HD: 004829",
+    "Ngày bán: 14/05/2024 07:15",
+    "Quy: 02 - NV: Tuân",
+    "Mät hàng SL D.Giá T.Tiên",
+    "Trúng gà vi 10 1 20.000 20.000",
+    "Mi Omachi bò 32 5.000 15.000",
+    "Pepsi lon 320ml 9.000 18.000",
+    "Tong SL: 6"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_hough(1.88)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 148.3,
+    "ocr_ms": 11920.17,
+    "kie_ms": 9.65
+  }
+}

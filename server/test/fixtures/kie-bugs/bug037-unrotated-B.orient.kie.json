@@ -1,0 +1,109 @@
+{
+  "fields": {
+    "merchant": "WinMart+",
+    "date": "22/11/2026",
+    "total": "115100",
+    "address": "PHIÊU TÍNH TIÊN"
+  },
+  "line_items": [
+    {
+      "name": "Táo Envy NZ (kg)",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 29900,
+      "confidence": 0.9736216068267822,
+      "line_index": 6,
+      "bbox": [
+        321.44415283203125,
+        764.0906372070312,
+        926.7166137695312,
+        798.2781372070312
+      ],
+      "raw_text": "Táo Envy NZ (kg) 0,5 29.900"
+    },
+    {
+      "name": "Cá basa phi lê 500g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 35500,
+      "confidence": 0.9991704225540161,
+      "line_index": 7,
+      "bbox": [
+        324.86376953125,
+        798.2781372070312,
+        928.4264526367188,
+        827.3375244140625
+      ],
+      "raw_text": "Cá basa phi lê 500g 1 35.500"
+    },
+    {
+      "name": "Bōt giǎt 400g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 27800,
+      "confidence": 0.9098927974700928,
+      "line_index": 8,
+      "bbox": [
+        323.1539611816406,
+        830.7562255859375,
+        928.4264526367188,
+        859.8156127929688
+      ],
+      "raw_text": "Bōt giǎt 400g 1 27.800"
+    },
+    {
+      "name": "Bánh quy bo 300g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 21900,
+      "confidence": 0.9814817905426025,
+      "line_index": 9,
+      "bbox": [
+        321.44415283203125,
+        859.8156127929688,
+        928.4264526367188,
+        894.0031127929688
+      ],
+      "raw_text": "Bánh quy bo 300g 1 21.900"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 115100,
+    "extracted_total": 115100,
+    "difference": 0,
+    "tolerance": 1000,
+    "is_math_consistent": true,
+    "suspected_line_indices": []
+  },
+  "full_text": "WinMart+\nWM+ HNI 12 Trung Kính, Yên Hòa, Câù Giàý\nPHIÊU TÍNH TIÊN\nHD: 00731-2611 Quây 03\nThài gian: 22/11/2026 08:31\nTên hàng SL T.Tiên\nTáo Envy NZ (kg) 0,5 29.900\nCá basa phi lê 500g 1 35.500\nBōt giǎt 400g 1 27.800\nBánh quy bo 300g 1 21.900\nTÔNG TIÊN HÀNG: 115.100\nDIÊM TÍCH LÜY: -22.700\nTIÊN CÂN THANH TOÁN: 92.400\nThè ngân hàng 92.400\nGiǔ hóa don đê'dôi trà trong 7 ngày",
+  "lines": [
+    "WinMart+",
+    "WM+ HNI 12 Trung Kính, Yên Hòa, Câù Giàý",
+    "PHIÊU TÍNH TIÊN",
+    "HD: 00731-2611 Quây 03",
+    "Thài gian: 22/11/2026 08:31",
+    "Tên hàng SL T.Tiên",
+    "Táo Envy NZ (kg) 0,5 29.900",
+    "Cá basa phi lê 500g 1 35.500",
+    "Bōt giǎt 400g 1 27.800",
+    "Bánh quy bo 300g 1 21.900",
+    "TÔNG TIÊN HÀNG: 115.100",
+    "DIÊM TÍCH LÜY: -22.700",
+    "TIÊN CÂN THANH TOÁN: 92.400",
+    "Thè ngân hàng 92.400",
+    "Giǔ hóa don đê'dôi trà trong 7 ngày"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_hough(2.02)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 35.51,
+    "ocr_ms": 4716.06,
+    "kie_ms": 9.89
+  },
+  "wall_ms": 4786
+}

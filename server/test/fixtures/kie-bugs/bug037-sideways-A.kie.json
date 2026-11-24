@@ -1,0 +1,68 @@
+{
+  "fields": {
+    "merchant": "Căm on Quý khách. Hęn gǎp li! HÓA DO'N BÁN HÀNG Hotline: 024 7106 6866 WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1 WinMart+",
+    "date": "24/11/2026",
+    "total": "115100",
+    "address": ""
+  },
+  "line_items": [
+    {
+      "name": "Căm on Quý khách. Hęn gǎp li! HÓA DO'N BÁN HÀNG",
+      "quantity": null,
+      "unit_price": 7106,
+      "amount": 6866,
+      "confidence": 0.961891233921051,
+      "line_index": 1,
+      "bbox": [
+        363.7124938964844,
+        370.6630554199219,
+        1243.828125,
+        844.2880249023438
+      ],
+      "raw_text": "Căm on Quý khách. Hęn gǎp li! HÓA DO'N BÁN HÀNG Hotline: 024 7106 6866 WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1 WinMart+"
+    },
+    {
+      "name": "NV: 30451",
+      "quantity": null,
+      "unit_price": 18900,
+      "amount": 30451,
+      "confidence": 0.9490232467651367,
+      "line_index": 2,
+      "bbox": [
+        518.1187744140625,
+        791.0910034179688,
+        1070.550048828125,
+        967.8424072265625
+      ],
+      "raw_text": "7.600 100.000 92.400 -22.700 115.100 17.400 32.900 45.900 18.900 NV: 30451"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 37317,
+    "extracted_total": 115100,
+    "difference": 77783,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      2
+    ]
+  },
+  "full_text": "Điêm còn li: 0 Khách hàng: 09xx xxx 512 Tiên thôi li Tiên khách đua Tiên cân thanh toán Điêm tich lüy Tông tiên hàng 1 × 17.400 Nuóc tuong 500ml 1 × 32.900 Sǔa tugi tit trùng 1L 1 × 45.900 Thit heo xay 300g 1 × 18.900 Rau muông VietGAP 500g Ngày: 24/11/2026 19:05 Sô'CT: 2611240045789\nCăm on Quý khách. Hęn gǎp li! HÓA DO'N BÁN HÀNG Hotline: 024 7106 6866 WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1 WinMart+\n7.600 100.000 92.400 -22.700 115.100 17.400 32.900 45.900 18.900 NV: 30451",
+  "lines": [
+    "Điêm còn li: 0 Khách hàng: 09xx xxx 512 Tiên thôi li Tiên khách đua Tiên cân thanh toán Điêm tich lüy Tông tiên hàng 1 × 17.400 Nuóc tuong 500ml 1 × 32.900 Sǔa tugi tit trùng 1L 1 × 45.900 Thit heo xay 300g 1 × 18.900 Rau muông VietGAP 500g Ngày: 24/11/2026 19:05 Sô'CT: 2611240045789",
+    "Căm on Quý khách. Hęn gǎp li! HÓA DO'N BÁN HÀNG Hotline: 024 7106 6866 WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1 WinMart+",
+    "7.600 100.000 92.400 -22.700 115.100 17.400 32.900 45.900 18.900 NV: 30451"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_minAreaRect(2.32)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 210.75,
+    "ocr_ms": 17604.77,
+    "kie_ms": 13.17
+  }
+}

@@ -196,8 +196,9 @@ async function correctDraft(adapter, link, language, chatId, draft, amount) {
 }
 
 // A receipt photo (docs/02 §2.6): "Reading receipt…", then KIE (about 20 s), then a draft with its buttons that
-// shows merchant · total · category and whether the line items add up. When KIE is down, too slow or finds no
-// total, the user is asked to type the amount instead: there is no AI fallback.
+// shows merchant · total · category and whether the line items add up (or, with the total torn off, that the amount
+// is their sum, an estimate). When KIE is down, too slow or nothing usable is printed, the user is asked to type the
+// amount instead: there is no AI fallback.
 async function readReceipt(adapter, link, language, message) {
   const m = messagesFor(language);
   const chatRef = { platform: adapter.platform, chatId: message.chatId, messageId: `${message.messageId}:1` };
@@ -218,8 +219,9 @@ async function readReceipt(adapter, link, language, message) {
   }
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: transaction._id });
   const lines = [m.draft(await describe(transaction, m))];
-  const { items, reconciled } = transaction.receipt;
-  if (items.length > 0) lines.push(m.receiptItems({ count: items.length, reconciled }));
+  const { items, reconciled, estimated } = transaction.receipt;
+  if (estimated) lines.push(m.receiptEstimated({ count: items.length }));
+  else if (items.length > 0) lines.push(m.receiptItems({ count: items.length, reconciled }));
   await adapter.sendDraft(message.chatId, { id: transaction.id, text: lines.join('\n') }, language);
 }
 
