@@ -175,3 +175,40 @@ test('TC-F2-11 a negative opening balance is marked at the field unless the type
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(sent).toEqual([{ method: 'POST', body: { name: 'Di net', type: 'credit', initialBalance: -999000, aliases: [] } }]);
 });
+
+test('TC-F2-11 a wallet saved below zero before the rule can still be renamed; a new negative value or type is still marked (BUG-038)', async () => {
+  wallets.push(
+    wallet({ id: 'w3', name: 'Di net', type: 'ewallet', initialBalance: -999000, balance: -999000 }),
+    wallet({ id: 'w4', name: 'Visa', type: 'credit', initialBalance: -500000, balance: -500000 }),
+  );
+  const user = userEvent.setup();
+  renderApp('/wallets');
+
+  // Rename only: the stored type and balance are sent back unchanged, which the server accepts.
+  await user.click(within(await screen.findByRole('article', { name: 'Di net' })).getByRole('button', { name: 'Sửa ví Di net' }));
+  let dialog = await screen.findByRole('dialog', { name: 'Sửa ví' });
+  await user.type(within(dialog).getByRole('textbox', { name: 'Tên ví' }), ' cũ');
+  await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(sent).toEqual([{ method: 'PATCH', body: { name: 'Di net cũ', type: 'ewallet', initialBalance: -999000, aliases: [] } }]);
+
+  // Another negative opening balance on the same e-wallet is a change, so the rule applies.
+  await user.click(within(await screen.findByRole('article', { name: 'Di net cũ' })).getByRole('button', { name: 'Sửa ví Di net cũ' }));
+  dialog = await screen.findByRole('dialog', { name: 'Sửa ví' });
+  let balance = within(dialog).getByRole('textbox', { name: 'Số dư ban đầu (₫)' });
+  await user.clear(balance);
+  await user.type(balance, '-500000');
+  await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+  expect(balance).toHaveAccessibleDescription('Chỉ thẻ tín dụng mới được có số dư âm');
+  await user.click(within(dialog).getByRole('button', { name: 'Huỷ' }));
+
+  // A credit card in debt switched to e-wallet keeps its negative balance, so it is marked too.
+  await user.click(within(screen.getByRole('article', { name: 'Visa' })).getByRole('button', { name: 'Sửa ví Visa' }));
+  dialog = await screen.findByRole('dialog', { name: 'Sửa ví' });
+  await user.click(within(dialog).getByRole('radio', { name: 'Ví điện tử' }));
+  await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+  balance = within(dialog).getByRole('textbox', { name: 'Số dư ban đầu (₫)' });
+  expect(balance).toHaveAccessibleDescription('Chỉ thẻ tín dụng mới được có số dư âm');
+  expect(balance).toHaveFocus();
+  expect(sent).toHaveLength(1); // only the rename went out
+});

@@ -36,11 +36,13 @@ function parseVnd(text: string): number | null {
 type BalanceError = 'initialBalance' | 'initialBalanceMax' | 'initialBalanceCreditOnly';
 
 // The message key of what is wrong with the opening balance: not a whole number, beyond ±MAX_MONEY, or below
-// zero on a wallet that is not a credit card (BUG-038, the server refuses it too).
-function balanceError(amount: number | null, type: WalletType): BalanceError | undefined {
+// zero on a wallet that is not a credit card (BUG-038, the server refuses it too). Like the server, a wallet
+// saved below zero before that rule passes while its type and opening balance stay as they are.
+function balanceError(amount: number | null, type: WalletType, wallet?: Wallet): BalanceError | undefined {
   if (amount === null) return 'initialBalance';
   if (Math.abs(amount) > MAX_MONEY) return 'initialBalanceMax';
-  if (amount < 0 && type !== 'credit') return 'initialBalanceCreditOnly';
+  const unchanged = wallet?.type === type && wallet.initialBalance === amount;
+  if (amount < 0 && type !== 'credit' && !unchanged) return 'initialBalanceCreditOnly';
   return undefined;
 }
 
@@ -66,7 +68,7 @@ export default function WalletDialog({ wallet, onClose }: Props) {
     event.preventDefault();
     const trimmed = name.trim();
     const amount = parseVnd(initialBalance);
-    const found = { name: trimmed.length < 1 || trimmed.length > 40, initialBalance: balanceError(amount, type) };
+    const found = { name: trimmed.length < 1 || trimmed.length > 40, initialBalance: balanceError(amount, type, wallet) };
     setErrors(found);
     if (found.name || found.initialBalance || amount === null) {
       // Focus the first wrong field so keyboard and screen reader users land on the problem.
