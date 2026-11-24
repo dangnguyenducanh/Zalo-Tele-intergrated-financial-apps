@@ -251,11 +251,11 @@ Specified in [02-features.md §2.5](02-features.md#25-text-parser-rules-rule-bas
 | Call | `POST ${KIE_URL}/analyze`, `multipart/form-data`, field **`image`** (JPEG/PNG, KIE limit 10 MB) |
 | Auth | Header `X-KIE-Key: ${KIE_API_KEY}`. **Small addition to the KIE app** (permitted): a FastAPI dependency that rejects requests without the key, because `/analyze` is otherwise open to anyone with the tunnel URL |
 | Timeout | 120 s (`AbortSignal.timeout`). KIE processes one image at a time (`inference_lock`), ~20 s each |
-| Use from response | `fields.merchant`, `fields.date`, `fields.total`, `fields.address`, `line_items[]`, `reconciliation`, `timings_ms` |
-| Ignore | `images.*_base64`, `boxes`, `lines`, `full_text` (large and not needed) |
-| Mapping | total → digits → `amount`; date `dd/mm/yyyy` → `occurredAt` (else now); merchant → `note`; items → `receipt.items`; category by keyword match on merchant + item names, else fallback |
+| Use from response | `fields.merchant`, `fields.date`, `fields.total`, `fields.address`, `line_items[]`, `reconciliation`, `timings_ms`, and the text `full_text` + `lines` (for the total; not stored) |
+| Ignore | `images.*_base64`, `boxes` (large and not needed) |
+| Mapping | `pickTotal` (`services/receiptTotal.js`, pure) → `amount`: amount in words, subtotal + VAT − discounts, grand-total label, the same sum without labels, KIE's total, else the sum of the item lines with `receipt.estimated: true` (docs/02 §2.6 step 3); date `dd/mm/yyyy` → `occurredAt` (else now); merchant → `note`; items → `receipt.items`; `receipt.reconciled` = the items add up to the amount within KIE's tolerance; category by whole-word keyword match on merchant + item names (accent look-alikes such as "phím" left out), else fallback |
 | Wallet | the user's `defaultWalletId` if set, else their oldest active (not archived) wallet. The stored default is used as is, without checking that it is still active |
-| Errors | `KIE_URL` unset → 503 `FEATURE_NOT_CONFIGURED`; network error → 502 `KIE_UNAVAILABLE`; KIE answers 400/413/415 (could not open the image) or no total → 422 `RECEIPT_UNREADABLE`; any other non-2xx (down, wrong key) → 502 `KIE_UNAVAILABLE`; timeout → 504 `KIE_TIMEOUT`. A total above 10^13 that is still a safe integer passes the mapping but fails the Transaction model's amount check → 500 `INTERNAL`; a larger total → 422 `RECEIPT_UNREADABLE`. The bot turns each into a friendly message ("no total" for 415/422, "reader not answering" otherwise) |
+| Errors | `KIE_URL` unset → 503 `FEATURE_NOT_CONFIGURED`; network error → 502 `KIE_UNAVAILABLE`; KIE answers 400/413/415 (could not open the image) or nothing usable printed (no total, no item line) → 422 `RECEIPT_UNREADABLE`; any other non-2xx (down, wrong key) → 502 `KIE_UNAVAILABLE`; timeout → 504 `KIE_TIMEOUT`. A total above 10^13 that is still a safe integer passes the mapping but fails the Transaction model's amount check → 500 `INTERNAL`; a larger total → 422 `RECEIPT_UNREADABLE`. The bot turns each into a friendly message ("no total" for 415/422, "reader not answering" otherwise) |
 
 ## 4.9 Vercel limits that shape the code
 

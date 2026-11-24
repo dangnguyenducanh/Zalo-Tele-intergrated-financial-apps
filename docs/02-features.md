@@ -119,9 +119,18 @@ Examples:
 
 1. A photo arrives (Telegram, Zalo or web upload). The bot replies "Đang đọc hoá đơn… / Reading receipt…".
 2. The API sends the image to the KIE service `POST /analyze` (JPEG/PNG, ≤ 10 MB; about 20 s, one image at a time).
-3. Mapping: `fields.total` → amount (digits only); `fields.merchant` → note; `fields.date` → date (`dd/mm/yyyy`, else now); `line_items` → `receipt.items`; the category is guessed by matching keywords on the merchant and item names, else Khác/Other.
-4. A draft is created and the bot shows merchant · total · category, plus the line count and whether the items add up to the total (`reconciliation`).
-5. If KIE is unreachable, times out (120 s) or finds no total, the bot says so and asks the user to type the amount. There is no AI fallback.
+3. Mapping: the amount is the **total payable**, picked by our server from the text KIE read (`full_text`/`lines`); KIE's own `fields.total` is only one candidate, because it also takes subtotals, invoice numbers, years and account codes (BUG-034…037). In order:
+   1. the amount in words ("Bằng chữ: Hai triệu năm trăm nghìn đồng"), when it matches a number printed on the receipt;
+   2. subtotal + VAT − discounts, when that sum is printed: the subtotal is the value next to "Tổng/Cộng tiền hàng" or "Tạm tính", VAT the value on a "GTGT"/"VAT" line, discounts the negative amounts;
+   3. the value of a grand-total label: "Tổng cộng (tiền thanh toán)", "Tổng tiền", "(Tiền cần) thanh toán", "Khách cần/phải trả", "Số tiền"; never "Tổng tiền hàng", "Chiết khấu", "Tích lũy", "Khách đưa", "Trả lại/Tiền thối";
+   4. the same sum as in 2 with no label (a sideways photo read as columns), if exactly one total fits;
+   5. KIE's total, if it is printed as money and is not just one item's price;
+   6. else, if item lines are readable (a torn receipt): their sum, **marked as an estimate** (`receipt.estimated`). The bot reply and the inbox card say so and ask the user to check it.
+
+   Money is only a number printed with thousands separators and no leading zero ("92.400"), so invoice/voucher numbers (`004829`, `PT-09/2023`), dates, years, phone and tax numbers are never amounts. Labels match even when OCR drops accented vowels ("Tng cng tin").
+   `fields.merchant` → note; `fields.date` → date (`dd/mm/yyyy`, else now); `line_items` → `receipt.items` (for an estimate: the item lines that were summed). A "Phiếu thu" is an expense draft too (other document types are a later feature). The category is guessed by matching keywords as whole words on the merchant and item names, else Khác/Other; receipt words that only look like a keyword once accents are dropped (phím, phố, bé, sạch) don't count.
+4. A draft is created and the bot shows merchant · total · category, plus the line count and whether the items add up to the total; for an estimate, that the amount is the sum of N item lines and should be checked.
+5. If KIE is unreachable, times out (120 s) or nothing usable is printed (no total, no item line), the bot says so and asks the user to type the amount. There is no AI fallback.
 
 ## 2.7 Languages and themes
 

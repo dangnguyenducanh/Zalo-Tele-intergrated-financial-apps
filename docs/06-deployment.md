@@ -137,6 +137,13 @@ On the dev server (or any machine with Docker and about 4 GB of free RAM):
 
 KIE handles **one image at a time** (~20 s each in its own benchmark). That's fine for a demo; tell the audience to send one photo at a time.
 
+**When the bot says the receipt reader is not answering** ("dịch vụ đọc hoá đơn không phản hồi", 502 `KIE_UNAVAILABLE`): usually the quick tunnel died, as in BUG-037 (the tunnel URL in Vercel's `KIE_URL` pointed at a dead tunnel).
+1. On the KIE machine: `curl -s localhost:<port>/health` → `{"status":"ok"}`. If not, `docker start <kie container>` and wait for health.
+2. `curl -s https://<tunnel>.trycloudflare.com/health` with the URL in `KIE_PUBLIC_URL`. No answer → restart `cloudflared tunnel --url http://localhost:<port>`, then step 6 above with the new URL (`tools/set-secret.sh KIE_PUBLIC_URL`, then redeploy).
+3. Send a receipt photo to the bot and check that a draft comes back in about 20–40 s.
+
+**Sideways photos:** KIE's page-orientation classifier (`use_doc_orientation_classify: true` in KIE's `configs/config.yaml`, model built into the image) is a change in the KIE repo, outside this one. Our server already reads the total of a sideways photo from the columns KIE returns without it, and from the shifted rows it returns with it (docs/02 §2.6).
+
 ## 6.7 Seed the database
 
 From your machine, with the Atlas URI in `server/.env`. `MONGODB_DB` picks the database, and a value in the shell wins over `server/.env` (check it if you ran `tools/wt-env.sh` in this shell):
