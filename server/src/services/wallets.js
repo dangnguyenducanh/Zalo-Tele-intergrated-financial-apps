@@ -36,12 +36,18 @@ async function findOwnWallet(userId, walletId) {
   return wallet;
 }
 
-// Saves the wallet and turns a duplicate name (unique index, docs/03) into 409 NAME_TAKEN.
+// Saves the wallet. A duplicate name (unique index, docs/03) becomes 409 NAME_TAKEN; a rule only the model can
+// check, because PATCH may send one half of it (a negative opening balance on a non-credit wallet), becomes 400.
 async function saveWallet(wallet) {
   try {
     return await wallet.save();
   } catch (err) {
     if (err.code === 11000) throw nameTaken();
+    if (err.name === 'ValidationError') {
+      const problems = Object.values(err.errors);
+      const details = problems.map((problem) => ({ path: problem.path, issue: problem.kind }));
+      throw new AppError(400, 'VALIDATION_ERROR', problems[0].message, details);
+    }
     throw err;
   }
 }

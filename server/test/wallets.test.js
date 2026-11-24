@@ -181,3 +181,50 @@ test('TC-F2-04 balance counts only confirmed, non-deleted transactions of that w
   expect(byName).toEqual({ 'Tiền mặt': -7_000, Test: 120_000 });
   expect((await api(userA.accessToken).get(`/wallets/${wallet.id}`)).body.balance).toBe(120_000);
 });
+
+// 400 VALIDATION_ERROR that names the opening balance as the wrong field.
+const negativeRefused = (res) => expect([res.status, res.body.error?.code, res.body.error?.details?.map((d) => d.path)]).toEqual([400, 'VALIDATION_ERROR', ['initialBalance']]);
+
+test('TC-F2-09 only a credit wallet may start below zero: cash, bank and e-wallet answer 400 (BUG-038)', async () => {
+  const { accessToken } = await registerUser();
+  const me = api(accessToken);
+
+  negativeRefused(await me.post('/wallets', { name: 'Di net', type: 'ewallet', initialBalance: -999_000 })); // the sheet's case
+  negativeRefused(await me.post('/wallets', { name: 'Ví', type: 'cash', initialBalance: -1 }));
+  negativeRefused(await me.post('/wallets', { name: 'VCB', type: 'bank', initialBalance: -50_000 }));
+  expect((await me.get('/wallets')).body.map((w) => w.name)).toEqual(['Tiền mặt']); // nothing was saved
+
+  const card = await me.post('/wallets', { name: 'Visa', type: 'credit', initialBalance: -999_000 });
+  expect([card.status, card.body.balance]).toEqual([201, -999_000]);
+  expect((await me.post('/wallets', { name: 'Di net', type: 'ewallet', initialBalance: 0 })).status).toBe(201);
+
+  // The model refuses it too, whoever saves the wallet.
+  await expect(Wallet.create({ userId: new mongoose.Types.ObjectId(), name: 'Raw', type: 'bank', initialBalance: -1 })).rejects.toThrow(/initialBalance/);
+});
+
+test('TC-F2-10 PATCH checks the resulting type and opening balance together; other edits of older rows still work (BUG-038)', async () => {
+  const { accessToken, user } = await registerUser();
+  const me = api(accessToken);
+  const { body: card } = await me.post('/wallets', { name: 'Visa', type: 'credit', initialBalance: -500_000 });
+
+  negativeRefused(await me.patch(`/wallets/${card.id}`, { type: 'ewallet' })); // the balance would stay -500.000
+  expect(await Wallet.findById(card.id)).toMatchObject({ type: 'credit', initialBalance: -500_000 });
+  const moved = await me.patch(`/wallets/${card.id}`, { type: 'ewallet', initialBalance: 0 });
+  expect([moved.status, moved.body.type, moved.body.balance]).toEqual([200, 'ewallet', 0]);
+  negativeRefused(await me.patch(`/wallets/${card.id}`, { initialBalance: -1 }));
+  negativeRefused(await me.patch(`/wallets/${user.defaultWalletId}`, { initialBalance: -10_000 })); // cash
+
+  // A wallet saved before this fix ("Di net", e-wallet at -999.000) can still be renamed and archived,
+  // and re-sending its unchanged type and balance changes nothing, so that passes too.
+  const { insertedId } = await Wallet.collection.insertOne({
+    userId: oid(user.id), name: 'Di net', type: 'ewallet', initialBalance: -999_000,
+    aliases: [], color: '', icon: '', archived: false, deletedAt: null, createdAt: new Date(), updatedAt: new Date(),
+  });
+  const old = `/wallets/${insertedId}`;
+  expect((await me.patch(old, { name: 'Di net cũ' })).status).toBe(200);
+  expect((await me.patch(old, { name: 'Di net', type: 'ewallet', initialBalance: -999_000 })).status).toBe(200);
+  expect((await me.patch(old, { archived: true })).status).toBe(200);
+  negativeRefused(await me.patch(old, { initialBalance: -1_000 }));
+  negativeRefused(await me.patch(old, { type: 'bank' }));
+  expect((await me.patch(old, { initialBalance: 0 })).body.balance).toBe(0);
+});
