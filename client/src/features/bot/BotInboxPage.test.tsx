@@ -346,3 +346,32 @@ test('TC-F9-04 opening the inbox again shows drafts confirmed in the chat meanwh
   expect(await screen.findByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toBeInTheDocument();
   expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument();
 });
+
+test('TC-F10-11 a receipt draft whose total was torn off says under its amount that it is an estimate (BUG-036)', async () => {
+  const user = userEvent.setup();
+  // What the server stores when no total is left on the receipt: the sum of the item lines, flagged as an estimate.
+  const receipt = {
+    merchant: 'Cửa hàng tiện lợi',
+    total: 53000,
+    reconciled: true,
+    estimated: true,
+    items: [
+      { name: 'Trứng gà vỉ 10', amount: 20000 },
+      { name: 'Mì Omachi bò', amount: 15000 },
+      { name: 'Pepsi lon 320ml', amount: 18000 },
+    ],
+  };
+  drafts.push(draft({ id: 'd4', amount: 53000, note: 'Cửa hàng tiện lợi', source: 'receipt', categoryId: 'c2', receipt }));
+  renderApp('/bot');
+
+  const torn = await card('Cửa hàng tiện lợi');
+  const amount = within(torn).getByRole('textbox', { name: 'Số tiền (₫)' });
+  expect(amount).toHaveAccessibleDescription(/^= 53\.000\s₫ · Ước tính: tổng các dòng hàng vì không đọc được tổng tiền, hãy kiểm tra$/);
+  // A receipt with its total read has no such note.
+  expect(within(await card('Bách Hoá Xanh')).getByRole('textbox', { name: 'Số tiền (₫)' })).toHaveAccessibleDescription(/^= 116\.000\s₫$/);
+
+  // Once the user types the real total, the note goes: it described the old number.
+  await user.clear(amount);
+  await user.type(amount, '55k');
+  expect(amount).toHaveAccessibleDescription(/^= 55\.000\s₫$/);
+});

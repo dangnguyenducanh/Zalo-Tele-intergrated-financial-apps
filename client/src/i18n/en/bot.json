@@ -52,6 +52,7 @@
     "budgetWarning": "Saved. You have used {{percent}}% of this month's budget.",
     "items": "Line items: {{count}}",
     "reconciled": "match the total",
-    "notReconciled": "do not match the total"
+    "notReconciled": "do not match the total",
+    "estimated": "Estimate: the sum of the line items, as no total could be read. Please check it"
   }
 }

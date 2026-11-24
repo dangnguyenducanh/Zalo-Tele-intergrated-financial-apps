@@ -50,6 +50,11 @@ export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () 
   };
   const errors: Partial<typeof wrong> = submitted ? wrong : {};
   const title = draft.note || t('transactions:noNote');
+  // No total left on the receipt: the server summed the item lines (docs/02 §2.6). Said under the amount while it is
+  // still that sum (not after a correction here or in the chat). The flag is read with `in` because the Draft type
+  // lives in botApi.ts, outside this card's scope.
+  const receipt = draft.receipt;
+  const estimated = !!receipt && 'estimated' in receipt && receipt.estimated === true && amount === receipt.total;
 
   const say = (message: string, severity: 'success' | 'warning' | 'error') => dispatch(showSnackbar({ message, severity }));
 
@@ -132,7 +137,9 @@ export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () 
               ? isOverMax(amountText)
                 ? t('transactions:validation.amountMax', { max: formatMoney(MAX_MONEY, language) })
                 : t('transactions:validation.amount')
-              : amount !== null ? `= ${formatMoney(amount, language)}` : ' '}
+              : amount !== null
+                ? `= ${formatMoney(amount, language)}${estimated ? ` · ${t('drafts.estimated')}` : ''}`
+                : ' '}
           required
           slotProps={{ htmlInput: { autoComplete: 'off' } }}
         />

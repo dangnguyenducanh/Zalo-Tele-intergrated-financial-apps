@@ -52,6 +52,7 @@
     "budgetWarning": "Đã lưu. Bạn đã dùng {{percent}}% ngân sách tháng này.",
     "items": "{{count}} dòng hàng",
     "reconciled": "khớp tổng tiền",
-    "notReconciled": "không khớp tổng tiền"
+    "notReconciled": "không khớp tổng tiền",
+    "estimated": "Ước tính: tổng các dòng hàng vì không đọc được tổng tiền, hãy kiểm tra"
   }
 }
