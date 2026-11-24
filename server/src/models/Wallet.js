@@ -29,9 +29,15 @@ const walletSchema = new mongoose.Schema(
 );
 
 // Only a credit card may start below zero (BUG-038). Checked when a wallet is created or its type or opening
-// balance changes, so a wallet saved before this rule can still be renamed or archived.
+// balance changes, so a wallet saved before this rule can still be renamed or archived. save() writes only the
+// changed fields, so a change to one half also writes the other half it was checked with: two saves at once then
+// each store a checked pair, never one half of each.
 walletSchema.pre('validate', function () {
   const changed = this.isNew || this.isModified('type') || this.isModified('initialBalance');
+  if (changed && !this.isNew) {
+    this.markModified('type');
+    this.markModified('initialBalance');
+  }
   if (changed && this.initialBalance < 0 && this.type !== 'credit') {
     this.invalidate('initialBalance', 'Only a credit card can start below zero', this.initialBalance, 'too_small');
   }

@@ -228,3 +228,27 @@ test('TC-F2-10 PATCH checks the resulting type and opening balance together; oth
   negativeRefused(await me.patch(old, { type: 'bank' }));
   expect((await me.patch(old, { initialBalance: 0 })).body.balance).toBe(0);
 });
+
+test('TC-F2-12 two PATCHes at once cannot leave a non-credit wallet below zero (BUG-038 review)', async () => {
+  const { accessToken } = await registerUser();
+  const me = api(accessToken);
+  const debt = (row) => row.type !== 'credit' && row.initialBalance < 0;
+  const broken = [];
+
+  // Each pair races two tabs: one moves the card off credit, the other makes or keeps it negative.
+  // Without writing both fields on every pair change, the row ends as an e-wallet in debt most runs.
+  for (let run = 0; run < 10; run += 1) {
+    const { body: a } = await me.post('/wallets', { name: `A${run}`, type: 'credit', initialBalance: -500_000 });
+    const { body: b } = await me.post('/wallets', { name: `B${run}`, type: 'credit', initialBalance: 0 });
+    await Promise.all([
+      me.patch(`/wallets/${a.id}`, { type: 'ewallet', initialBalance: 0 }),
+      me.patch(`/wallets/${a.id}`, { initialBalance: -100_000 }),
+      me.patch(`/wallets/${b.id}`, { initialBalance: -500_000 }),
+      me.patch(`/wallets/${b.id}`, { type: 'ewallet' }),
+    ]);
+    for (const row of await Promise.all([a.id, b.id].map((id) => Wallet.findById(id).lean()))) {
+      if (debt(row)) broken.push(`${row.name} ${row.type} ${row.initialBalance}`);
+    }
+  }
+  expect(broken).toEqual([]);
+});
