@@ -153,3 +153,25 @@ test('TC-F4-13 an opening balance beyond ±10^13 ₫ is marked at the field with
   expect(balance).toHaveFocus();
   expect(sent).toEqual([]);
 });
+
+test('TC-F2-11 a negative opening balance is marked at the field unless the type is credit card, and nothing is sent (BUG-038)', async () => {
+  const user = userEvent.setup();
+  renderApp('/wallets');
+
+  await user.click(await screen.findByRole('button', { name: 'Thêm ví' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Thêm ví' });
+  await user.type(within(dialog).getByRole('textbox', { name: 'Tên ví' }), 'Di net');
+  await user.click(within(dialog).getByRole('radio', { name: 'Ví điện tử' }));
+  const balance = within(dialog).getByRole('textbox', { name: 'Số dư ban đầu (₫)' });
+  await user.type(balance, '-999.000');
+  await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+
+  expect(sent).toEqual([]);
+  expect(balance).toHaveAccessibleDescription('Chỉ thẻ tín dụng mới được có số dư âm');
+  expect(balance).toHaveFocus();
+
+  await user.click(within(dialog).getByRole('radio', { name: 'Thẻ tín dụng' }));
+  await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(sent).toEqual([{ method: 'POST', body: { name: 'Di net', type: 'credit', initialBalance: -999000, aliases: [] } }]);
+});
