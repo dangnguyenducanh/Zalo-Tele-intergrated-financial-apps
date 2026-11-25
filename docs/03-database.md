@@ -29,6 +29,8 @@ erDiagram
 
 8 collections. The slides require at least 3 with relations.
 
+*Planned (§2.10, see §3.6):* no new collection. A claim link in `linkCodes` has no `userId`, so a `LINK_CODE` will belong to one user or to none (`USER |o--o{ LINK_CODE`).
+
 ## 3.3 Collections
 
 ### `users`
@@ -120,6 +122,8 @@ Indexes:
 - `{ userId: 1, walletId: 1 }`: wallet balance
 - `{ "chatRef.platform": 1, "chatRef.chatId": 1, "chatRef.messageId": 1 }` **unique, partial** (only when `chatRef` exists). `messageId` is `"<platform message id>:<line>"` (a receipt uses line 1). If Telegram/Zalo retries the same webhook, no second draft is created.
 
+*Planned (§2.10, see §3.6):* `source` and `chatRef.platform` gain `whatsapp`.
+
 ### `budgets`
 
 | Field | Type | Notes |
@@ -146,6 +150,8 @@ A budget whose category was deleted is hidden from the list and skipped by "copy
 
 Indexes: `{ platform: 1, platformUserId: 1 }` **unique** (one web account per chat account); `{ userId: 1 }`.
 
+*Planned (§2.10, see §3.6):* `platform` gains `whatsapp`; for WhatsApp, `platformUserId` and `chatId` are the user's business-scoped user ID (BSUID), never the phone number. Two fields are added for the claim-link notice: `viaClaim` and `claimNoticeDismissedAt`.
+
 ### `linkCodes`
 
 | Field | Type | Notes |
@@ -156,6 +162,8 @@ Indexes: `{ platform: 1, platformUserId: 1 }` **unique** (one web account per ch
 | `usedAt` | Date \| null | one-time use |
 
 Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`.
+
+*Planned (§2.10, see §3.6):* `userId` becomes optional and a `chat` sub-document is added, so a row is either a code (made on the website) or a claim link (made by the bot).
 
 ## 3.4 Key aggregations
 
@@ -192,3 +200,66 @@ Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`.
 | income | Thu khác *(fallback)* | Other income | nhan, received |
 
 **Default wallets on register:** "Tiền mặt / Cash" (`cash`, aliases `tm`, `cash`) set as the default wallet.
+
+## 3.6 One-tap linking and WhatsApp (planned, §2.10)
+
+None of this is built yet. It lists what docs/02 §2.10 changes against §3.3; the PR that builds each part moves its change into §3.3 and removes it here. §2.10 adds no collection and no index.
+
+### `linkCodes`: codes and claim links (planned)
+
+| Field | Today | Planned |
+|---|---|---|
+| `userId` | ObjectId → User, required | ObjectId → User, **optional**: set only on a code made on the website |
+| `chat` | — | **new** `{ platform, platformUserId, chatId, displayName }`: set only on a claim link made by the bot. The four fields mean the same as in `chatLinks` |
+| `codeHash` | SHA-256 of the 6-char code | unchanged for codes; for a claim link, the SHA-256 of its token (§2.10 adds no second hash field) |
+| `expiresAt`, `usedAt` | now + 10 minutes; one-time use | unchanged, for both kinds |
+
+| | Code (F7, as today) | Claim link (new, §2.10.3) |
+|---|---|---|
+| Created by | `POST /api/chat-links/code` on the website | the bot, when a chat that is not linked sends anything except `/start CODE` or `/link CODE` (a wrong or expired code counts as anything) |
+| Field set | `userId` (the user who asked) | `chat` (the chat that asked) |
+| Secret | 6 characters, A–Z and 2–9 without look-alikes | random 24 bytes, sent as a 32-character base64url token |
+| Stored | SHA-256 only, in `codeHash` | SHA-256 only, in `codeHash` |
+| Lifetime | 10 minutes, single use | 10 minutes, single use |
+| Used by | the chat: `/start CODE` (Telegram deep link) or `/link CODE` | the website: `POST /api/chat-links/claim { token }`, after `/link?t=<token>` and Confirm |
+| Matches only rows with | `userId` | `chat` |
+| How many | at most 5 new codes per user per 10 minutes (rate limit, F7) | at most one live claim link per chat |
+
+- **Exactly one of `userId` and `chat` is set.** `userId` loses `required`. §2.10 states the rule but not where it is checked (model validator or the code that writes rows): left to the builder. Every existing row has `userId` and no `chat`, so it is already a valid code; no migration.
+- **Neither kind works in the other's place.** Redeeming in the chat keeps today's single atomic update (`codeHash`, `usedAt: null`, `expiresAt` in the future → set `usedAt`) and adds "`userId` is set". `POST /api/chat-links/claim` is the same single atomic update with "`chat` is set" instead, then creates the `chatLinks` row from `chat` plus the logged-in user's `userId`. `POST /api/chat-links/claim/preview` matches the same way and changes nothing, so Cancel leaves the token to expire. No match (unknown, used, expired, or a code) → 404 `LINK_TOKEN_INVALID`.
+- **Hashing.** The same SHA-256 (hex) as today, so both kinds share the unique `{ codeHash: 1 }` index. A code is trimmed and upper-cased before hashing; base64url is case-sensitive, so a token is hashed exactly as received.
+- **One live claim link per chat.** Before creating one, the bot deletes any older live (unused, unexpired) claim link for the same chat, so a second message gives a new link and the first stops working (§2.10.6). §2.10 does not name the key for "the same chat"; `chat.platform` + `chat.platformUserId`, the pair `chatLinks` is unique on, is the natural one. Delete-then-create is two writes, not one atomic step, and §2.10 asks for no index to enforce it.
+- **Indexes unchanged.** `{ codeHash: 1 }` unique serves both kinds, and the TTL index `{ expiresAt: 1 }, expireAfterSeconds: 0` removes both. No index covers the delete-by-`chat` query; the collection only holds rows from about the last 10 minutes, and §2.10 leaves adding one to the builder.
+
+### `chatLinks` (planned)
+
+| Field | Today | Planned |
+|---|---|---|
+| `platform` | `telegram` \| `zalo` | `telegram` \| `zalo` \| `whatsapp` |
+| `platformUserId` | Telegram / Zalo `from.id` | WhatsApp: the user's business-scoped user ID (BSUID): `from_user_id` on the message, `user_id` on the contact. Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key |
+| `chatId` | where to send replies | WhatsApp: the same BSUID; replies are sent with `recipient_type: "individual"` and `recipient: <BSUID>`, never `to` (§2.10.4) |
+| `displayName` | shown on the Bot inbox | WhatsApp: `value.contacts[0].profile.name` |
+| `viaClaim` | — | **new** Boolean, default `false`; `true` for a link made by a claim link (§2.10.5) |
+| `claimNoticeDismissedAt` | — | **new** Date \| null, default `null`; when the user dismissed the "Not you? [Unlink]" notice for this link |
+
+- Rows are created two ways: by `/start CODE` / `/link CODE` in the chat (from the message plus the code's `userId`, as today, now from WhatsApp too; `viaClaim` keeps its default `false`) and by `POST /api/chat-links/claim` (from the claim link's `chat` plus the logged-in user, with `viaClaim: true`).
+- `GET /api/chat-links` also returns `viaClaim` and `claimNoticeDismissedAt`. The Bot inbox shows the notice for every link with `viaClaim && !claimNoticeDismissedAt`; `PATCH /api/chat-links/:id/claim-notice` (own links only) sets `claimNoticeDismissedAt` to now. Existing rows read as `viaClaim: false` through the schema default, so no migration.
+- Indexes unchanged. `{ platform: 1, platformUserId: 1 }` unique now also means one web account per WhatsApp user (BSUID), and it is the backstop when a chat was linked between the claim link and Confirm: 409 `CHAT_ALREADY_LINKED`, and the token stays spent (§2.10.3).
+
+### `transactions` (planned)
+
+| Field | Today | Planned |
+|---|---|---|
+| `source` | `web` \| `telegram` \| `zalo` \| `receipt` | adds `whatsapp` for drafts from the WhatsApp bot, text and receipt photos alike (a bot photo already takes its platform as `source`; `receipt` stays for web uploads) |
+| `chatRef.platform` | `telegram` \| `zalo` | adds `whatsapp` (§2.10.5); without it every WhatsApp draft fails validation |
+| `chatRef.chatId` | the chat's `chatId` | WhatsApp: the BSUID, not a phone number |
+| `chatRef.messageId` | `"<platform message id>:<line>"` | WhatsApp: `"<wamid>:<line>"`, from the message `id` (§2.10.4) |
+
+- Indexes unchanged. The unique partial `chatRef` index is what turns a second delivery of the same `wamid` into no second draft (§2.10.4).
+- Adding enum values needs no data migration.
+
+### Privacy (planned)
+
+- **Unlinked chats.** Today the bot stores nothing for a chat that is not linked. With claim links it stores one `linkCodes` row per unlinked chat that writes in (its `chat` ids and display name) until the TTL index removes it. MongoDB's TTL sweep runs about once a minute, so a row can outlive `expiresAt` briefly; the claim query checks `expiresAt` itself, as redeeming a code does today.
+- **Tokens.** Only the SHA-256 of a claim token is stored, like codes and refresh tokens. The token travels in the bot's reply, in `/link?t=…` (which the page removes from the address bar) and in request bodies, never in a URL the server logs (§2.10.3).
+- **WhatsApp: no phone number is stored.** The key is the BSUID (§2.10.4), so `chatLinks`, `linkCodes.chat` and `transactions.chatRef` hold the BSUID, never a phone number. The web shows `displayName` (the WhatsApp profile name), and admin stats count chats per platform without identifiers. Transaction responses still carry `chatRef` as today (the model's `toJSON` keeps it), so a WhatsApp draft's response carries the BSUID, not a phone number.

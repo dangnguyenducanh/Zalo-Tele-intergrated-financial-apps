@@ -20,6 +20,7 @@ trust proxy 1 → helmet → express.json({ limit: '1mb' }) → cookie-parser �
 
 - There is no global `requireAuth`. Each protected router applies it itself, so an unknown top-level path still answers 404 (an unknown sub-path of a protected router, such as `/api/wallets/x/y`, answers 401 without a token). `connectDb` runs before every `/api` router except `/health`, so with the database down any other `/api` path answers 500. `/admin` adds `requireRole('admin')`; `/webhooks` checks the platform's secret header instead of a JWT; `/auth` protects only `/auth/me`.
 - Only `/auth/login` and `/auth/register` are rate-limited (plus `POST /chat-links/code`, see §4.3).
+- *Planned (§2.10.4):* `/webhooks/whatsapp` checks an HMAC signature of the raw body instead of a secret header. The HMAC needs the exact bytes Meta sent, and re-serialising `req.body` does not give them back, so the global parser becomes `express.json({ limit, verify })`, where `verify` keeps the bytes as `req.rawBody` only when `req.originalUrl` starts with `/api/webhooks/whatsapp`. The order above does not change.
 
 ## 4.2 Configuration
 
@@ -27,7 +28,8 @@ trust proxy 1 → helmet → express.json({ limit: '1mb' }) → cookie-parser �
 
 - no `KIE_URL` → `POST /receipts` answers 503 `FEATURE_NOT_CONFIGURED` for a valid JPEG/PNG upload (the missing-field 400 and the 415 come first; the bots say the receipt reader is not answering);
 - no webhook secret → that platform's webhook answers 401 to everything;
-- no `TELEGRAM_BOT_USERNAME` → `telegramDeepLink` is `null`.
+- no `TELEGRAM_BOT_USERNAME` → `telegramDeepLink` is `null`;
+- *planned (§2.10):* `links.telegram` replaces `telegramDeepLink` with the same rule, and `links.whatsapp` / `links.zalo` are `null` when that app's settings are missing (at least `WHATSAPP_NUMBER` / `ZALO_BOT_URL`, which the links are built from; whether the other WhatsApp variables also count is left to the builder). §2.10 does not name the case of an unset `WHATSAPP_APP_SECRET` or `WHATSAPP_VERIFY_TOKEN`; following §2.10.4's rule that a failed check answers 401 (`POST`) or 403 (`GET`), and the way `sameSecret` treats an unset secret today, a missing one fails the check like a wrong one. The builder confirms this (rather than a 503 `FEATURE_NOT_CONFIGURED`).
 
 An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required variables and the `APP_URL`, bot and KIE variables get harmless defaults, so the test suites run without `server/.env` (`MONGODB_DB` and the `SEED_*` variables stay unset).
 
@@ -46,6 +48,12 @@ An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required 
 | `TELEGRAM_WEBHOOK_SECRET` | 1–256 chars `[A-Za-z0-9_-]` |
 | `ZALO_BOT_TOKEN` | from Zalo Bot Platform |
 | `ZALO_WEBHOOK_SECRET` | 8–256 chars |
+| `WHATSAPP_ACCESS_TOKEN` *(planned, §2.10)* | permanent (system user) access token of the Meta app; sends messages and downloads receipt photos |
+| `WHATSAPP_PHONE_NUMBER_ID` *(planned)* | the business number's ID in the Graph API messages URL |
+| `WHATSAPP_APP_SECRET` *(planned)* | key of the `X-Hub-Signature-256` HMAC on webhook `POST`s |
+| `WHATSAPP_VERIFY_TOKEN` *(planned)* | compared with `hub.verify_token` in the webhook's `GET` setup check |
+| `WHATSAPP_NUMBER` *(planned)* | the business number, international format, digits only, for `wa.me` links |
+| `ZALO_BOT_URL` *(planned)* | the bot's share link from Zalo Bot Creator (the link card's Zalo button) |
 | `KIE_URL` | `https://<tunnel-host>`, must be a URL |
 | `KIE_API_KEY` | shared secret sent as `X-KIE-Key` (see §4.8) |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | used by `npm run seed` and `npm run seed:test` only |
@@ -132,9 +140,24 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 
 | Method | Path | Auth | Body | Success | Errors |
 |---|---|---|---|---|---|
-| POST | `/chat-links/code` | 🔒 | — | **201** `{code, expiresAt, telegramDeepLink}` (`null` without `TELEGRAM_BOT_USERNAME`) | 429 `RATE_LIMITED` (5 per user per 10 min) |
-| GET | `/chat-links` | 🔒 | — | **200** `[{id, platform, displayName, createdAt}]` | — |
+| POST | `/chat-links/code` | 🔒 | — | **201** `{code, expiresAt, telegramDeepLink}` (`null` without `TELEGRAM_BOT_USERNAME`). *Planned (§2.10.2):* **201** `{code, expiresAt, links:{telegram, whatsapp, zalo}}` (each a URL or `null`) instead of `telegramDeepLink`; the client changes in the same PR | 429 `RATE_LIMITED` (5 per user per 10 min) |
+| POST | `/chat-links/claim/preview` *(planned, §2.10.3)* | 🔒 | `{token}` | **200** `{platform, displayName}`; the token is not spent | `LINK_TOKEN_INVALID` (404: unknown, used or expired) |
+| POST | `/chat-links/claim` *(planned, §2.10.3)* | 🔒 | `{token}` | **201** `{id, platform, displayName, createdAt, viaClaim: true}` | `LINK_TOKEN_INVALID` (404); `CHAT_ALREADY_LINKED` (409: that chat was linked meanwhile; the token is still spent) |
+| GET | `/chat-links` | 🔒 | — | **200** `[{id, platform, displayName, createdAt}]`. *Planned (§2.10.5):* each item also has `viaClaim` and `claimNoticeDismissedAt` | — |
 | DELETE | `/chat-links/:id` | 🔒 | — | **204** | 404 |
+| PATCH | `/chat-links/:id/claim-notice` *(planned, §2.10.5)* | 🔒 | — | **204**; sets `claimNoticeDismissedAt` to now (own links only) | 404 (another user's or unknown id) |
+
+*Planned error codes are written `CODE` (status) in this section until the build PR adds `errors.LINK_TOKEN_INVALID` and `errors.CHAT_ALREADY_LINKED` (vi + en): TC-F12-03 reads codes written as status-then-code from this file and requires a translation for each.*
+
+**Link card links** *(planned, §2.10.2)*: `links.telegram` is `https://t.me/<bot>?start=<CODE>` (as today), `links.whatsapp` is `https://wa.me/<WHATSAPP_NUMBER>?text=%2Flink%20<CODE>` (the chat opens with `/link CODE` typed), and `links.zalo` is `ZALO_BOT_URL` (a Zalo bot link carries no payload, so the card copies `/link CODE` to the clipboard before opening it). The code itself is unchanged: 6 characters, 10 minutes, single use, 5 per user per 10 minutes.
+
+**Linking from the chat** *(planned, §2.10.3)*: the bot hands an unlinked chat a claim link (see §4.6, step 4), and the website's `/link?t=<token>` screen spends it through the two endpoints above.
+- Tokens travel in the body, never in a URL the server logs. Both endpoints need login.
+- Both only match `linkCodes` rows that have `chat` (claim links), so a website code is `LINK_TOKEN_INVALID` here; in the other direction `/start CODE` and `/link CODE` only match rows that have `userId`, so a claim token never works in the chat.
+- `/claim` is one atomic update, as `/link CODE` is today: the row must be unused, unexpired and a claim link, and it is marked used. Then a `chatLinks` row is created from its `chat` (`platform`, `platformUserId`, `chatId`, `displayName`) for the logged-in user. If that chat got linked in the meantime, the unique `(platform, platformUserId)` index refuses the row → `CHAT_ALREADY_LINKED` (409).
+- After a 201 the bot sends the chat the same text as a `/link CODE` success ("Đã liên kết với tài khoản <name>" / "Linked to the account of <name>") in the user's language. How that send runs (inside the request or `waitUntil`) and what happens when it fails are left to the builder.
+- Responses carry only `platform` and `displayName`, never `platformUserId` or `chatId`.
+- Phishing (§2.10.3): an attacker can send their own chat's claim link to a victim; if the victim confirms, the attacker's chat is linked to the victim's account and can read `/today` and `/month` and create and confirm transactions there (not the web login). The display name is not proof. Mitigations: the warning on the `/link` confirm screen, the 10-minute single-use token, and a Bot inbox notice "New chat linked from a chat link: **Zalo · Anh**. Not you? [Unlink]". The server records it on `chatLinks`: `viaClaim` (boolean, default `false`; `/claim` sets `true`) and `claimNoticeDismissedAt` (date or `null`). The notice shows for every link with `viaClaim && !claimNoticeDismissedAt`; Unlink is the existing `DELETE /chat-links/:id`, and `PATCH /chat-links/:id/claim-notice` dismisses it (`claimNoticeDismissedAt = now`, 204; 404 for another user's or an unknown id).
 
 ### Admin 👑
 
@@ -146,7 +169,7 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 | POST | `/admin/categories` | `{type, names:{vi,en}, keywords?, icon?, color?}` | **201** | 400, 403 |
 | PATCH | `/admin/categories/:id` | same fields except `type` (fixed) | **200** | 400, 403, 404 |
 | DELETE | `/admin/categories/:id` | — | **204** | 403, 404, 409 `FALLBACK_CATEGORY` |
-| GET | `/admin/stats` | — | **200** `{users, activeUsers7d, chatLinks:{telegram, zalo}, transactionsBySource}` | 403 |
+| GET | `/admin/stats` | — | **200** `{users, activeUsers7d, chatLinks:{telegram, zalo}, transactionsBySource}`. *Planned (§2.10.5):* `chatLinks` and `transactionsBySource` gain `whatsapp` | 403 |
 
 ### Webhooks and health
 
@@ -154,6 +177,8 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 |---|---|---|---|---|
 | POST | `/webhooks/telegram` | header `X-Telegram-Bot-Api-Secret-Token` | **200** (always, after the secret check) | 401 bad secret |
 | POST | `/webhooks/zalo` | header `X-Bot-Api-Secret-Token` (timing-safe compare) | **200** | 401 bad secret |
+| GET | `/webhooks/whatsapp` *(planned, §2.10.4)* | query `hub.mode=subscribe` and `hub.verify_token` equal to `WHATSAPP_VERIFY_TOKEN` (Meta's setup check) | **200** `hub.challenge` as plain text | 403 |
+| POST | `/webhooks/whatsapp` *(planned, §2.10.4)* | header `X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body with WHATSAPP_APP_SECRET>` (constant-time compare) | **200** (also for status updates, which are ignored) | 401 bad signature, nothing processed |
 | GET | `/health` | — | **200** `{status:'ok', db:'up'}` | 503 |
 
 ## 4.5 Errors and status codes
@@ -168,10 +193,10 @@ Every error goes through one `errorHandler` and has the same shape (the one exce
 |---|---|
 | 200 / 201 / 204 | OK / created / deleted or no body |
 | 400 `VALIDATION_ERROR` | zod validation failed (body, query, params, bad ObjectId) |
-| 401 | Not logged in, bad or expired token, wrong password, bad webhook secret |
-| 403 | Logged in but not allowed (role), account locked |
-| 404 | Resource not found **or not yours** |
-| 409 | Unique conflict (`EMAIL_TAKEN`, `NAME_TAKEN`, `BUDGET_EXISTS`, else generic `CONFLICT`), resource in use, fallback category, last admin, already confirmed |
+| 401 | Not logged in, bad or expired token, wrong password, bad webhook secret; *planned (§2.10.4):* bad WhatsApp signature |
+| 403 | Logged in but not allowed (role), account locked; *planned (§2.10.4):* WhatsApp setup check (`GET /webhooks/whatsapp`) with a wrong verify token |
+| 404 | Resource not found **or not yours**; *planned (§2.10.3):* `LINK_TOKEN_INVALID` (claim token unknown, used, expired, or a website code) |
+| 409 | Unique conflict (`EMAIL_TAKEN`, `NAME_TAKEN`, `BUDGET_EXISTS`, else generic `CONFLICT`), resource in use, fallback category, last admin, already confirmed; *planned (§2.10.3):* `CHAT_ALREADY_LINKED` (the claimed chat was linked meanwhile) |
 | 413 / 415 | Body too large (`PAYLOAD_TOO_LARGE`) / image not JPEG or PNG (`UNSUPPORTED_MEDIA_TYPE`) |
 | 422 | `RECEIPT_UNREADABLE` (no total found, or KIE could not open the image); `NO_AMOUNT_FOUND` (quick-add text with no readable amount) |
 | 429 `RATE_LIMITED` | Rate limited |
@@ -194,28 +219,29 @@ server/src/bot/
 └── zalo.js        map event → core calls, sendMessage
 ```
 
-The secret check lives in `routes/webhooks.js`, before either adapter runs.
+The secret check lives in `routes/webhooks.js`, before either adapter runs. *Planned (§2.10.4):* a third adapter for WhatsApp (file layout left to the builder), whose signature check runs at the same point; see **WhatsApp specifics** below.
 
 **Adapter contract** (what `core.js` needs from each platform):
 
 ```js
 {
-  platform: 'telegram' | 'zalo',
+  platform: 'telegram' | 'zalo',           // planned: | 'whatsapp' (§2.10.4)
   sendText(chatId, text),
-  sendDraft(chatId, { id, text }, lang),   // Telegram: inline keyboard; Zalo: text + "ok / huy" hint
+  sendDraft(chatId, { id, text }, lang),   // Telegram: inline keyboard; Zalo: text + "ok / huy" hint; WhatsApp (planned): button message
   downloadPhoto(ref) → Buffer
 }
 ```
 
-**Webhook handling** (both platforms):
+**Webhook handling** (both platforms; WhatsApp *(planned)* follows steps 1, 2, 4 and 5, with its signature check in step 1 and Meta retrying any delivery that does not get a 200; step 3 has no WhatsApp equivalent in §2.10, see **WhatsApp specifics**):
 
 1. Check the secret header, comparing with `crypto.timingSafeEqual`. A mismatch returns 401.
 2. Reply **200 immediately**, then run the adapter's handler (`handleTelegramUpdate` / `handleZaloEvent`) inside `waitUntil`. The platform does not retry, and the slow work (KIE ~20 s) continues inside the 300 s function limit. Failures are only logged.
 3. Only messages from **private chats** are handled (Telegram `chat.type = private`, Zalo `chat.chat_type = PRIVATE`); in a group other people would see the money, so those messages are dropped. Telegram button presses (`callback_query`) are handled before this check, with no chat-type test (drafts, and so their buttons, are only sent to private chats).
 4. `handleMessage` looks up `chatLinks` by `(platform, platformUserId)`. If there is none, only `/start CODE` and `/link CODE` are accepted; everything else gets the "please link" reply. A linked but locked user gets the "locked" reply to everything else (`/start CODE` and `/link CODE` are answered before the lock check).
-5. Idempotency: each draft carries `chatRef = (platform, chatId, '<messageId>:<line>')`, and the unique partial index turns a duplicate delivery of a text or photo message into no second draft and no second reply. Typed `ok` / `huy`, commands and Zalo amount-only corrections are not deduplicated: delivered twice, they run twice (a second `ok` acts on the next waiting draft; a correction is applied and the draft sent again). For a photo the core first checks whether that `chatRef` already exists, so a redelivered photo is not sent to KIE again.
+   *Planned (§2.10.3), on every platform:* the "please link" reply also carries a **claim link**. For anything except `/start CODE` or `/link CODE` (a wrong or expired code counts as "anything"), the bot deletes any older live claim link of this chat, so a chat has at most one, then stores a new one in `linkCodes`: a random 32-character base64url token (24 bytes), kept only as its SHA-256, 10 minutes, single use, with `chat: { platform, platformUserId, chatId, displayName }` and no `userId`. The reply, in both languages, is the current "please link" text plus "Or tap to link: `<APP_URL>/link?t=<token>` (valid 10 minutes)". The website spends the token through `POST /chat-links/claim` (§4.4).
+5. Idempotency: each draft carries `chatRef = (platform, chatId, '<messageId>:<line>')`, and the unique partial index turns a duplicate delivery of a text or photo message into no second draft and no second reply. Typed `ok` / `huy`, commands and Zalo amount-only corrections are not deduplicated: delivered twice, they run twice (a second `ok` acts on the next waiting draft; a correction is applied and the draft sent again). For a photo the core first checks whether that `chatRef` already exists, so a redelivered photo is not sent to KIE again. *Planned (§2.10.4):* WhatsApp's message `id` (`wamid…`) is the `messageId`, so the same rules hold there.
 
-**Bot commands** (same on both platforms):
+**Bot commands** (same on both platforms, and on WhatsApp once built, §2.10.4):
 
 | Input | Reply |
 |---|---|
@@ -239,6 +265,17 @@ The secret check lives in `routes/webhooks.js`, before either adapter runs.
 - `sendMessage { chat_id, text }`, max 2000 chars. **No buttons**, so each draft ends with the `ok` / `huy` hint (see Bot commands). **Zalo only:** a one-line reply that is only an amount (`55k`) corrects the waiting draft's amount through the same update service as the web Bot inbox.
 - Every line of a message is saved before any reply is sent, so a failed `sendMessage` (monthly quota, timeout) never loses the lines after it.
 - ⚠️ The payload shape comes from community SDKs (see sources in [06-deployment.md](06-deployment.md)). Log the first real webhook body during setup and adjust if it differs.
+
+**WhatsApp specifics** *(planned, §2.10.4; Meta's WhatsApp Cloud API directly, `https://graph.facebook.com/<version>/…`)*:
+- Webhook `/api/webhooks/whatsapp`, subscribed to the `messages` field (Meta app setup goes in [06-deployment.md](06-deployment.md)). `GET` is Meta's setup check: `hub.mode=subscribe` and `hub.verify_token` equal to `WHATSAPP_VERIFY_TOKEN` → 200 with `hub.challenge` as plain text, otherwise 403. `POST` must carry `X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of req.rawBody with WHATSAPP_APP_SECRET>` (raw bytes kept by the parser's `verify`, §4.1), compared in constant time; otherwise 401 and nothing is processed. A platform with missing settings is skipped by the webhook-registration script (`scripts/setWebhooks.js`); what that script does for WhatsApp is left to the builder.
+- Body: read `entry[].changes[].value`. `messages[]` are handled; `statuses[]` (sent/delivered/read) are ignored. Both get 200, so Meta doesn't retry.
+- Incoming message → core message: `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID: `from_user_id` on the message, `user_id` on the contact). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key and is never stored. `displayName` is `value.contacts[0].profile.name`; `messageId` is the message `id` (`wamid…`). `type: text` → `text.body`; `type: image` → `photo` = `image.id`; `type: interactive` with `button_reply` → a button press (`handleButton`) decoded from `button_reply.id`; other types (audio, sticker, location…) → the help text. §2.10.4 names no group-chat check like step 3; that is left to the builder.
+- Sending: `POST https://graph.facebook.com/<version>/<WHATSAPP_PHONE_NUMBER_ID>/messages` with the access token, `messaging_product: "whatsapp"`, `recipient_type: "individual"`, `recipient: <BSUID>` (no `to`: Meta reserves `to` for phone numbers), and either `type: "text"` or `type: "interactive"` with `interactive.type: "button"`. The Graph API version is one constant in the adapter, pinned at build time. `sendText` splits long replies at 4096 characters. A button message's body is at most 1024 characters and each button title at most 20 (§2.4). Meta lets the bot reply only within 24 hours of the user's last message (§2.10.1).
+- Drafts (`sendDraft`): a button message with **✅ Lưu**, **❌ Huỷ**, **✏️ Sửa**. The button ids carry the same action and draft id as Telegram's `callback_data` (`c:<txId>` / `x:<txId>`), so `handleButton`'s existing confirm/discard path is reused; how the ids are encoded within WhatsApp's 256-character id limit is left to the builder. Reply buttons cannot open a URL, so ✏️ Sửa makes the bot reply with `<APP_URL>/bot`. §2.10.4 does not say how the `{ ok, text }` result of a press is shown in the chat; left to the builder.
+- Receipts (`downloadPhoto`): `GET /<image.id>` with the access token gives a `url` valid for 5 minutes; download it with the same token and pass the bytes to KIE as on the other platforms.
+- Every closed list of platforms gains `whatsapp` (§2.10.5): the Mongoose enums `chatLinks.platform`, `transactions.source` and `transactions.chatRef.platform` (without the last, every WhatsApp draft fails validation), the zod `source` filter of `GET /transactions` (`routes/transactions.js`), and the platform/source lists of `GET /admin/stats` (`services/admin.js`).
+- Privacy: no phone number is stored or returned; the web shows the WhatsApp profile name, and admin stats count chats per platform without identifiers.
+- Locked accounts, `/today`, `/month`, `/lang`, `/help` and budget alerts behave exactly as on Telegram and Zalo.
 
 ## 4.7 Text parser
 
@@ -271,6 +308,10 @@ Specified in [02-features.md §2.5](02-features.md#25-text-parser-rules-rule-bas
 
 - [ ] `.env` git-ignored; `.env.example` lists names only; secrets set in Vercel → Settings → Environment Variables.
 - [ ] Webhook secrets checked with timing-safe compare before the update is processed (the global `express.json` has already parsed the body).
+- [ ] *Planned (§2.10.4):* WhatsApp `X-Hub-Signature-256` checked against an HMAC-SHA256 of `req.rawBody` with `WHATSAPP_APP_SECRET`, in constant time, before anything is processed (401 otherwise); the `GET` setup check answers 403 unless `hub.verify_token` equals `WHATSAPP_VERIFY_TOKEN`.
+- [ ] *Planned (§2.10.3):* claim tokens are 24 random bytes, stored only as SHA-256, single use, 10 min, at most one live per chat; they travel in request bodies, never in a URL the server logs; claiming needs login plus the Confirm step and spends the token in one atomic update.
+- [ ] *Planned (§2.10.4):* no WhatsApp phone number stored or returned (chats are keyed by BSUID).
+- [ ] *Planned, open (not stated by §2.10):* `middleware/requestId.js` logs `req.originalUrl`, and Meta's `GET` setup check carries `hub.verify_token` in the query, so `WHATSAPP_VERIFY_TOKEN` would reach the Vercel logs. The builder either redacts the `hub.*` query in the request log for `/api/webhooks/whatsapp` or accepts it (the token only guards the setup check).
 - [ ] Every query scoped by `userId`; admin cannot read users' transactions.
 - [ ] Passwords hashed with bcrypt; refresh tokens and link codes stored hashed; link codes single-use, 10 min TTL.
 - [ ] `helmet`; JSON body limit 1 MB; zod on every input; `mongoose.set('sanitizeFilter', true)` against operator injection.
