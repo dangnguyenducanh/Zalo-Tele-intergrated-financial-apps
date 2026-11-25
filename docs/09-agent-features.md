@@ -1,6 +1,6 @@
 # 9. Agent features (planned design)
 
-> **Status: design draft for review, nothing here is built.** Written 2026-11-25. Parts 1 and 2 were checked by independent reviewer agents; Part 3 is a draft whose reviewer notes are listed in the appendix and not yet applied. Specs move into docs/02–07 only after a feature is chosen.
+> **Status: design draft for review, nothing here is built.** Written 2026-11-25. Parts 1 and 2 were checked by independent reviewer agents; Part 3 is a draft whose reviewer notes are listed in the appendix and not yet applied. The buildable spec is now [02-features.md §2.11](02-features.md#211-assistant-and-agent-features-planned), which takes this design's recommended answers to the open decisions (marked ⚑ there) and applies the Part 3 reviewer fixes it needs; embeddings, the LLM planner, C2 and B5 stay here as later options.
 
 - **Part 1** — the 15 agent features (tiers A rule-based, B proactive, C optional AI), first package, open decisions.
 - **Part 2** — rules vs AI agent: who answers what on Telegram, Zalo, WhatsApp and the dashboard; guardrails; tech stack; cost. Checked by two skeptics and merged.
