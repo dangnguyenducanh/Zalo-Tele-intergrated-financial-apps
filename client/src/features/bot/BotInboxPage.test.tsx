@@ -367,6 +367,8 @@ test('TC-F10-11 a receipt draft whose total was torn off says under its amount t
   const torn = await card('Cửa hàng tiện lợi');
   const amount = within(torn).getByRole('textbox', { name: 'Số tiền (₫)' });
   expect(amount).toHaveAccessibleDescription(/^= 53\.000\s₫ · Ước tính: tổng các dòng hàng vì không đọc được tổng tiền, hãy kiểm tra$/);
+  // The items summary does not claim they "match the total": the amount is their sum (like the bot reply).
+  expect(within(torn).getByText(/dòng hàng/, { selector: 'summary' })).toHaveTextContent(/^3 dòng hàng$/);
   // A receipt with its total read has no such note.
   expect(within(await card('Bách Hoá Xanh')).getByRole('textbox', { name: 'Số tiền (₫)' })).toHaveAccessibleDescription(/^= 116\.000\s₫$/);
 

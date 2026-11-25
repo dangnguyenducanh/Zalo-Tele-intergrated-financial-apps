@@ -52,9 +52,10 @@ export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () 
   const title = draft.note || t('transactions:noNote');
   // No total left on the receipt: the server summed the item lines (docs/02 §2.6). Said under the amount while it is
   // still that sum (not after a correction here or in the chat). The flag is read with `in` because the Draft type
-  // lives in botApi.ts, outside this card's scope.
+  // lives in botApi.ts, outside this card's scope. The items summary then leaves out "match the total": they always do.
   const receipt = draft.receipt;
-  const estimated = !!receipt && 'estimated' in receipt && receipt.estimated === true && amount === receipt.total;
+  const fromItems = !!receipt && 'estimated' in receipt && receipt.estimated === true;
+  const estimated = fromItems && amount === receipt.total;
 
   const say = (message: string, severity: 'success' | 'warning' | 'error') => dispatch(showSnackbar({ message, severity }));
 
@@ -203,7 +204,8 @@ export default function DraftCard({ draft, onGone }: { draft: Draft; onGone: () 
         // Native disclosure: keyboard and screen reader support without any script.
         <Box component="details" sx={{ mt: 2, typography: 'body2', '& summary': { cursor: 'pointer', py: 0.5 } }}>
           <summary>
-            {t('drafts.items', { count: items.length })} · {t(draft.receipt?.reconciled ? 'drafts.reconciled' : 'drafts.notReconciled')}
+            {t('drafts.items', { count: items.length })}
+            {!fromItems && ` · ${t(draft.receipt?.reconciled ? 'drafts.reconciled' : 'drafts.notReconciled')}`}
           </summary>
           <Box component="ul" sx={{ m: 0, mt: 1, pl: 3 }}>
             {items.map((item, index) => (
