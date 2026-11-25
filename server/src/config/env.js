@@ -25,8 +25,12 @@ export function parseEnv(source) {
     ZALO_BOT_TOKEN: optional(z.string(), 'test-zalo-token'),
     ZALO_WEBHOOK_SECRET: optional(z.string().min(8).max(256), 'test-zalo-secret'),
     // The bot's share link (Zalo Bot Creator). The link card's QR code holds 106 bytes at most (client qrCode.ts).
+    // The "//" is checked too: zod also takes "https:zalo.me/1", which as an href is a path on our own site.
     ZALO_BOT_URL: optional(
-      z.url({ protocol: /^https$/ }).refine((url) => Buffer.byteLength(url) <= 106, 'at most 106 bytes, so it fits the QR code'),
+      z
+        .url({ protocol: /^https$/ })
+        .regex(/^https:\/\//i, 'must start with https://')
+        .refine((url) => Buffer.byteLength(url) <= 106, 'at most 106 bytes, so it fits the QR code'),
       'https://zalo.me/test-bot',
     ),
     WHATSAPP_NUMBER: optional(z.string().regex(/^[1-9]\d{5,14}$/), '84900000000'), // international (no leading 0), digits only, for wa.me links

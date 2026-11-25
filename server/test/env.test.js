@@ -65,6 +65,8 @@ test('TC-F7-11 WHATSAPP_NUMBER must be international digits and ZALO_BOT_URL an 
     { WHATSAPP_NUMBER: '0901234567' },
     { ZALO_BOT_URL: 'http://zalo.me/123' },
     { ZALO_BOT_URL: 'zalo.me/123' },
+    { ZALO_BOT_URL: 'https:zalo.me/123' }, // as an href this opens our own site's /zalo.me/123
+    { ZALO_BOT_URL: 'https:/zalo.me/123' },
     { ZALO_BOT_URL: zaloUrl(107) },
     { ZALO_BOT_URL: `https://zalo.me/${'ạ'.repeat(31)}` }, // 47 characters, 109 bytes
   ]) {
