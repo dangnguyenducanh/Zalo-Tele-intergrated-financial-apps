@@ -97,9 +97,9 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 | Method | Path | Auth | Body / query | Success | Errors |
 |---|---|---|---|---|---|
 | GET | `/wallets` | 🔒 | `?includeArchived=` | **200** `[{…, balance}]` | — |
-| POST | `/wallets` | 🔒 | `{name, type, initialBalance, aliases?, color?, icon?}` | **201** | 400, 409 `NAME_TAKEN` |
+| POST | `/wallets` | 🔒 | `{name, type, initialBalance, aliases?, color?, icon?}` | **201** | 400 (also `initialBalance` < 0 when `type` ≠ `credit`, details path `initialBalance`), 409 `NAME_TAKEN` |
 | GET | `/wallets/:id` | 🔒 | — | **200** | 404 |
-| PATCH | `/wallets/:id` | 🔒 | any field above, `archived?` (archiving the default wallet clears the user's default) | **200** | 400, 404, 409 |
+| PATCH | `/wallets/:id` | 🔒 | any field above, `archived?` (archiving the default wallet clears the user's default) | **200** | 400 (also when the patch changes `type` or `initialBalance` and the resulting wallet is below 0 without being `credit`), 404, 409 |
 | DELETE | `/wallets/:id` | 🔒 | — | **204** | 404, 409 `WALLET_IN_USE` |
 | GET | `/categories` | 🔒 | `?type=expense\|income` | **200** | — |
 | POST | `/categories` | 🔒 | `{type, name, keywords?, icon?, color?}` | **201** | 400, 409 `NAME_TAKEN` (same name and type, any case) |

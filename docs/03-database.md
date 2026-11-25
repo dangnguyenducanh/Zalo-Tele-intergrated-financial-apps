@@ -70,7 +70,7 @@ Indexes: `{ tokenHash: 1 }` unique; `{ userId: 1, revokedAt: 1 }`; **TTL** `{ ex
 | `userId` | ObjectId → User | required |
 | `name` | String | 1–40 chars, unique per user among non-deleted, ignoring case (duplicate → 409 `NAME_TAKEN`); an archived wallet keeps its name |
 | `type` | String | `cash` \| `bank` \| `ewallet` \| `credit` |
-| `initialBalance` | Number (int) | may be 0 or negative (credit) |
+| `initialBalance` | Number (int) | ±10^13; below 0 only when `type` is `credit` (a model `pre('validate')` hook checks it when the wallet is created or its `type` or `initialBalance` changes, so older rows can still be renamed or archived, and then saves both fields together, so two edits at once cannot mix their halves; BUG-038) |
 | `aliases` | [String] | bot shortcuts, e.g. `["mm","momo"]` |
 | `color`, `icon` | String | UI only |
 | `archived` | Boolean | hidden from pickers, kept in stats; archiving the user's default wallet clears `users.defaultWalletId` |
