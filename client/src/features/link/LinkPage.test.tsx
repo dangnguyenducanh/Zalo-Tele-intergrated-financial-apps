@@ -167,7 +167,9 @@ test('TC-F7-20 a failed preview is an error with Retry; a failed claim keeps Con
   await user.click(screen.getByRole('button', { name: /^EN/ }));
   expect(await screen.findByText(/Cannot reach the server/)).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Confirm' }));
-  expect(await screen.findByText('Linked ✓ Zalo · Anh')).toBeInTheDocument();
+  // Wait for /bot first: /link has its own snackbar, and its copy of the message is thrown away on the way there.
+  expect(await heading('Bot inbox')).toBeInTheDocument();
+  expect(screen.getByText('Linked ✓ Zalo · Anh')).toBeInTheDocument();
 });
 
 test('TC-F7-20 an explicit logout forgets a pending claim token, so the next person does not get it', async () => {
