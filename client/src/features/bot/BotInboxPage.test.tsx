@@ -487,6 +487,32 @@ test('TC-F7-14 a chat linked in another tab while the page sat idle is not "Link
   }
 });
 
+test('TC-F7-14 an expired, unused code is not "Linked ✓" when an unlink reloads the list with a link made elsewhere', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    links = [{ id: 'l0', platform: 'telegram', displayName: 'Old TG', createdAt: NOW }];
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234'), zalo: ZALO }, 3000);
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(await within(linkCard).findByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+
+    links = [...links, { id: 'l1', platform: 'zalo', displayName: 'Phone Zalo', createdAt: new Date().toISOString() }]; // linked elsewhere later
+    await user.click(within(linked).getByRole('button', { name: 'Huỷ liên kết Telegram · Old TG' })); // the unlink reloads the list
+    await user.click(within(await screen.findByRole('dialog', { name: 'Huỷ liên kết?' })).getByRole('button', { name: 'Huỷ liên kết' }));
+    expect(await within(linked).findByText(/Zalo · Phone Zalo/)).toBeInTheDocument();
+    await waitFor(() => expect(within(linked).getByRole('heading', { name: 'Tài khoản đã liên kết' })).toHaveFocus());
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test('TC-F7-14 a code redeemed in its last seconds is not "Linked ✓" for the next code', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   try {

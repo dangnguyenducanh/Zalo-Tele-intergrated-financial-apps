@@ -49,7 +49,9 @@ export default function LinkCard() {
   // A link that was not there when the code was made: the bot redeemed it, so the code is spent. Updating state
   // while rendering (React's "previous render" pattern) swaps the code for "Linked ✓" and stops the 5 s checks.
   // linkedBefore is null when the list could not be loaded then: no "Linked ✓" rather than a wrong one.
-  const newLink = code && linkedBefore ? chatLinks?.find((link) => !linkedBefore.includes(link.id)) : undefined;
+  // Only while the code is live: after it expires the list still reloads (an unlink, Retry), and a link made
+  // elsewhere then did not redeem this code.
+  const newLink = code && live && linkedBefore ? chatLinks?.find((link) => !linkedBefore.includes(link.id)) : undefined;
   if (newLink) {
     setLinked(newLink);
     setCode(null);
