@@ -203,7 +203,7 @@ Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`.
 
 ## 3.6 One-tap linking and WhatsApp (planned, §2.10)
 
-None of this is built yet. It lists what docs/02 §2.10 changes against §3.3; the PR that builds each part moves its change into §3.3 and removes it here. §2.10 adds no collection and no index.
+None of this is built yet. It lists what docs/02 §2.10 changes against §3.3; as each part is built, its change moves into §3.3 and is removed here. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. §2.10 adds no collection and no index.
 
 ### `linkCodes`: codes and claim links (planned)
 

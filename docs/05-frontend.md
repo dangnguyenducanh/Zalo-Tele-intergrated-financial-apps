@@ -146,7 +146,7 @@ A failed load of a page's main data (Dashboard, Transactions, Wallets, Categorie
 
 ## 5.9 One-tap linking and WhatsApp (planned, §2.10)
 
-> **Not built yet.** §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). Each part moves into §5.2–§5.7 in the PR that builds it (§2.10.5). Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
+> **Not built yet.** §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). As each part is built it moves into §5.2–§5.7 (§2.10.5). Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
 
 ### 5.9.1 Link card on `/bot` (planned, §2.10.2)
 
@@ -156,7 +156,7 @@ Today `LinkCard.tsx` shows, once a code exists, the code and countdown, then a T
 |---|---|---|
 | Data | `telegramDeepLink` from `POST /api/chat-links/code` | `links: { telegram, whatsapp, zalo }`, each a URL or `null`. The client uses them as given and builds no URL itself |
 | Layout | Telegram block and Zalo text shown together | An app picker **Telegram \| WhatsApp \| Zalo** (one choice); below it only the selected app's button, instruction line and QR |
-| Default app | – | The first shown app (link not `null`), in that order, that is not linked yet: no row in `GET /api/chat-links` for this user (the list the card already polls). An app left out of the picker is never the default |
+| Default app | – | The first shown app (link not `null`), in that order, that is not linked yet (no row in `GET /api/chat-links` for this user, the list the card already polls); if every shown app is linked, the first shown app (card T32, #72). An app left out of the picker is never the default |
 | Missing settings | Telegram block hidden when `telegramDeepLink` is `null`; Zalo text always shown | Any app whose link is `null` is left out of the picker (Zalo too, when `ZALO_BOT_URL` is not set) |
 | QR | The Telegram deep link | The selected app's link. For Zalo it only opens the bot, so the large code stays on screen |
 | Feedback | The new account appears under **Linked accounts** | Also `Linked ✓ <App> · <name>` on the card, as soon as the polled list has a link it did not have when the code was made |
@@ -254,7 +254,7 @@ Keys and wording are left to the builder (§2.10), in vi and en. What needs text
 
 1. **Zalo, copy fails:** does the tab still open? A real link always opens it and no pop-up blocker can stop it; opening only after a successful copy needs `window.open` after an `await`, which some browsers block.
 2. **Link card after "Linked ✓":** does the code stay (and polling go on) until it expires, or does the card reset? The code is single use either way.
-3. **Picker edge cases:** which app is selected when every shown app is already linked, and what the card shows when all three links are `null`.
+3. **Picker edge case:** what the card shows when all three links are `null`.
 4. **`/link` gaps:** no token (opened bare, or `sessionStorage` empty) and network or 5xx errors on preview or claim have no state in §2.10.3. The §5.7 rule (error banner with **Retry**) is the obvious candidate for the second.
 5. **New users:** `/login` links to `/register`, and `RegisterPage` always lands on `/`, so someone who registers on the way loses the return to `/link`. Should `RegisterPage` honour `state.from` too?
 6. **Clearing the token:** after Confirm, Cancel or an error, so a spent token does not stay in `sessionStorage`.

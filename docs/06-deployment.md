@@ -198,7 +198,7 @@ CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not d
 
 ## 6.12 WhatsApp Cloud API (Meta) setup (planned, §2.10)
 
-> **Planned (§2.10), not built yet.** Today there is no WhatsApp code: `server/src/routes/webhooks.js` has only `/telegram` and `/zalo`, `server/src/config/env.js` has no `WHATSAPP_*` variable, and `setWebhooks.js` knows only Telegram and Zalo. Do these steps when the WhatsApp adapter (§2.10.4) is merged. The bot talks to Meta's WhatsApp Cloud API directly, with no provider in between.
+> **Planned (§2.10), not built yet.** Today there is no WhatsApp code: `server/src/routes/webhooks.js` has only `/telegram` and `/zalo`, `server/src/config/env.js` has no `WHATSAPP_*` variable, and `setWebhooks.js` knows only Telegram and Zalo. Do these steps when the WhatsApp adapter (§2.10.4) is merged. The bot talks to Meta's WhatsApp Cloud API directly, with no provider in between. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.
 
 **On Meta's side** (once; §2.10.1 lists what the owner needs):
 
@@ -226,7 +226,7 @@ CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not d
 tools/set-secret.sh WHATSAPP_ACCESS_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMBER ZALO_BOT_URL
 ```
 
-It saves them in `server/.env` and pushes them to **both** Vercel projects. The scripts don't change for this: none of the six is on the local-only list in `tools/vercel-env-push.sh`, so they are pushed as typed, like the Telegram and Zalo keys. If a push fails, repeat it with `tools/vercel-env-push.sh production WHATSAPP_ACCESS_TOKEN …` (and `staging`). Then **redeploy** (`tools/deploy.sh production`): Meta's setup check below needs `WHATSAPP_VERIFY_TOKEN` live. The PR that builds the adapter also adds the six names, without values, to `.env.example`.
+It saves them in `server/.env` and pushes them to **both** Vercel projects. The scripts don't change for this: none of the six is on the local-only list in `tools/vercel-env-push.sh`, so they are pushed as typed, like the Telegram and Zalo keys. If a push fails, repeat it with `tools/vercel-env-push.sh production WHATSAPP_ACCESS_TOKEN …` (and `staging`). Then **redeploy** (`tools/deploy.sh production`): Meta's setup check below needs `WHATSAPP_VERIFY_TOKEN` live. The build PRs also add the names, without values, to `.env.example`: T32 (#72) `WHATSAPP_NUMBER` and `ZALO_BOT_URL`, T34 (#74) the other four.
 
 **Register the number and the webhook** (after that deploy; production URL, as in §6.4):
 
@@ -250,5 +250,5 @@ A Meta app has one callback URL, so, like the Telegram and Zalo bots, the WhatsA
 **When settings are missing** (§2.10.2, §2.10.5):
 
 - The webhook-registration script skips that platform and prints `skipped: …`, as it does for Telegram and Zalo today.
-- The link card leaves the app out of the picker: `POST /api/chat-links/code` returns `null` for its entry in `links`. WhatsApp's link is built from `WHATSAPP_NUMBER` and Zalo's is `ZALO_BOT_URL`, so without them the button is hidden; which of the other `WHATSAPP_*` variables also count as "missing" is left to the builder. Today the Telegram button already behaves this way when `TELEGRAM_BOT_USERNAME` is unset (`telegramDeepLink: null`).
-- §2.10 doesn't name the case of an unset `WHATSAPP_APP_SECRET` or `WHATSAPP_VERIFY_TOKEN`. Following §2.10.4's rule that a failed check answers 401 (`POST`) or 403 (`GET`), and the way `sameSecret` treats an unset secret for Telegram and Zalo today, a missing one fails the check like a wrong one; the builder confirms this ([04-backend.md §4.2](04-backend.md#42-configuration)).
+- The link card leaves the app out of the picker: `POST /api/chat-links/code` returns `null` for its entry in `links`. WhatsApp's link is built from `WHATSAPP_NUMBER` and Zalo's is `ZALO_BOT_URL`, so without them the button is hidden (§2.10.2). WhatsApp is also hidden while any of the four webhook settings in the next point is unset (card T34, #74). Today the Telegram button already behaves this way when `TELEGRAM_BOT_USERNAME` is unset (`telegramDeepLink: null`).
+- If any of `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /api/webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing (card T34, #74; [04-backend.md §4.2](04-backend.md#42-configuration)). So staging deploys and works without the WhatsApp settings, with WhatsApp hidden and its webhook off.

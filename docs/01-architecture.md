@@ -10,7 +10,7 @@ The system has **three runtime pieces**:
 
 Telegram and Zalo push messages to **webhooks** on the same Vercel API.
 
-**Planned ([§2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned), not built yet):** WhatsApp joins as a third chat app through **Meta's WhatsApp Cloud API**, with the same webhook pattern and bot core as Telegram and Zalo. Dashed lines in the diagram are planned. Every part of this document marked "planned" describes a change against today's code, not something that exists.
+**Planned ([§2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned), not built yet):** WhatsApp joins as a third chat app through **Meta's WhatsApp Cloud API**, with the same webhook pattern and bot core as Telegram and Zalo. Dashed lines in the diagram are planned. Every part of this document marked "planned" describes a change against today's code, not something that exists. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.
 
 ```mermaid
 flowchart LR

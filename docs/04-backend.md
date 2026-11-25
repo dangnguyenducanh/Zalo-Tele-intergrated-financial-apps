@@ -1,5 +1,7 @@
 # 4. Backend (Express 5 on Vercel)
 
+*Parts marked planned (§2.10) are not built yet. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.*
+
 ## 4.1 How the API runs
 
 - `server/src/app.js` builds and **exports** the Express app. It never calls `listen`.
@@ -29,7 +31,8 @@ trust proxy 1 → helmet → express.json({ limit: '1mb' }) → cookie-parser �
 - no `KIE_URL` → `POST /receipts` answers 503 `FEATURE_NOT_CONFIGURED` for a valid JPEG/PNG upload (the missing-field 400 and the 415 come first; the bots say the receipt reader is not answering);
 - no webhook secret → that platform's webhook answers 401 to everything;
 - no `TELEGRAM_BOT_USERNAME` → `telegramDeepLink` is `null`;
-- *planned (§2.10):* `links.telegram` replaces `telegramDeepLink` with the same rule, and `links.whatsapp` / `links.zalo` are `null` when that app's settings are missing (at least `WHATSAPP_NUMBER` / `ZALO_BOT_URL`, which the links are built from; whether the other WhatsApp variables also count is left to the builder). §2.10 does not name the case of an unset `WHATSAPP_APP_SECRET` or `WHATSAPP_VERIFY_TOKEN`; following §2.10.4's rule that a failed check answers 401 (`POST`) or 403 (`GET`), and the way `sameSecret` treats an unset secret today, a missing one fails the check like a wrong one. The builder confirms this (rather than a 503 `FEATURE_NOT_CONFIGURED`).
+- *planned (§2.10):* `links.telegram` replaces `telegramDeepLink` with the same rule; no `WHATSAPP_NUMBER` → `links.whatsapp` is `null`, and no `ZALO_BOT_URL` → `links.zalo` is `null`, so the link card hides that app (§2.10.2);
+- *planned (§2.10), decided by card T34 (#74):* if any of the WhatsApp webhook settings `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing, and `links.whatsapp` is `null`, so the link card hides WhatsApp. Unlike Telegram and Zalo (401 without their secret), an unset setting is not treated as a failed check.
 
 An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required variables and the `APP_URL`, bot and KIE variables get harmless defaults, so the test suites run without `server/.env` (`MONGODB_DB` and the `SEED_*` variables stay unset).
 
@@ -177,8 +180,8 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 |---|---|---|---|---|
 | POST | `/webhooks/telegram` | header `X-Telegram-Bot-Api-Secret-Token` | **200** (always, after the secret check) | 401 bad secret |
 | POST | `/webhooks/zalo` | header `X-Bot-Api-Secret-Token` (timing-safe compare) | **200** | 401 bad secret |
-| GET | `/webhooks/whatsapp` *(planned, §2.10.4)* | query `hub.mode=subscribe` and `hub.verify_token` equal to `WHATSAPP_VERIFY_TOKEN` (Meta's setup check) | **200** `hub.challenge` as plain text | 403 |
-| POST | `/webhooks/whatsapp` *(planned, §2.10.4)* | header `X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body with WHATSAPP_APP_SECRET>` (constant-time compare) | **200** (also for status updates, which are ignored) | 401 bad signature, nothing processed |
+| GET | `/webhooks/whatsapp` *(planned, §2.10.4)* | query `hub.mode=subscribe` and `hub.verify_token` equal to `WHATSAPP_VERIFY_TOKEN` (Meta's setup check) | **200** `hub.challenge` as plain text | 403; 503 `FEATURE_NOT_CONFIGURED` (a WhatsApp webhook setting unset, §4.2) |
+| POST | `/webhooks/whatsapp` *(planned, §2.10.4)* | header `X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body with WHATSAPP_APP_SECRET>` (constant-time compare) | **200** (also for status updates, which are ignored) | 401 bad signature, nothing processed; 503 `FEATURE_NOT_CONFIGURED` (a WhatsApp webhook setting unset, §4.2) |
 | GET | `/health` | — | **200** `{status:'ok', db:'up'}` | 503 |
 
 ## 4.5 Errors and status codes
