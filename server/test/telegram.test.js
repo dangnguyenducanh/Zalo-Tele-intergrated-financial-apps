@@ -139,6 +139,7 @@ test('TC-F7-01 POST /chat-links/code returns a 6-char code valid for 10 minutes 
 
   const { code, expiresAt, links } = res.body;
   expect(code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/); // no I/O/0/1 look-alikes
+  // The link card assumes this lifetime too (CODE_LIFETIME_MS in client/src/features/bot/LinkCard.tsx): change both.
   const ttl = new Date(expiresAt).getTime() - before;
   expect(ttl).toBeGreaterThanOrEqual(10 * 60 * 1000);
   expect(ttl).toBeLessThan(10 * 60 * 1000 + 5000);
