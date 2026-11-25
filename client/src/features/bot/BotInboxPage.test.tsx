@@ -337,7 +337,7 @@ test('TC-F10-06 the receipt status and error switch to English with the rest of 
   expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo bản nháp từ hoá đơn.');
 });
 
-test('TC-F7-06 Generate stays busy until the fresh link list is back, so a slow GET /chat-links cannot send a second code request', async () => {
+test('TC-F7-06 Generate stays disabled while the fresh link list is still loading after the code arrived', async () => {
   const user = userEvent.setup();
   renderApp('/bot');
   const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
@@ -345,13 +345,23 @@ test('TC-F7-06 Generate stays busy until the fresh link list is back, so a slow 
 
   let answerLinks = () => {};
   const slowList = new Promise<void>((resolve) => (answerLinks = resolve)); // e.g. a cold start
-  server.use(http.get('*/api/chat-links', async () => (await slowList, HttpResponse.json(links))));
+  let listAsked = false;
+  server.use(
+    http.get('*/api/chat-links', async () => {
+      listAsked = true;
+      await slowList;
+      return HttpResponse.json(links);
+    }),
+  );
   let posts = 0;
   codeAnswer = () => (posts++, codeWith('ABC234', { telegram: TG('ABC234') })());
   const generate = screen.getByRole('button', { name: 'Tạo mã liên kết' });
   await user.click(generate);
-  await waitFor(() => expect(posts).toBe(1));
-  expect(generate).toBeDisabled(); // the POST is done, the list is not: a second tap does nothing
+  // The card asks for the list only after the POST has answered: from here on the list alone keeps the button busy.
+  await waitFor(() => expect(listAsked).toBe(true));
+  // RTK Query tells React about that answer on the next animation frame: let it render before looking at the button.
+  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+  expect(generate).toBeDisabled();
 
   answerLinks();
   expect(await screen.findByText('ABC234')).toBeInTheDocument();
