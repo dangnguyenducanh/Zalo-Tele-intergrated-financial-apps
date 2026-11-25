@@ -127,7 +127,7 @@ test('TC-F7-15 link card in a real browser: WhatsApp prefilled link, Zalo copies
 });
 
 // BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card at any width.
-test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accounts: no sideways scroll on a phone', async ({ page, request }, testInfo) => {
+test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accounts and the "Linked ✓" message: no sideways scroll on a phone', async ({ page, request }, testInfo) => {
   const { email } = await createAccount(request);
   await page.setViewportSize({ width: 390, height: 844 });
   await logIn(page, email);
@@ -140,10 +140,15 @@ test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accou
   expect((await request.post('/api/webhooks/telegram', { ...webhook, data: update })).status()).toBe(200);
   const accounts = page.getByRole('region', { name: 'Tài khoản đã liên kết' });
   await expect(accounts).toContainText(longName, { timeout: 10_000 });
+  // The "Linked ✓" message in the link card shows the same name. Its box scrolls (overflow: auto), so the page
+  // does not scroll sideways when the name runs past the edge: compare the box's own widths too.
+  const linkedMessage = page.getByRole('region', { name: 'Liên kết ứng dụng chat' }).locator('.MuiAlert-message');
+  await expect(linkedMessage).toHaveText(`Đã liên kết ✓ Telegram · ${longName}`, { timeout: 10_000 });
 
-  for (const width of [390, 375, 1280]) {
+  for (const width of [360, 390, 375, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `no sideways scroll at ${width} px`).toBe(true);
+    expect(await linkedMessage.evaluate((el) => el.scrollWidth <= el.clientWidth), `"Linked ✓" name wraps at ${width} px`).toBe(true);
     await accounts.screenshot({ path: testInfo.outputPath(`linked-accounts-long-name-${width}.png`), animations: 'disabled' });
   }
 });

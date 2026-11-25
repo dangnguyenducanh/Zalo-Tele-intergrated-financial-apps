@@ -360,8 +360,12 @@ test('TC-F9-04 opening the inbox again shows drafts confirmed in the chat meanwh
   expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument();
 });
 
+// Zalo's QR only opens the bot (its link carries no code), so its name says just that.
 const qrPathOf = (card: HTMLElement, app: string) =>
-  within(card).getByRole('img', { name: `Mã QR mở ${app} với mã liên kết` }).querySelector('path')?.getAttribute('d');
+  within(card)
+    .getByRole('img', { name: app === 'Zalo' ? 'Mã QR mở bot Zalo' : `Mã QR mở ${app} với mã liên kết` })
+    .querySelector('path')
+    ?.getAttribute('d');
 
 test('TC-F7-12 link card: only configured apps are offered; the picker switches the button, the step and the QR', async () => {
   const user = userEvent.setup();
@@ -513,18 +517,21 @@ test('TC-F7-14 an expired, unused code is not "Linked ✓" when an unlink reload
   }
 });
 
-test('TC-F7-14 a code redeemed in its last seconds is not "Linked ✓" for the next code', async () => {
+test('TC-F7-14 a code redeemed after the last 5 s check is "Linked ✓" once it expires, and not for the next code', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   try {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     codeAnswer = codeWith('ABC234', { telegram: TG('ABC234') }, 3000); // expires before the first 5 s check
     renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
     await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
     const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
     expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
-    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: NOW }]; // redeemed just before it expired
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: new Date().toISOString() }]; // redeemed just before it expired
     await act(() => vi.advanceTimersByTimeAsync(4000));
-    expect(await within(linkCard).findByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh')).toBeInTheDocument(); // the last check at expiry
+    expect(within(linkCard).queryByText('Mã đã hết hạn. Hãy tạo mã mới.')).not.toBeInTheDocument();
+    expect(within(linked).getByText(/Telegram · Anh/)).toBeInTheDocument();
 
     codeAnswer = codeWith('XYZ567', { telegram: TG('XYZ567') });
     await user.click(within(linkCard).getByRole('button', { name: 'Tạo mã mới' }));
@@ -532,6 +539,29 @@ test('TC-F7-14 a code redeemed in its last seconds is not "Linked ✓" for the n
     await act(() => vi.advanceTimersByTimeAsync(5000));
     expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
     expect(within(linkCard).getByText('XYZ567')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 "Linked ✓", then unlink that account: no "Linked ✓" any more, Generate is offered', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: new Date().toISOString() }];
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh Nguyen')).toBeInTheDocument();
+
+    await user.click(within(linked).getByRole('button', { name: 'Huỷ liên kết Telegram · Anh Nguyen' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Huỷ liên kết?' })).getByRole('button', { name: 'Huỷ liên kết' }));
+    expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(await within(linkCard).findByRole('button', { name: 'Tạo mã liên kết' })).toBeInTheDocument(); // once the dialog has closed
   } finally {
     vi.useRealTimers();
   }

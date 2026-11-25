@@ -41,7 +41,8 @@ export default function LinkCard() {
   const codeBox = useRef<HTMLDivElement>(null);
   const linkedBox = useRef<HTMLDivElement>(null);
 
-  const secondsLeft = code ? Math.max(0, Math.round((Date.parse(code.expiresAt) - now) / 1000)) : 0;
+  // Rounded up, so the code counts as expired only once its expiry time has passed.
+  const secondsLeft = code ? Math.max(0, Math.ceil((Date.parse(code.expiresAt) - now) / 1000)) : 0;
   // The account appears under "Linked accounts" as soon as the user has sent the code to the bot.
   const { data: chatLinks, refetch: refetchLinks } = useGetChatLinksQuery(undefined, { pollingInterval: secondsLeft > 0 ? CHECK_LINKS_MS : 0 });
   const live = secondsLeft > 0;
@@ -49,13 +50,24 @@ export default function LinkCard() {
   // A link that was not there when the code was made: the bot redeemed it, so the code is spent. Updating state
   // while rendering (React's "previous render" pattern) swaps the code for "Linked ✓" and stops the 5 s checks.
   // linkedBefore is null when the list could not be loaded then: no "Linked ✓" rather than a wrong one.
-  // Only while the code is live: after it expires the list still reloads (an unlink, Retry), and a link made
-  // elsewhere then did not redeem this code.
-  const newLink = code && live && linkedBefore ? chatLinks?.find((link) => !linkedBefore.includes(link.id)) : undefined;
+  // Only a link made before the code expired (both server times): one made later, found when an unlink or Retry
+  // reloads the list, did not redeem this code.
+  const newLink =
+    code && linkedBefore
+      ? chatLinks?.find((link) => !linkedBefore.includes(link.id) && Date.parse(link.createdAt) <= Date.parse(code.expiresAt))
+      : undefined;
   if (newLink) {
     setLinked(newLink);
     setCode(null);
   }
+  // "Linked ✓" only while that link still exists: unlinking it below takes the message away (no stale "Linked ✓").
+  const stillLinked = linked && chatLinks?.some((link) => link.id === linked.id) ? linked : null;
+
+  // One last check when the code expires: it may have been redeemed after the last 5 s check.
+  const expired = code !== null && !live;
+  useEffect(() => {
+    if (expired) void refetchLinks();
+  }, [expired, refetchLinks]);
 
   useEffect(() => {
     if (!live) return;
@@ -167,7 +179,8 @@ export default function LinkCard() {
                 {copy === 'done' && t('link.copied', { code: code.code })}
                 {copy === 'failed' && t('link.copyFailed')}
               </Typography>
-              <QrCode text={code.links[app]} label={t('link.qrFor', { app: t(`sources.${app}`) })} />
+              {/* Zalo's link only opens the bot: it carries no code (docs/02 §2.10.2). */}
+              <QrCode text={code.links[app]} label={app === 'zalo' ? t('link.qrZalo') : t('link.qrFor', { app: t(`sources.${app}`) })} />
             </>
           )}
           <Typography>{t('link.manual')}</Typography>
@@ -177,9 +190,10 @@ export default function LinkCard() {
         </Stack>
       ) : (
         <>
-          {linked ? (
-            <Alert ref={linkedBox} tabIndex={-1} severity="success" sx={{ mb: 2 }}>
-              {t('link.linked', { name: `${t(`sources.${linked.platform}`)} · ${linked.displayName}` })}
+          {stillLinked ? (
+            // The chat name is user text with no length limit: it wraps anywhere instead of running out of the card.
+            <Alert ref={linkedBox} tabIndex={-1} severity="success" sx={{ mb: 2, '& .MuiAlert-message': { overflowWrap: 'anywhere' } }}>
+              {t('link.linked', { name: `${t(`sources.${stillLinked.platform}`)} · ${stillLinked.displayName}` })}
             </Alert>
           ) : (
             code && (
@@ -189,7 +203,7 @@ export default function LinkCard() {
             )
           )}
           <Button variant="contained" loading={isLoading} onClick={() => void generate()}>
-            {t(code || linked ? 'link.regenerate' : 'link.generate')}
+            {t(code || stillLinked ? 'link.regenerate' : 'link.generate')}
           </Button>
         </>
       )}

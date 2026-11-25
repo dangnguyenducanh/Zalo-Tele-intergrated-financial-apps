@@ -31,6 +31,7 @@
       "zalo": "The button below copies /link {{code}} and opens the Zalo bot: paste it into the chat and send."
     },
     "qrFor": "QR code that opens {{app}} with the link code",
+    "qrZalo": "QR code that opens the Zalo bot",
     "manual": "You can also send this message to the bot yourself:",
     "copied": "Copied /link {{code}}",
     "copyFailed": "Could not copy. Copy the message below yourself and send it to the Zalo bot.",

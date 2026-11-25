@@ -31,6 +31,7 @@
       "zalo": "Nút bên dưới chép /link {{code}} và mở bot Zalo: dán vào ô chat rồi gửi."
     },
     "qrFor": "Mã QR mở {{app}} với mã liên kết",
+    "qrZalo": "Mã QR mở bot Zalo",
     "manual": "Bạn cũng có thể tự gửi tin nhắn sau cho bot:",
     "copied": "Đã chép /link {{code}}",
     "copyFailed": "Không chép được. Hãy tự chép tin nhắn bên dưới rồi gửi cho bot Zalo.",
