@@ -12,6 +12,7 @@ import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
 import { User } from '../src/models/User.js';
+import { createClaimToken } from '../src/services/chatLinks.js';
 import { setWebhooks } from '../src/scripts/setWebhooks.js';
 import { monthKey, vnDate, vnParts } from '../src/utils/vnTime.js';
 import fixtures from './fixtures/telegram-updates.json' with { type: 'json' };
@@ -595,16 +596,26 @@ test('TC-F7-16 an unlinked chat gets a one-time claim link, stored as a hash onl
 
 test('TC-F7-16 messages arriving at the same moment leave one live claim link per chat', async () => {
   await say('hi', CHAT_B);
-  for (let round = 0; round < 5; round++) {
-    const from = calls.length;
-    await Promise.all(['một', 'hai', 'ba', 'bốn'].map((text) => deliver(textUpdate(text))));
-    const rows = await LinkCode.find({ 'chat.platformUserId': String(CHAT_A) }).lean();
+  const chat = { platform: 'telegram', platformUserId: String(CHAT_A), chatId: String(CHAT_A), displayName: 'Anh Nguyen' };
+  const rowsOfChat = () => LinkCode.find({ 'chat.platformUserId': chat.platformUserId }).lean();
+  // createClaimToken itself, not the webhook: HTTP delivery staggers the writes. Only two inserts can make a second
+  // row, so every round starts with none. Without `unique: true` on the partial index this fails.
+  for (let round = 0; round < 10; round++) {
+    await LinkCode.deleteMany({ 'chat.platformUserId': chat.platformUserId });
+    const tokens = await Promise.all(Array.from({ length: 4 }, () => createClaimToken(chat)));
+    const rows = await rowsOfChat();
     expect(rows).toHaveLength(1);
-    // Every message was answered, and the one live token is among the links sent.
-    const tokens = calls.slice(from).map((c) => claimTokenIn(textOf(c)));
-    expect(tokens).toHaveLength(4);
     expect(tokens.map(sha256)).toContain(rows[0].codeHash);
   }
+
+  // Through the webhook: every message is answered, and the one live token is among the links sent.
+  const from = calls.length;
+  await Promise.all(['một', 'hai', 'ba', 'bốn'].map((text) => deliver(textUpdate(text))));
+  const tokens = calls.slice(from).map((c) => claimTokenIn(textOf(c)));
+  expect(tokens).toHaveLength(4);
+  const rows = await rowsOfChat();
+  expect(rows).toHaveLength(1);
+  expect(tokens.map(sha256)).toContain(rows[0].codeHash);
   expect(await LinkCode.countDocuments()).toBe(2); // the other chat's link is untouched
 });
 
