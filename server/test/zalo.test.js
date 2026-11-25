@@ -129,6 +129,23 @@ test('TC-F8-03 the Zalo webhook rejects a missing or wrong secret header with 40
   expect(await Transaction.countDocuments()).toBe(0);
 });
 
+// docs/02 §2.10.3: the only way to link Zalo without typing anything.
+test('TC-F7-16 TC-F7-18 an unlinked Zalo chat gets a claim link; claiming it links the chat and Zalo gets the success text', async () => {
+  const replies = await say('xin chào');
+  expect(replies.map((c) => c.method)).toEqual(['sendMessage']);
+  const [, token] = /http:\/\/localhost:5300\/link\?t=([A-Za-z0-9_-]{32})/.exec(textOf(replies[0]));
+  expect(await LinkCode.find().lean()).toMatchObject([{ chat: { platform: 'zalo', platformUserId: USER_A, chatId: USER_A, displayName: 'Anh Nguyen' } }]);
+
+  const { accessToken, user } = await registerUser({ name: 'Lan' });
+  const post = (path) => request(app).post(`/api/chat-links/${path}`).set('Authorization', `Bearer ${accessToken}`).send({ token });
+  expect((await post('claim/preview')).body).toEqual({ platform: 'zalo', displayName: 'Anh Nguyen' });
+  calls.length = 0;
+  expect((await post('claim')).status).toBe(201);
+  await Promise.all(background.splice(0));
+  expect(calls).toEqual([{ bot: 'bottest-zalo-token', method: 'sendMessage', body: { chat_id: USER_A, text: viText.linked('Lan') } }]);
+  expect(await ChatLink.find().lean()).toMatchObject([{ userId: oid(user.id), platform: 'zalo', viaClaim: true }]);
+});
+
 test('TC-F8-07 Zalo "grab 32k" → reply "ok" saves the draft; a second draft → "huy" discards it', async () => {
   // Not linked yet: link instructions, nothing stored.
   const unlinked = await say('grab 32k');
