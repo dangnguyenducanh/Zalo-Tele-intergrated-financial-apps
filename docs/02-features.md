@@ -31,9 +31,9 @@ Each feature is a complete slice (screen → API → collection), and most have 
 | F5 | **Monthly budgets**: limit per category (or overall) per month; progress bars; over-budget warnings (web + bot) | C R U D | Budgets, Dashboard |
 | F6 | **Statistics**: total balance of active wallets; month figures (income, expense, net, budget left); this month vs last month in weekly columns (spending or income); spending by category as a ranked list; category budgets to watch | R | Dashboard |
 | F7 | **Bot linking**: one-time code / Telegram deep link; list and unlink chat accounts. *Planned (§2.10):* one button per app (Telegram, WhatsApp, Zalo) and linking that starts in the chat | C R D | Bot inbox, *Link (planned)* |
-| F8 | **Bot capture (Telegram + Zalo, *WhatsApp planned in §2.10*)**: text → draft → confirm; receipt photo → KIE (*planned:* local Qwen, §2.6) → draft → confirm; `/today`, `/month` | C U D (drafts) | (chat) + Bot inbox |
+| F8 | **Bot capture (Telegram + Zalo, *WhatsApp planned in §2.10*)**: text → draft → confirm; receipt photo → local Qwen (§2.6) → draft → confirm; `/today`, `/month` | C U D (drafts) | (chat) + Bot inbox |
 | F9 | **Bot inbox (web)**: review drafts from any source; edit, confirm or discard; see receipt line items | R U D | Bot inbox |
-| F10 | **Receipt upload (web)**: upload a photo on the web; KIE (*planned:* local Qwen, §2.6) → draft | C | Bot inbox |
+| F10 | **Receipt upload (web)**: upload a photo on the web; local Qwen (§2.6) → draft | C | Bot inbox |
 | F11 | **Admin**: users (lock/unlock, role), default categories, system stats | C R U D | Admin users, Admin categories |
 | F12 | **Preferences**: language vi/en, theme light/dark/system; saved per user and in localStorage | U | Settings, app bar |
 | F13 | **Web quick add**: a text box on the Dashboard and Transactions pages. You type `phở 45k` (same syntax as the bot), see a live preview (amount, category, wallet, date), and press Enter to save. A line with no amount, or past the 10th, is named inline and nothing is saved until it is fixed. The full form is one click away | C | Dashboard, Transactions |
@@ -45,7 +45,7 @@ Each feature is a complete slice (screen → API → collection), and most have 
 ### Non-goals (kept out on purpose)
 - Transfers between wallets, multiple currencies (VND only), tags, *automatically posted* recurring transactions, data import/export. (*Planned §2.11 B3* only prepares recurring bills as drafts the user confirms.)
 - Any third-party AI/LLM, and any model parsing typed text: a typed amount is read only by the rule parser (§2.5). *Planned §2.11:* a local model (Qwen3.5-2B on our own GPU host) may answer questions through the app's own read-only tools, read a receipt photo into a draft the user confirms (§2.6), and suggest a category. No data goes to a third party.
-- Storing receipt images. The bot keeps the chat platform's file reference; the reader's result (KIE, or the local model once §2.6 switches) is stored on the transaction.
+- Storing receipt images. The bot keeps the chat platform's file reference; only the reader's result is stored on the transaction.
 - Unofficial WhatsApp libraries (Baileys, whatsapp-web.js): they break WhatsApp's terms, get numbers banned and need an always-on server. WhatsApp goes through Meta's Cloud API only (§2.10).
 - Messages the WhatsApp bot sends first (reminders, alerts outside a reply): they need paid, pre-approved Meta templates. The bot only replies.
 - Bots in group chats, on every platform.
@@ -125,18 +125,24 @@ Examples:
 | `+lương 15tr` | income · 15,000,000 · Lương · default wallet · now · "lương" |
 | `coffee 30k` | expense · 30,000 · Ăn uống (English keyword) · now · "coffee" |
 
-## 2.6 Receipt photos (KIE, then local Qwen)
+## 2.6 Receipt photos (Qwen on our GPU host)
 
-KIE reads receipts today. *Planned (§2.11):* the local Qwen3.5-2B model in the agent service replaces it, but only after the receipt eval passes. `RECEIPT_READER` picks the reader: `kie` (the default until then) or `qwen`.
+A local model, **Qwen3.5-2B** on vLLM on our own GPU host, reads receipts (card T79, instead of KIE; no photo goes to a third party). It sits behind a small service, `agent/receipts/`, that answers **KIE's contract** ([04-backend.md §4.8](04-backend.md#48-receipt-reader-client-servicesreceiptsjs-and-the-qwen-service)), so the app is unchanged: it calls `KIE_URL` with `KIE_API_KEY`. Which service listens on KIE's port decides the reader; KIE is kept as the rollback ([06-deployment.md §6.6](06-deployment.md#66-receipt-service-qwen-kie-kept-as-the-rollback)). This replaces the earlier plan to read receipts inside the agent service (`/v1/receipt`) and to switch with `RECEIPT_READER`; the agent service can take this reader in later.
 
 1. A photo arrives (Telegram, Zalo or web upload). The bot replies "Đang đọc hoá đơn… / Reading receipt…".
-2. The API sends the image to the reader:
-   - `kie`: the KIE service `POST /analyze` (JPEG/PNG, ≤ 10 MB; about 20 s, one image at a time).
-   - `qwen` *(planned)*: the agent service `POST /v1/receipt { userId, image, mime }` (60 s budget). Qwen reads the image into guided JSON (`total`, `merchant`, `date`, `items`, `currency`, `confidence`). Then `check_total` applies the "payable total only" rule in code: the total must be a money-shaped number on a TOTAL / TỔNG CỘNG / THANH TOÁN line, or the largest money value after VAT. Years, dates, phone numbers, numbers with a leading zero and document numbers are rejected; with no valid total the answer is `NO_TOTAL`. The model never sets the amount on its own. At most 30 receipts per user per day; every read is logged in `receiptReads` (never the image).
-3. Mapping, the same for both readers: total → amount (digits only); merchant → note; date → date (`dd/mm/yyyy`, else now); line items → `receipt.items`; the category is guessed by matching keywords on the merchant and item names, else Khác/Other (*planned:* then the agent service may add a category suggestion, §2.11.4).
-4. A draft is created and the bot shows merchant · total · category, plus the line count and whether the items add up to the total (`reconciliation`).
-5. If the reader finds no total, or cannot read the photo, the bot says so and asks the user to type the amount. With `kie`: KIE unreachable or timed out (120 s) → the same. With `qwen` *(planned)*: the agent service down, busy or timed out → KIE when `KIE_URL` is still set, else "type the amount". A third-party AI is never used.
-6. *Planned:* **the switch.** The receipt eval runs Qwen and KIE side by side on the 5 MC-OCR receipts in `server/test/fixtures/receipts/` plus at least 25 real receipts, each with its true payable total. Only when Qwen reads at least as many true totals as KIE, with p95 ≤ 15 s, does the default become `qwen`; then the KIE container is retired.
+2. The API sends the image to `POST ${KIE_URL}/analyze` (JPEG/PNG; the service takes up to 10 MB; a few seconds per photo, and several photos are read at the same time).
+3. **The reading method** (every model call is non-thinking, temperature 0, with JSON-schema guided output):
+   1. Three reads of the photo at once: a **direct read** (merchant, address, date, line items, `total_payable` or null), a **line copy** (every printed money line with its label as printed) and a **verbatim re-read** of all the text.
+   2. The **picker** (plain code) chooses the amount to pay from the copied lines, matching labels without accents, best group first: "cần/phải thanh toán", "phải trả", "tổng (cộng) tiền thanh toán", "tổng thanh toán"; then "số tiền"; then "tổng cộng", "total", "tổng tiền" (not "tiền hàng"). Goods subtotals, VAT, discount, points, cash received, change and item-count lines are skipped unless the label is of the first group; the last line of the best group wins. With no such line, the direct read's total is used, unless the copy shows that amount only on a skipped line.
+   3. **No invented total.** On a torn receipt the model tends to make up a "Tổng cộng" equal to the item sum. So the chosen amount must be printed in a verbatim re-read: if the re-read shows it only as the goods subtotal ("Tổng tiền hàng", "Cộng tiền hàng", "Tạm tính"), there is no total; if the re-read does not show it at all, a second re-read of only the numbers must.
+   4. Money is a whole number of VND from 1 to 10^13. Numbers on lines with a document number, date, phone number or tax code, dates, years and numbers with a leading zero are never the total.
+
+   When no payable total is printed, `total` is `""`. The photo is never written to disk or logged.
+4. Mapping: total → amount (digits only); merchant → note; date → date (`dd/mm/yyyy`, else now); line items → `receipt.items`; the category is guessed by matching keywords on the merchant and item names, else Khác/Other (*planned:* then the agent service may add a category suggestion, §2.11.4).
+5. A draft is created and the bot shows merchant · total · category, plus the line count and whether the items add up to the total (`reconciliation`).
+6. If the reader finds no total, or cannot read the photo, the bot says so and asks the user to type the amount. If the service is unreachable, cannot reach its model or takes longer than 120 s, the bot says the reader is not answering. A third-party AI is never used.
+
+**Measured** on 16 receipts (tester photos and the 5 MC-OCR samples, 2026-11-25): Qwen read all 16 payable totals correctly (both torn ones as "no total"), KIE read 8. About 4–5 s per photo (all within 15 s) and about 11 GB of GPU memory.
 
 ## 2.7 Languages and themes
 
@@ -169,10 +175,10 @@ Each step ends deployable, so there is always something to show.
 4. **Telegram bot (F7, F8 text):** link code, parser, draft → buttons → confirm.
 5. **Zalo bot (F8 text):** same core, `ok`/`huy` confirm.
 6. **Dashboard + budgets (F5, F6).**
-7. **Receipts (F8 photo, F9, F10):** KIE in Docker + Cloudflare Tunnel, bot inbox.
+7. **Receipts (F8 photo, F9, F10):** KIE in Docker + Cloudflare Tunnel, bot inbox. Since card T79 the reader behind that tunnel is the Qwen service (§2.6).
 8. **Admin (F11), i18n and theme polish (F12), sessions page.**
 9. **One-tap linking and WhatsApp (§2.10, planned):** the new link card and `wa.me`/Zalo buttons first (no new platform needed to ship it), then linking from the chat with `/link`, then the WhatsApp adapter.
-10. **Assistant and agent features (§2.11, planned):** Stage R (rules; needs the agent service but not the LLM) first, then Stage AI with the local model on vLLM, then the receipt switch from KIE to Qwen after its eval (§2.11.7).
+10. **Assistant and agent features (§2.11, planned):** Stage R (rules; needs the agent service but not the LLM) first, then Stage AI with the local model on vLLM (§2.11.7). Receipts are already read by Qwen (§2.6).
 11. **Email codes (§2.12, planned):** the mailer and verified sign-up first, then forgot password. Independent of §2.10 and §2.11, so it can ship before them.
 
 ## 2.10 One-tap linking and WhatsApp (planned)
@@ -248,7 +254,7 @@ Link a chat app                                  code ABC123 · 9:41 left
 - **Incoming message → bot core message:** `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID, `from_user_id` on the message / `user_id` on the contact). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key and is not stored. Replies are sent with the `recipient` field set to the BSUID; `displayName` is `value.contacts[0].profile.name`; `type: text` → `text.body`; `type: image` → photo by `image.id`; `type: interactive` with `button_reply` → a button press with `button_reply.id`. Other types (audio, sticker, location…) get the help text.
 - **Sending:** `POST https://graph.facebook.com/<version>/<WHATSAPP_PHONE_NUMBER_ID>/messages` with `messaging_product: "whatsapp"`, `recipient_type: "individual"`, `recipient: <BSUID>` (no `to`: Meta reserves `to` for phone numbers, and BSUIDs must go in `recipient`), and either `type: "text"` or `type: "interactive"` with `interactive.type: "button"`. The Graph API version is one constant in the adapter. Long replies are split at 4096 characters.
 - **Drafts:** each draft is sent as a button message (✅ Lưu, ❌ Huỷ, ✏️ Sửa) whose button ids carry the same action and draft id as Telegram's callback data, so the core's existing confirm/discard path is reused. ✏️ Sửa replies with `<APP_URL>/bot`.
-- **Receipts:** `GET /<image.id>` with the access token gives a `url` valid for 5 minutes; download it with the same token and pass it to KIE as with the other platforms.
+- **Receipts:** `GET /<image.id>` with the access token gives a `url` valid for 5 minutes; download it with the same token and pass it to the receipt reader (§2.6) as with the other platforms.
 - **Privacy:** the phone number is never stored (the key is the BSUID). The web shows the WhatsApp profile name, and admin stats count chats per platform without identifiers.
 - Locked accounts, `/today`, `/month`, `/lang`, `/help` and budget alerts behave exactly as in §2.4.
 
@@ -271,7 +277,7 @@ Link a chat app                                  code ABC123 · 9:41 left
 | `/link?t=` logged out → login → confirm screen → Confirm → linked; the chat gets the success message | Linking from the chat |
 | A used, expired or code-type token at `/claim` → 404 `LINK_TOKEN_INVALID`; a chat linked meanwhile → 409 | Claim rules |
 | WhatsApp webhook: bad signature → 401 and nothing stored; `GET` setup check with the right/wrong token → challenge/403; a status update → 200, nothing stored; the same `wamid` twice → one draft | Webhook security and idempotency |
-| WhatsApp `phở 45k` → button message → ✅ → saved; ❌ → discarded; ✏️ → Bot inbox URL; a receipt photo → KIE draft | WhatsApp capture matches Telegram |
+| WhatsApp `phở 45k` → button message → ✅ → saved; ❌ → discarded; ✏️ → Bot inbox URL; a receipt photo → receipt draft | WhatsApp capture matches Telegram |
 | A message without `from` (username user) links and captures by BSUID; no phone number is stored or returned | Identity and privacy |
 | A claim link opened by someone else shows the warning; after Confirm the Bot inbox shows the "Not you? Unlink" notice | Phishing mitigation |
 
@@ -288,7 +294,7 @@ Link a chat app                                  code ABC123 · 9:41 left
 - ⚑ **Agent backend in Python:** FastAPI `0.162.5` + LangGraph `1.2.24`, with uvicorn `0.54.0`, pymongo `4.18.3`, the openai `3.59.0` client for vLLM's OpenAI-compatible API and sentence-transformers `6.3.0`. It copies the reference repo's graph shape. Not LangGraph.js inside Express: the model and the embedder are Python on the GPU anyway, and the reference repo is Python. Kept as the alternative: LangGraph.js in Express calling vLLM through the tunnel.
 - ⚑ **The question engine moves into the agent service.** The skills, routing, typed query and templates of §2.11.3 are Python there, not `server/src/ask/`. Express keeps `classify` (§2.11.1, pure JS, rules unchanged) and forwards a question.
 - ⚑ **Express stays the only public API.** It keeps capture (parser, drafts, `ok`/`huy`, buttons), `classify`, the plain commands (`/today`, `/month` …), every write, auth and the cron entry point. It calls the agent service server to server through a Cloudflare tunnel, like KIE today.
-- ⚑ **Receipts:** `RECEIPT_READER=kie|qwen`. `kie` until the receipt eval passes, then `qwen`, and the KIE container is retired (§2.6).
+- ⚑ **Receipts:** already read by Qwen behind `KIE_URL` (§2.6, card T79). This replaces the `RECEIPT_READER=kie|qwen` switch planned here: where the rest of §2.11 says `RECEIPT_READER`, `/v1/receipt`, `read_receipt`, `receiptReads` or the receipt eval, read it as the older plan, to be revisited when the agent service takes the reader in.
 - ⚑ **Categorizer:** keyword rules first, as today. Only when they fall back to Khác/Other does the agent service suggest a category: the nearest one by embedding, and the LLM only on a near tie, choosing from the user's own category ids (§2.11.4).
 - ⚑ **No AI opt-in and no admin grant.** They existed because data went to a third party; now it never leaves our machines. Kept: the Settings switch "Trợ lý" (on by default), the admin runtime switch, and per-user daily caps that protect the one GPU (§2.11.4).
 - ⚑ **Embeddings: `BAAI/bge-m3`** (1024 dimensions, multilingual including Vietnamese), searched in memory in the agent service with hybrid ranking (lexical + vector, RRF), as the reference repo's `find_skills`. Atlas Vector Search is the upgrade path, not used now.

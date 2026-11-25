@@ -1,6 +1,6 @@
 # 6. Deployment (Vercel + MongoDB Atlas free)
 
-Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free cluster, the KIE service in Docker on our own machine behind a Cloudflare Tunnel. The planned agent service and its local model (§2.11) also run on our own hardware, the team's GPU host, behind a tunnel of their own, so they add no bill either (§6.13).
+Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free cluster, receipt reading in Docker on our own GPU host behind a Cloudflare Tunnel: a local Qwen3.5-2B model and a small service that answers KIE's contract (§6.6; KIE is kept as the rollback). The planned agent service (§2.11) also runs on that host behind a tunnel of its own, so it adds no bill either (§6.13).
 
 ## 6.1 Free tier facts (checked 2026-11-20)
 
@@ -8,12 +8,12 @@ Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free clus
 |---|---|---|
 | **Vercel Hobby** | Static hosting + Vercel Functions (Fluid compute) | Function max duration **300 s** (default 300 s); request/response body **4.5 MB**; function bundle 250 MB; an Express app becomes **one** function; `express.static` is ignored (static files are served from build output); Hobby is for **non-commercial** use (a class project qualifies) |
 | **MongoDB Atlas Free cluster** (formerly M0) | Shared cluster | **512 MB** storage; one free cluster per project; capped data transfer per rolling 7 days; no backups; can upgrade later |
-| **Cloudflare quick tunnel** (`cloudflared tunnel --url …`) | Public HTTPS URL to a local port, no account | Random `*.trycloudflare.com` URL that **changes on every restart**; meant for testing and demos. A named tunnel (free Cloudflare account + own domain) gives a stable URL. Used for KIE today and, planned, for the agent service (§6.13) |
+| **Cloudflare quick tunnel** (`cloudflared tunnel --url …`) | Public HTTPS URL to a local port, no account | Random `*.trycloudflare.com` URL that **changes on every restart**; meant for testing and demos. A named tunnel (free Cloudflare account + own domain) gives a stable URL. Used for the receipt service today and, planned, for the agent service (§6.13) |
 | **Telegram Bot API** | Free | Webhook needs HTTPS; bot file downloads ≤ 20 MB |
 | **Zalo Bot Platform** (Basic plan) | Free | Up to **3 bots**, each bot talks to at most **50 users**, **3,000 messages/month**; webhook needs HTTPS; messages ≤ 2000 chars; no buttons |
 | **WhatsApp Cloud API** (Meta), *planned, §2.10* | Messages from users; the bot's replies up to **1,000 a month** per business number (figures from §2.10.1) | Replies past that are billed per message, so a payment method is needed by then; the bot may reply only within **24 h** of the user's last message; up to 3 reply buttons; long replies split at 4096 chars (§2.10.4); webhook needs HTTPS |
 | **Vercel Cron Jobs** (Hobby), *planned, §2.11* | Scheduled `GET` calls to our own function | Once a day at most, fired at any time within the scheduled hour, on **production deployments only**, no retry (§2.11.2) |
-| **GPU host** (our own machine), *planned, §2.11* | vLLM serving Qwen3.5-2B (Apache-2.0) and the agent service with bge-m3; weights downloaded once from Hugging Face | One RTX 5880 Ada (48 GB) shared with other services that already use about 30 GB: vLLM gets `--gpu-memory-utilization 0.25` (≈ 12 GB: 4.5 GB of weights + KV cache), bge-m3 ≈ 2.3 GB. At most **8** requests in the model at once and **16** queued; beyond that `AGENT_BUSY` (§6.13) |
+| **GPU host** (our own machine) | vLLM serving Qwen3.5-2B (Apache-2.0) for receipts (§6.6, about 11 GB of GPU memory); *planned, §2.11:* the agent service with bge-m3. Weights are downloaded once from Hugging Face | One RTX 5880 Ada (48 GB) shared with other services that already use about 30 GB: vLLM gets `--gpu-memory-utilization 0.25` (≈ 12 GB: 4.5 GB of weights + KV cache), bge-m3 ≈ 2.3 GB. At most **8** requests in the model at once and **16** queued; beyond that `AGENT_BUSY` (§6.13) |
 | **Gmail SMTP**, *planned, §2.12* | A Google account with an app password | About **500 mails a day**; too many bounces or mails to fake addresses make Google stop the account sending for up to 24 h (§2.12.1). Vercel blocks only port 25, so port 465 works |
 
 **Why not host KIE on Hugging Face Spaces?** Its docs still list a free CPU Basic tier (2 vCPU, 16 GB, sleeps after 48 h idle), but 2026 forum threads report free Docker Spaces being restricted. It is not reliable enough for demo day. Our own machine plus a tunnel is fully under our control.
@@ -92,7 +92,7 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS`, `CRON_SECRET` *(planned, §2.11)* | §6.13 (`AGENT_URL` is pushed from `AGENT_PUBLIC_URL`, like `KIE_URL`) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` *(planned, §2.12)* | §6.14 |
 | `KIE_URL` | the value of `KIE_PUBLIC_URL` (§6.6); if that is empty, a non-local `KIE_URL` is pushed as is |
-| `KIE_API_KEY` | §6.6 |
+| `KIE_API_KEY` | §6.6 (the Qwen service and KIE check the same key) |
 
 Kept local and never pushed: `VERCEL_*`, `SEED_*`, `TEST_USER_*`, `PROD_URL`, `STAGING_URL`, `PORT`, `VITE_PORT`, `WT_SLOT`, the local `APP_URL`, `MONGODB_DB` (replaced by the per-target values above) and `KIE_URL`, `KIE_PUBLIC_URL` (`KIE_PUBLIC_URL` is pushed as `KIE_URL`). Planned (§2.11): `AGENT_URL` and `AGENT_PUBLIC_URL` the same way (`AGENT_PUBLIC_URL` is pushed as `AGENT_URL`). Empty values and `.env.example` placeholders are skipped. Seeding runs locally (§6.7).
 
@@ -145,21 +145,89 @@ node --env-file=server/.env server/src/scripts/setWebhooks.js https://<project>.
 4. Check it with `getWebhookInfo` (same base URL), then send the bot a text and a photo. Look at the **first real payloads** in Vercel → Logs to confirm `event_name`, `message.chat.id` and `message.photo_url` (field names come from community SDKs).
 5. `ZALO_BOT_URL` for the link card's **Copy & open Zalo** button (§2.10.2): in **Zalo Bot Creator**, pick the bot to open its details page and copy the bot's share link, an `https://` link such as `https://zalo.me/…` (this menu path is not verified yet: the only source found documents the bot's group-invite link, so check it on a phone and correct this step). Save it with `tools/set-secret.sh ZALO_BOT_URL` (or together with the WhatsApp values, §6.12), then check on a phone that the link opens the bot's chat. Optional: without it, Zalo is left out of the link card, and `/link CODE` still works when typed. The value must start with `https://` and be at most 106 bytes (it goes into the card's QR code), and `WHATSAPP_NUMBER` must be digits only with the country code first (no `+`, spaces, dashes or leading 0): the API checks both at startup and **does not start** with a bad value, so check them before you redeploy.
 
-## 6.6 KIE service (Docker + Cloudflare Tunnel)
+## 6.6 Receipt service (Qwen; KIE kept as the rollback)
 
-On the dev server (or any machine with Docker and about 4 GB of free RAM):
+Receipts are read by **Qwen3.5-2B** on our GPU host (card T79). `agent/receipts/` is a small FastAPI service that answers KIE's contract (`POST /analyze` with `X-KIE-Key`, `GET /health`; [04-backend.md §4.8](04-backend.md#48-receipt-reader-client-servicesreceiptsjs-and-the-qwen-service)). So the app does not change: it still calls `KIE_URL` with `KIE_API_KEY`. **Only one reader listens on `127.0.0.1:8290`**, behind the same tunnel. Switching or rolling back changes which container owns that port; the tunnel URL, the Vercel variables and the deployment stay as they are.
+
+`agent/receipts/compose.yaml` (project `sochitieu-receipts`) has two services, both reachable on the host's loopback only:
+
+| Service (container) | Image | Listens on | Job |
+|---|---|---|---|
+| `vllm` (`sochitieu-vllm`) | `vllm/vllm-openai@sha256:c1c9f6fd…` (v0.31.0, the full digest is in the file) | `127.0.0.1:8300` (published from the container's port 8000) | Serves `Qwen/Qwen3.5-2B` at revision `15852e8c16360a2fea060d615a32b45270f8a8fc` as `qwen3.5-2b`, with the flags of §6.13. Never exposed through a tunnel |
+| `qwen-receipts` | built from `agent/receipts/Dockerfile`, `FROM` the same vLLM image (nothing is installed) | `127.0.0.1:8290` (host network; `QWEN_RECEIPTS_PORT` picks another port for a test) | The contract and the reading method of [§2.6](02-features.md#26-receipt-photos-qwen-on-our-gpu-host). The file system is read-only, so no photo can be written to disk |
+
+**Needs:** an NVIDIA GPU with about 12 GB free (measured: about 11 GB), Docker with Compose v2 and the NVIDIA Container Toolkit, and about 5 GB of disk for the weights in `HF_HOME` (default `~/.cache/huggingface`), downloaded once from Hugging Face.
+
+**Settings of the service** (environment only): `KIE_API_KEY` (required: it refuses to start without it) and `VLLM_URL` (default `http://127.0.0.1:8300/v1`). Compose takes `KIE_API_KEY` from the shell that runs it, and the container keeps it, also across reboots. After changing the key, run the `up` command again. Don't run `docker compose config` while the key is exported: it prints the values.
+
+Run every command below from the repository root of a checkout of the code you want to run, with `server/.env` present. The `( … )` subshell loads only `KIE_API_KEY`, so the key is never typed or printed and does not stay in your shell.
+
+### Start and check (KIE keeps serving)
+
+1. **vLLM.** If a container named `sochitieu-vllm` is already running (`docker ps`), keep it and skip this step. Else:
+
+```bash
+docker compose -f agent/receipts/compose.yaml up -d vllm
+curl -s http://127.0.0.1:8300/v1/models      # lists qwen3.5-2b once loaded (a few minutes; longer on the first start)
+```
+
+2. **The service on a free port**, next to the live KIE:
+
+```bash
+( set -a; . <(grep '^KIE_API_KEY=' server/.env); set +a
+  QWEN_RECEIPTS_PORT=8291 docker compose -f agent/receipts/compose.yaml up -d --build --no-deps qwen-receipts )
+curl -s -w ' %{http_code}\n' http://127.0.0.1:8291/health     # {"status":"ok"} 200: the service reaches the model
+```
+
+3. **The contract test** against it, with the 5 sample receipts (needs `npm ci` once):
+
+```bash
+( cd server && set -a && . <(grep '^KIE_API_KEY=' .env) && set +a && KIE_URL=http://127.0.0.1:8291 npx vitest run test/kie.contract.test.js )
+```
+
+### Switch to Qwen
+
+Photos sent during the few seconds between the two commands get "the receipt reader is not answering".
+
+```bash
+docker update --restart=no kie-receipts && docker stop kie-receipts    # KIE stays stopped, also after a reboot
+( set -a; . <(grep '^KIE_API_KEY=' server/.env); set +a
+  docker compose -f agent/receipts/compose.yaml up -d --build --no-deps qwen-receipts )   # no QWEN_RECEIPTS_PORT: 8290
+curl -s -w ' %{http_code}\n' http://127.0.0.1:8290/health
+```
+
+Then check the public address, `curl -s -w ' %{http_code}\n' <KIE_PUBLIC_URL>/health` → 200, and send one receipt photo from the web or a chat: it becomes a draft in about 10 s.
+
+### Roll back to KIE
+
+```bash
+docker update --restart=no qwen-receipts && docker stop qwen-receipts
+docker update --restart=unless-stopped kie-receipts && docker start kie-receipts
+curl -s -w ' %{http_code}\n' http://127.0.0.1:8290/health     # KIE takes a moment to load
+```
+
+vLLM may keep running (it listens on loopback only); `docker stop sochitieu-vllm` frees its GPU memory.
+
+### When something is wrong
+
+- `/health` answers 503: vLLM is down or still loading. Photos get "the receipt reader is not answering" until it is back. Both containers restart by themselves after a reboot (`restart: unless-stopped`).
+- `docker logs qwen-receipts` shows one line per request: whether a total was found and how long the reads took, or why it failed. It never holds the key, the photo or anything read from the receipt.
+- A total of `""` is a normal answer: no payable total is printed (for example a torn receipt), and the app asks the user to type the amount.
+
+### The tunnel
+
+The public address is a tunnel to port 8290, whichever reader owns it: `cloudflared tunnel --url http://localhost:8290` prints `https://<random>.trycloudflare.com`. Save that URL with `tools/set-secret.sh KIE_PUBLIC_URL` (and `KIE_API_KEY` the same way), then **redeploy**. `server/.env` keeps `KIE_URL` as the local address the dev server calls; Vercel's `KIE_URL` is pushed from `KIE_PUBLIC_URL`. A quick-tunnel URL changes every time `cloudflared` restarts, which means running `tools/set-secret.sh KIE_PUBLIC_URL` again and redeploying. For a stable URL, create a free Cloudflare account and a **named tunnel** on your own domain.
+
+### KIE (the rollback)
+
+How the `kie-receipts` container was set up, on any machine with Docker and about 4 GB of free RAM:
 
 1. `git clone https://github.com/NguyenVanVuongDev/Document-Intelligence-KIE` (author's permission granted).
 2. Add the API-key check: a FastAPI dependency on `/analyze` comparing header `X-KIE-Key` with env `KIE_API_KEY`, returning 401 otherwise.
-3. Build and run: `docker compose up -d --build`. The first build downloads PaddleOCR models into the image, which takes several minutes. Map port 8000 to a free host port if 8000 is taken.
+3. Build and run: `docker compose up -d --build`. The first build downloads PaddleOCR models into the image, which takes several minutes. Map port 8000 to host port 8290 (or the port the tunnel points at).
 4. Check locally: `curl -s localhost:<port>/health` → `{"status":"ok"}`.
-5. Expose it: `cloudflared tunnel --url http://localhost:<port>` prints `https://<random>.trycloudflare.com`.
-6. Save that URL with `tools/set-secret.sh KIE_PUBLIC_URL` (and `KIE_API_KEY` the same way), then **redeploy**. `server/.env` keeps `KIE_URL` as the local address the dev server calls; Vercel's `KIE_URL` is pushed from `KIE_PUBLIC_URL`.
-7. A quick-tunnel URL changes every time `cloudflared` restarts, which means running `tools/set-secret.sh KIE_PUBLIC_URL` again and redeploying. For a stable URL, create a free Cloudflare account and a **named tunnel** on your own domain.
 
-KIE handles **one image at a time** (~20 s each in its own benchmark). That's fine for a demo; tell the audience to send one photo at a time.
-
-*(Planned, §2.11.)* KIE is **retired after the receipt eval**: once Qwen3.5-2B in the agent service reads at least as many true payable totals as KIE on the eval set (and p95 ≤ 15 s), `RECEIPT_READER` flips to `qwen` (§6.13). Keep KIE running until then: with `RECEIPT_READER=kie`, or when the agent service is down, photos still go to KIE. After the flip, stop the KIE container and its tunnel and remove `KIE_URL`, `KIE_PUBLIC_URL` and `KIE_API_KEY` in the PR that removes the KIE client.
+KIE handles **one image at a time** (~20 s each in its own benchmark). In the spike on 16 receipts (2026-11-25) it read 8 payable totals correctly; the Qwen reader read all 16. KIE and its container are removed only by a later card.
 
 ## 6.7 Seed the database
 
@@ -184,7 +252,7 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 - [ ] Register → default wallet and categories appear; log in as the seeded admin → Admin menu visible
 - [ ] Telegram: `getWebhookInfo` clean; link via deep link; `phở 45k` → ✅ → shows on the dashboard
 - [ ] Zalo: `/link CODE`; `grab 32k` → `ok` → saved
-- [ ] KIE: tunnel running, `KIE_PUBLIC_URL` current (pushed with `tools/set-secret.sh KIE_PUBLIC_URL`, then redeployed), a receipt photo becomes a draft in about 20–40 s
+- [ ] Receipts (§6.6): `curl -s http://127.0.0.1:8290/health` → 200 on the GPU host; the tunnel is running and `<KIE_PUBLIC_URL>/health` → 200 (else push the new URL with `tools/set-secret.sh KIE_PUBLIC_URL`, then redeploy); a receipt photo becomes a draft in about 10 s (about 20–40 s while rolled back to KIE)
 - [ ] Light/dark and vi/en switch on login and in the app bar
 - [ ] `.env` not in git (`git ls-files | grep -E '(^|/)\.env'` shows only `.env.example`)
 - [ ] Real chats after a deploy: `node tools/bot-e2e/bot-e2e.mjs` steps pass (`--target prod` by default; see [docs/testing/bot-e2e.md](testing/bot-e2e.md))
@@ -204,7 +272,7 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 
 ## 6.10 CI
 
-`.github/workflows/ci.yml` runs on every pull request and on pushes to `main` (Node 22): `npm ci`, `npm run typecheck` (client), `npm run lint` (ESLint), `npm test` (Vitest, server then client). The real-KIE contract test skips itself when `KIE_URL` doesn't answer `/health`, so it always skips in CI. JUnit results are uploaded as the `test-results` artifact.
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main` (Node 22): `npm ci`, `npm run typecheck` (client), `npm run lint` (ESLint), `npm test` (Vitest, server then client). Then the receipt service's Python tests: Python 3.12, `pip install -r agent/receipts/requirements-ci.txt` (the versions inside its vLLM image), `python -m pytest agent/receipts` with a fake model (no GPU; a request to any other address fails the test). The reader contract test skips itself when `KIE_URL` doesn't answer `/health`, so it always skips in CI. JUnit results are uploaded as the `test-results` artifact.
 
 CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not deploy. Deploys are manual (§6.3), and the real-chat check above is run by hand after one.
 
@@ -281,13 +349,13 @@ A Meta app has one callback URL, so, like the Telegram and Zalo bots, the WhatsA
 
 ## 6.13 Agent service and local model (planned, §2.11)
 
-> **Planned (§2.11), not built yet.** Today there is no agent code: `server/src/config/env.js` has none of these variables, there is no `agent/` folder, `vercel.json` has no `crons`, and there is no `/api/cron/daily` route. Do these steps when the agent service and `services/agent.js` are merged. The design is in [01-architecture.md §1.9](01-architecture.md#19-agent-service-and-local-model-planned-211) and [§2.11.4](02-features.md#2114-local-model-layer-qwen35-2b-on-vllm). Choices marked ⚑ are recommendations.
+> **Planned (§2.11), not built yet.** The only code under `agent/` today is the receipt service, `agent/receipts/` (§6.6), which already runs this section's vLLM and model; when the agent service is built, it reuses that vLLM rather than starting a second one, and it can take the receipt reader in. The receipt parts below (`RECEIPT_READER`, `/v1/receipt`, the KIE fallback, the receipt checks) are the older plan: Qwen already reads receipts behind `KIE_URL` (§6.6). `server/src/config/env.js` has none of these variables, `vercel.json` has no `crons`, and there is no `/api/cron/daily` route. Do these steps when the agent service and `services/agent.js` are merged. The design is in [01-architecture.md §1.9](01-architecture.md#19-agent-service-and-local-model-planned-211) and [§2.11.4](02-features.md#2114-local-model-layer-qwen35-2b-on-vllm). Choices marked ⚑ are recommendations.
 
 **What runs where.** Express on Vercel stays the only public API. On the GPU host, one `docker compose` project, `sochitieu-agent`, runs three services:
 
 | Service | Image | Listens on | Job |
 |---|---|---|---|
-| `vllm` | `vllm/vllm-openai:v0.31.0` (pinned) | `127.0.0.1:8300` only | Serves `Qwen/Qwen3.5-2B` as `qwen3.5-2b` (OpenAI-compatible API) |
+| `vllm` | `vllm/vllm-openai:v0.31.0` (pinned; §6.6 pins it by digest) | `127.0.0.1:8300` only | Serves `Qwen/Qwen3.5-2B` as `qwen3.5-2b` (OpenAI-compatible API) |
 | `agent` | built from `agent/` (Python 3.12) | `127.0.0.1:8310` only | FastAPI + LangGraph, with the bge-m3 embedder in the same process |
 | `tunnel` | `cloudflare/cloudflared` (tag pinned at setup) | — | Quick tunnel to the agent only. vLLM is never exposed |
 

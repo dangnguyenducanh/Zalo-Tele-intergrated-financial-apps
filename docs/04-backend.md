@@ -62,7 +62,7 @@ An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required 
 | `WHATSAPP_VERIFY_TOKEN` *(planned)* | compared with `hub.verify_token` in the webhook's `GET` setup check |
 | `AGENT_URL` *(planned, §2.11)* | `https://<tunnel-host>` of the agent service, must be a URL; its value comes from `AGENT_PUBLIC_URL` on the GPU host, like `KIE_URL` from `KIE_PUBLIC_URL` |
 | `AGENT_SECRET` *(planned)* | `openssl rand -hex 32`; sent as `Authorization: Bearer …`; the same value is in `agent/.env` (§4.11) |
-| `RECEIPT_READER` *(planned)* | `kie` \| `qwen`, default `kie` until the receipt eval passes (§4.8) |
+| `RECEIPT_READER` *(planned)* | `kie` \| `qwen`. Not needed since card T79: Qwen already answers `KIE_URL` (§4.8) |
 | `ASSISTANT_ENABLED` *(planned)* | `true` \| `false`, default `false`; the model gate's ceiling, and the runtime switch's value while `appSettings` has no row |
 | `ASSISTANT_CHANNELS` *(planned)* | comma list, default `web,telegram,zalo,whatsapp` |
 | `CRON_SECRET` *(planned)* | sent by Vercel Cron as `Authorization: Bearer …`; checked with `sameSecret()` |
@@ -283,12 +283,12 @@ The secret check lives in `routes/webhooks.js`, before either adapter runs. *Pla
 **Webhook handling** (both platforms; WhatsApp *(planned)* follows steps 1, 2, 4 and 5, with its signature check in step 1 and Meta retrying any delivery that does not get a 200; step 3 has no WhatsApp equivalent in §2.10, see **WhatsApp specifics**):
 
 1. Check the secret header, comparing with `crypto.timingSafeEqual`. A mismatch returns 401.
-2. Reply **200 immediately**, then run the adapter's handler (`handleTelegramUpdate` / `handleZaloEvent`) inside `waitUntil`. The platform does not retry, and the slow work (KIE ~20 s) continues inside the 300 s function limit. Failures are only logged.
+2. Reply **200 immediately**, then run the adapter's handler (`handleTelegramUpdate` / `handleZaloEvent`) inside `waitUntil`. The platform does not retry, and the slow work (reading a receipt) continues inside the 300 s function limit. Failures are only logged.
 3. Only messages from **private chats** are handled (Telegram `chat.type = private`, Zalo `chat.chat_type = PRIVATE`); in a group other people would see the money, so those messages are dropped. Telegram button presses (`callback_query`) are handled before this check, with no chat-type test (drafts, and so their buttons, are only sent to private chats).
 4. `handleMessage` looks up `chatLinks` by `(platform, platformUserId)`. If there is none, only `/start CODE` and `/link CODE` are accepted; everything else gets the "please link" reply. A linked but locked user gets the "locked" reply to everything else (`/start CODE` and `/link CODE` are answered before the lock check).
    *Planned (§2.10.3), on every platform:* the "please link" reply also carries a **claim link**. For anything except `/start CODE` or `/link CODE` (a wrong or expired code counts as "anything"), the bot deletes any older live claim link of this chat, so a chat has at most one, then stores a new one in `linkCodes`: a random 32-character base64url token (24 bytes), kept only as its SHA-256, 10 minutes, single use, with `chat: { platform, platformUserId, chatId, displayName }` and no `userId`. The reply, in both languages, is the current "please link" text plus "Or tap to link: `<APP_URL>/link?t=<token>` (valid 10 minutes)". The website spends the token through `POST /chat-links/claim` (§4.4).
    *Planned (§2.11.1):* for a linked, active chat the first match wins, in this order: a photo (the receipt reader → draft, §4.8); `/hoi <question>` (the question path); any other command; the reserved words `ok`, `huy`, `hoàn tác`, `khôi phục`; everything else goes through `classify(text, { followUp })`, where a question goes to the agent service's `/v1/turn` (§4.11) and a capture to `createDrafts` as today. `followUp` is true when an assistant answer went to this chat in the last 10 minutes. A bare `1`–`3` replies to an open ask-back; after it expired (less than 24 h ago) it gets "Câu hỏi đã hết hạn, hãy hỏi lại" and never reaches `createDrafts` or the Zalo amount correction. Telegram button presses are still handled before all of this.
-5. Idempotency: each draft carries `chatRef = (platform, chatId, '<messageId>:<line>')`, and the unique partial index turns a duplicate delivery of a text or photo message into no second draft and no second reply. Typed `ok` / `huy`, commands and Zalo amount-only corrections are not deduplicated: delivered twice, they run twice (a second `ok` acts on the next waiting draft; a correction is applied and the draft sent again). For a photo the core first checks whether that `chatRef` already exists, so a redelivered photo is not sent to KIE again. *Planned (§2.10.4):* WhatsApp's message `id` (`wamid…`) is the `messageId`, so the same rules hold there.
+5. Idempotency: each draft carries `chatRef = (platform, chatId, '<messageId>:<line>')`, and the unique partial index turns a duplicate delivery of a text or photo message into no second draft and no second reply. Typed `ok` / `huy`, commands and Zalo amount-only corrections are not deduplicated: delivered twice, they run twice (a second `ok` acts on the next waiting draft; a correction is applied and the draft sent again). For a photo the core first checks whether that `chatRef` already exists, so a redelivered photo is not sent to the receipt reader again. *Planned (§2.10.4):* WhatsApp's message `id` (`wamid…`) is the `messageId`, so the same rules hold there.
    *Planned (§2.11):* a **question** is deduplicated too: Express sends the chatRef `<platform>:<chatId>:<messageId>` as `requestId`, and the agent service's `ingress` first inserts its `agentTurns` row, unique on `(userId, requestId)`, so a redelivered question answers once and calls the model at most once. An action card runs once because the tap flips its `pendingActions` row `pending → done` atomically first. A recurring-bill draft from the cron uses `chatRef.messageId = rec:<date>:<key>`, so a rerun makes no second draft. Proactive messages insert their `notices` row before sending, so a double cron fire sends nothing twice.
 
 **Bot commands** (same on both platforms, and on WhatsApp once built, §2.10.4):
@@ -339,7 +339,7 @@ The secret check lives in `routes/webhooks.js`, before either adapter runs. *Pla
 - Incoming message → core message: `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID: `from_user_id` on the message, `user_id` on the contact). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key and is never stored. `displayName` is `value.contacts[0].profile.name`; `messageId` is the message `id` (`wamid…`). `type: text` → `text.body`; `type: image` → `photo` = `image.id`; `type: interactive` with `button_reply` → a button press (`handleButton`) decoded from `button_reply.id`; other types (audio, sticker, location…) → the help text. §2.10.4 names no group-chat check like step 3; that is left to the builder.
 - Sending: `POST https://graph.facebook.com/<version>/<WHATSAPP_PHONE_NUMBER_ID>/messages` with the access token, `messaging_product: "whatsapp"`, `recipient_type: "individual"`, `recipient: <BSUID>` (no `to`: Meta reserves `to` for phone numbers), and either `type: "text"` or `type: "interactive"` with `interactive.type: "button"`. The Graph API version is one constant in the adapter, pinned at build time. `sendText` splits long replies at 4096 characters. A button message's body is at most 1024 characters and each button title at most 20 (§2.4). Meta lets the bot reply only within 24 hours of the user's last message (§2.10.1).
 - Drafts (`sendDraft`): a button message with **✅ Lưu**, **❌ Huỷ**, **✏️ Sửa**. The button ids carry the same action and draft id as Telegram's `callback_data` (`c:<txId>` / `x:<txId>`), so `handleButton`'s existing confirm/discard path is reused; how the ids are encoded within WhatsApp's 256-character id limit is left to the builder. Reply buttons cannot open a URL, so ✏️ Sửa makes the bot reply with `<APP_URL>/bot`. §2.10.4 does not say how the `{ ok, text }` result of a press is shown in the chat; left to the builder.
-- Receipts (`downloadPhoto`): `GET /<image.id>` with the access token gives a `url` valid for 5 minutes; download it with the same token and pass the bytes to KIE as on the other platforms.
+- Receipts (`downloadPhoto`): `GET /<image.id>` with the access token gives a `url` valid for 5 minutes; download it with the same token and pass the bytes to the receipt reader as on the other platforms.
 - Every closed list of platforms gains `whatsapp` (§2.10.5): the Mongoose enums `chatLinks.platform`, `transactions.source` and `transactions.chatRef.platform` (without the last, every WhatsApp draft fails validation), the zod `source` filter of `GET /transactions` (`routes/transactions.js`), and the platform/source lists of `GET /admin/stats` (`services/admin.js`).
 - Privacy: no phone number is stored or returned; the web shows the WhatsApp profile name, and admin stats count chats per platform without identifiers.
 - Locked accounts, `/today`, `/month`, `/lang`, `/help` and budget alerts behave exactly as on Telegram and Zalo.
@@ -350,30 +350,39 @@ Specified in [02-features.md §2.5](02-features.md#25-text-parser-rules-rule-bas
 
 *Planned (§2.11):* `classify()` (`bot/ask.js`, rules in §2.11.1) runs before the parser on chat text and on `POST /transactions/parse`; it is a pure function with table-driven unit tests like the parser. The parser gains the `chia N` rule (A5), applied before `findAmount()`. `findAmount()` is also how C3 takes a budget limit from the user's own message (§4.11); today it is private to `bot/parser.js`, so it gets exported.
 
-## 4.8 KIE client (`services/receipts.js`)
+## 4.8 Receipt reader client (`services/receipts.js`) and the Qwen service
+
+The reader is **Qwen** ([§2.6](02-features.md#26-receipt-photos-qwen-on-our-gpu-host), card T79): the service in `agent/receipts/` answers the contract the client was written for, KIE's. So the client keeps its `KIE_*` settings and error codes, and KIE can come back by putting it on the same port ([06-deployment.md §6.6](06-deployment.md#66-receipt-service-qwen-kie-kept-as-the-rollback)). `createReceiptDraft()` stays the one entry point for the web and the bots.
 
 | | |
 |---|---|
-| Call | `POST ${KIE_URL}/analyze`, `multipart/form-data`, field **`image`** (JPEG/PNG, KIE limit 10 MB) |
-| Auth | Header `X-KIE-Key: ${KIE_API_KEY}`. **Small addition to the KIE app** (permitted): a FastAPI dependency that rejects requests without the key, because `/analyze` is otherwise open to anyone with the tunnel URL |
-| Timeout | 120 s (`AbortSignal.timeout`). KIE processes one image at a time (`inference_lock`), ~20 s each |
+| Call | `POST ${KIE_URL}/analyze`, `multipart/form-data`, field **`image`** (JPEG/PNG, reader limit 10 MB) |
+| Auth | Header `X-KIE-Key: ${KIE_API_KEY}`: `/analyze` would otherwise be open to anyone with the tunnel URL. The Qwen service checks it itself; KIE got a small FastAPI dependency for it (permitted) |
+| Timeout | 120 s (`AbortSignal.timeout`). The Qwen service takes a few seconds per photo and gives up after 90 s itself; KIE (rollback) processes one image at a time (`inference_lock`), ~20 s each |
 | Use from response | `fields.merchant`, `fields.date`, `fields.total`, `fields.address`, `line_items[]`, `reconciliation`, `timings_ms` |
 | Ignore | `images.*_base64`, `boxes`, `lines`, `full_text` (large and not needed) |
 | Mapping | total → digits → `amount`; date `dd/mm/yyyy` → `occurredAt` (else now); merchant → `note`; items → `receipt.items`; category by keyword match on merchant + item names, else fallback |
 | Wallet | the user's `defaultWalletId` if set, else their oldest active (not archived) wallet. The stored default is used as is, without checking that it is still active |
-| Errors | `KIE_URL` unset → 503 `FEATURE_NOT_CONFIGURED`; network error → 502 `KIE_UNAVAILABLE`; KIE answers 400/413/415 (could not open the image) or no total → 422 `RECEIPT_UNREADABLE`; any other non-2xx (down, wrong key) → 502 `KIE_UNAVAILABLE`; timeout → 504 `KIE_TIMEOUT`. A total above 10^13 that is still a safe integer passes the mapping but fails the Transaction model's amount check → 500 `INTERNAL`; a larger total → 422 `RECEIPT_UNREADABLE`. The bot turns each into a friendly message ("no total" for 415/422, "reader not answering" otherwise) |
+| Errors | `KIE_URL` unset → 503 `FEATURE_NOT_CONFIGURED`; network error → 502 `KIE_UNAVAILABLE`; the reader answers 400/413/415 (could not open the image) or no total → 422 `RECEIPT_UNREADABLE`; any other non-2xx (down, wrong key) → 502 `KIE_UNAVAILABLE`; timeout → 504 `KIE_TIMEOUT`. A total above 10^13 that is still a safe integer passes the mapping but fails the Transaction model's amount check → 500 `INTERNAL`; a larger total → 422 `RECEIPT_UNREADABLE`. The bot turns each into a friendly message ("no total" for 415/422, "reader not answering" otherwise) |
 
-**Receipt reader switch** *(planned, §2.6, §2.11)*. `RECEIPT_READER` picks who reads a photo; `createReceiptDraft()` stays the one entry point for the web and the bots.
-- `kie` (the default until the receipt eval passes): the KIE client above, unchanged.
-- `qwen`: `services/agent.js` `readReceipt()` sends the bytes as base64 to the agent service's `/v1/receipt` (60 s budget, §4.11). The answer maps to the same draft as KIE's: total → `amount`, merchant → `note`, date → `occurredAt`, items → `receipt.items`, reconciliation → `receipt.reconciled`, and the agent's `ms` goes in `receipt.kieMs`. The agent has already applied the payable-total rules (`check_total`), so `{error: NO_TOTAL|UNREADABLE}` → `RECEIPT_UNREADABLE` (422). The category is the keyword rule as today; a Khác/Other result asks `/v1/categorize` after the draft is sent.
-- Agent service down, timed out or busy with `RECEIPT_READER=qwen`: the photo goes to KIE when `KIE_URL` is set; else the bot asks the user to type the amount and `POST /receipts` answers `AGENT_UNAVAILABLE` (503), or `AGENT_BUSY` (503) when its queue is full. Over 30 reads a day the agent answers `RATE_LIMITED` (429), which Express passes on.
-- Gate to flip the default to `qwen` (eval in [07-testing.md](07-testing.md)): Qwen reads at least as many true payable totals as KIE on the receipt set, with p95 ≤ 15 s. Then the KIE container is retired, and this client and the `KIE_*` variables go with it.
+**The Qwen service** (`agent/receipts/`, Python, FastAPI; it runs in a container built from the pinned vLLM image, on `127.0.0.1:8290`):
+
+| Endpoint | Answers |
+|---|---|
+| `POST /analyze` | **200** `{fields: {total, merchant, address, date}, line_items: [{name, quantity, unit_price, amount}], reconciliation: {is_math_consistent}, timings_ms: {read, check?}}`. `total` is a digit string, or `""` when no payable total is printed; `date` is `dd/mm/yyyy` or `""`; `unit_price` can be null; `is_math_consistent` means the line items add up to the total within 1,000 VND |
+| | **401** missing or wrong `X-KIE-Key` (compared in constant time, before the body is read) · **400** no `image` file in the form, or an image that cannot be read · **413** over 10 MB, or over 40 megapixels · **415** not a JPEG or PNG |
+| | **502** the model answered with an error or not with the asked JSON · **503** vLLM unreachable · **504** vLLM too slow (60 s a call, 90 s a photo) |
+| `GET /health` | **200** `{status: "ok"}` only when vLLM answers and serves `qwen3.5-2b`, else **503**. No key needed |
+
+- Files: `app.py` (HTTP: key, upload, errors; the photo is turned by its EXIF flag and shrunk to 2048 px only when needed), `reader.py` (the reads and the answer), `picker.py` (pure rules: the payable total, what is printed, the date), `vllm_client.py` (the four prompts and JSON schemas; each answer is validated with pydantic).
+- Calls to vLLM (`VLLM_URL`, default `http://127.0.0.1:8300/v1`): non-thinking (`chat_template_kwargs: {"enable_thinking": false}`), temperature 0, `response_format: {type: "json_schema"}`.
+- The upload is parsed in memory (Starlette would otherwise move a file over 1 MB to a temporary file) and the container's file system is read-only. The log holds timings and error kinds, never the key, the photo or anything read from it.
 
 ## 4.9 Vercel limits that shape the code
 
 | Limit (Hobby) | Effect |
 |---|---|
-| Function max duration **300 s** (default 300 s with Fluid compute) | Covers the KIE call (~20 s; 120 s timeout) and, *planned (§2.11)*, the agent calls (25 s in chat, 40 s on the web, 60 s for a receipt). `waitUntil` work shares this limit |
+| Function max duration **300 s** (default 300 s with Fluid compute) | Covers the receipt reader call (a few seconds with Qwen, ~20 s with KIE; 120 s timeout) and, *planned (§2.11)*, the agent calls (25 s in chat, 40 s on the web, 60 s for a receipt). `waitUntil` work shares this limit |
 | Request/response body **4.5 MB** | Web receipt uploads are resized in the browser (≤ 1600 px JPEG). Bots download photos server-side, so no limit there |
 | One Express function, 250 MB bundle | Keep server dependencies small; nothing native |
 | `express.static` is ignored | The SPA is served by Vercel's CDN from `client/dist` |
@@ -399,10 +408,12 @@ Specified in [02-features.md §2.5](02-features.md#25-text-parser-rules-rule-bas
 - [ ] Passwords hashed with bcrypt; refresh tokens and link codes stored hashed; link codes single-use, 10 min TTL.
 - [ ] `helmet`; JSON body limit 1 MB; zod on every input; `mongoose.set('sanitizeFilter', true)` against operator injection.
 - [ ] Atlas: dedicated DB user with `readWrite` on one database only; strong password (the network allows `0.0.0.0/0`, see deployment doc).
-- [ ] KIE protected by `X-KIE-Key`.
+- [ ] The receipt reader (the Qwen service, or KIE) is protected by `X-KIE-Key`.
 - [ ] Last admin cannot demote or lock themselves (`409 LAST_ADMIN`).
 
 ## 4.11 Assistant, agent service and daily cron (planned, §2.11)
+
+*Receipts changed after this plan (card T79):* Qwen already reads them behind `KIE_URL` (§4.8), so the `/v1/receipt`, `readReceipt()`, `receiptReads` and `RECEIPT_READER` parts below are the older plan, to be revisited when the agent service takes the reader in.
 
 None of this is built yet; docs/02 §2.11 is the spec, and [01-architecture.md](01-architecture.md) shows the components and flows. Every number in a reply comes from our code and MongoDB, never from the model, and nothing goes to a third-party model. The work is split in two:
 
