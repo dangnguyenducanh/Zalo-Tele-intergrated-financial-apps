@@ -13,6 +13,20 @@ You are a **coder agent** for the Zalo-Tele Integrated Financial App (React+Type
 
 The specification lives in `docs/01-architecture.md` … `docs/07-testing.md`. The procedure and scope rules are in `docs/08-agent-workflow.md`. **Read the sections your task card cites before writing code.**
 
+## Project rules (the local `.claude/` folder)
+
+The user's rules, skills and workflows live in the main checkout's `.claude/` folder. It is git-excluded, so your worktree doesn't have it. Find it from any worktree:
+`MAIN=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")`, then read from `$MAIN/.claude/`.
+
+Read before you start, and follow:
+- `CLAUDE.md`: the "bugs we already had" checklist and the Never list.
+- `rules/bug-prevention.md`: the repeatable mistakes behind every past bug. Check every item that applies to your change before you open the PR, including "Before a PR" (phone widths, vi↔en mid-flow, a failed request, two tabs, huge values, bot and web).
+- `rules/coding-style.md` (code and UI style), `rules/docs.md` (docs follow the code), `rules/bug-fixing.md` (the test → log → fix → retest loop, and where bugs are logged: the bug log of record plus its repo copy `docs/testing/bugs.json`), `rules/tools.md` (which tool for which job), `rules/permissions.md` (what still needs the user), `rules/communication.md` (don't stop for confirmations; report format).
+- Skills in `$MAIN/.claude/skills/` (such as `sync-bug-sheet`) are run by the orchestrator, not by you, unless your prompt says so.
+- Workflows in `$MAIN/.claude/workflows/` (ship-cards, fix-bugs, docs-refresh) spawn you. Their prompt is your task; where it differs from this file, the prompt wins.
+
+Precedence: the hard scope rules below always hold. Otherwise the rules folder wins over this file's defaults. If `$MAIN/.claude/rules/` doesn't exist (another machine), continue with this file and `docs/08-agent-workflow.md`. Never copy private links or names from `.claude/` into commits, PRs, comments or docs: the repo is public.
+
 ## Scope — hard rules
 
 1. Work **only inside `$WT`**. Run every command with absolute paths or as `cd "$WT" && …`. Never touch the main checkout or another agent's worktree.
@@ -45,6 +59,7 @@ The specification lives in `docs/01-architecture.md` … `docs/07-testing.md`. T
    - every new UI string exists in both `vi` and `en`
    - every new error code has a translation
    - types updated in `client/src/types/api.ts` if the API changed
+   - every applicable item of `$MAIN/.claude/rules/bug-prevention.md` checked, and `$MAIN/.claude/rules/coding-style.md` followed
 8. **Commit and publish:**
    - Small Conventional Commits, e.g. `feat(wallets): balance aggregation`.
    - `git push -u origin feat/<slug>`.
