@@ -73,8 +73,9 @@ export default function LinkCard() {
     setError(null);
     try {
       const created = await createLinkCode().unwrap();
-      // The links that exist now (loaded first if the page has not got them yet), to tell the new one apart.
-      const before = chatLinks ?? (await refetchLinks().unwrap().catch(() => undefined));
+      // The links that exist now, always fetched fresh: the cached list misses links made in another tab or by a
+      // code redeemed after the last check, and would report them as "Linked ✓" for this code.
+      const before = await refetchLinks().unwrap().catch(() => undefined);
       setNow(Date.now());
       setCode(created);
       setApp(firstApp(created, before ?? []));

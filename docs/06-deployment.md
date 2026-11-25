@@ -122,7 +122,7 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -d "url=htt
 curl -s "https://bot-api.zaloplatforms.com/bot$ZALO_BOT_TOKEN/setWebhook" -H 'Content-Type: application/json' -d "{\"url\":\"https://<project>.vercel.app/api/webhooks/zalo\",\"secret_token\":\"$ZALO_WEBHOOK_SECRET\"}"
 ```
 
-4. For the web link card's **Copy & open Zalo** button, copy the bot's share link (Zalo Bot Creator → the bot → share, an `https://zalo.me/…` link) into `ZALO_BOT_URL` with `tools/set-secret.sh ZALO_BOT_URL`. Optional: without it the card has no Zalo button, and `/link CODE` still works when typed.
+4. For the web link card's **Copy & open Zalo** button, copy the bot's share link (Zalo Bot Creator → the bot → share, an `https://zalo.me/…` link) into `ZALO_BOT_URL` with `tools/set-secret.sh ZALO_BOT_URL`. Optional: without it the card has no Zalo button, and `/link CODE` still works when typed. The value must start with `https://`, and `WHATSAPP_NUMBER` must be digits only (no `+`, spaces or dashes): the API checks both at startup and **does not start** with a bad value, so check them before you redeploy.
 5. Check it with `getWebhookInfo` (same base URL), then send the bot a text and a photo. Look at the **first real payloads** in Vercel → Logs to confirm `event_name`, `message.chat.id` and `message.photo_url` (field names come from community SDKs).
 
 ## 6.6 KIE service (Docker + Cloudflare Tunnel)

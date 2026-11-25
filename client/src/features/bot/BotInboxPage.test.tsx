@@ -465,3 +465,48 @@ test('TC-F7-14 the card says "Linked ✓ <app> · <name>" as soon as the 5 s che
     vi.useRealTimers();
   }
 });
+
+test('TC-F7-14 a chat linked in another tab while the page sat idle is not "Linked ✓" for the new code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Other Tab', createdAt: NOW }]; // linked on another device
+    await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument(); // Telegram is linked now
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('ABC234')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 a code redeemed in its last seconds is not "Linked ✓" for the next code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234') }, 3000); // expires before the first 5 s check
+    renderApp('/bot');
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: NOW }]; // redeemed just before it expired
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(await within(linkCard).findByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+
+    codeAnswer = codeWith('XYZ567', { telegram: TG('XYZ567') });
+    await user.click(within(linkCard).getByRole('button', { name: 'Tạo mã mới' }));
+    expect(await within(linkCard).findByText('XYZ567')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('XYZ567')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
