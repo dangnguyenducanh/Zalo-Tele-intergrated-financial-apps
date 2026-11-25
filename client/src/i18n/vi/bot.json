@@ -6,7 +6,8 @@
     "telegram": "Telegram",
     "zalo": "Zalo",
     "receipt": "Hoá đơn",
-    "web": "Web"
+    "web": "Web",
+    "whatsapp": "WhatsApp"
   },
   "link": {
     "title": "Liên kết Telegram / Zalo",
@@ -19,7 +20,21 @@
     "telegram": "Telegram: bấm Mở Telegram, hoặc quét mã QR bằng điện thoại.",
     "openTelegram": "Mở Telegram",
     "qr": "Mã QR mở bot Telegram với mã liên kết",
-    "zalo": "Zalo (hoặc Telegram): gửi tin nhắn sau cho bot"
+    "zalo": "Zalo (hoặc Telegram): gửi tin nhắn sau cho bot",
+    "heading": "Liên kết ứng dụng chat",
+    "app": "Ứng dụng chat",
+    "openWhatsapp": "Mở WhatsApp",
+    "openZalo": "Chép mã & mở Zalo",
+    "steps": {
+      "telegram": "Bấm nút bên dưới, rồi bấm Start (Bắt đầu) trong Telegram.",
+      "whatsapp": "Tin nhắn /link {{code}} đã được gõ sẵn: chỉ cần bấm Gửi.",
+      "zalo": "Nút bên dưới chép /link {{code}} và mở bot Zalo: dán vào ô chat rồi gửi."
+    },
+    "qrFor": "Mã QR mở {{app}} với mã liên kết",
+    "manual": "Bạn cũng có thể tự gửi tin nhắn sau cho bot:",
+    "copied": "Đã chép /link {{code}}",
+    "copyFailed": "Không chép được. Hãy tự chép tin nhắn bên dưới rồi gửi cho bot Zalo.",
+    "linked": "Đã liên kết ✓ {{name}}"
   },
   "accounts": {
     "title": "Tài khoản đã liên kết",

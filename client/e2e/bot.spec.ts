@@ -45,8 +45,8 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
 
   // The code shown on the page, sent from a Telegram chat as "/start CODE" (what the deep link does).
   await page.getByRole('button', { name: 'Tạo mã liên kết' }).press('Enter'); // keyboard: focus must follow the code
-  const linkCard = page.getByRole('region', { name: 'Liên kết Telegram / Zalo' });
-  await expect(linkCard.getByRole('img', { name: 'Mã QR mở bot Telegram với mã liên kết' })).toBeVisible();
+  const linkCard = page.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  await expect(linkCard.getByRole('img', { name: 'Mã QR mở Telegram với mã liên kết' })).toBeVisible();
   const code = (await linkCard.getByText(/^[A-Z2-9]{6}$/).textContent())!;
   await expect(page.locator(':focus')).toContainText(code);
   await expect(linkCard.getByRole('link', { name: 'Mở Telegram' })).toHaveAttribute('href', new RegExp(`\\?start=${code}$`));
@@ -80,6 +80,52 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
   await expect(row).not.toContainText('Nháp');
 });
 
+// docs/02 §2.10.2: one button per chat app. The test API has all three settings (config/env.js test defaults).
+test('TC-F7-15 link card in a real browser: WhatsApp prefilled link, Zalo copies "/link CODE", "Linked ✓"; 375 and 1280 px, light and dark', async ({ page, context, request }, testInfo) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // The Zalo button opens the bot in a new tab: answer it here, so the test never reaches the real zalo.me (BUG-002).
+  await context.route(/^https:\/\/zalo\.me\//, (route) => route.fulfill({ contentType: 'text/html', body: '<title>Zalo bot</title>' }));
+  const { email } = await createAccount(request);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await logIn(page, email);
+  await page.goto('/bot');
+  await page.getByRole('button', { name: 'Tạo mã liên kết' }).click();
+  const linkCard = page.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  const code = (await linkCard.getByText(/^[A-Z2-9]{6}$/).textContent())!;
+  const picker = linkCard.getByRole('group', { name: 'Ứng dụng chat' });
+  await expect(picker.getByRole('button')).toHaveText(['Telegram', 'WhatsApp', 'Zalo']);
+  await expect(picker.getByRole('button', { name: 'Telegram' })).toHaveAttribute('aria-pressed', 'true');
+
+  await picker.getByRole('button', { name: 'WhatsApp' }).click();
+  const whatsapp = linkCard.getByRole('link', { name: 'Mở WhatsApp' });
+  expect(new URL((await whatsapp.getAttribute('href'))!).searchParams.get('text')).toBe(`/link ${code}`);
+  await expect(linkCard.getByRole('img', { name: 'Mã QR mở WhatsApp với mã liên kết' })).toBeVisible();
+
+  await picker.getByRole('button', { name: 'Zalo' }).click();
+  const [zaloTab] = await Promise.all([context.waitForEvent('page'), linkCard.getByRole('link', { name: 'Chép mã & mở Zalo' }).click()]);
+  await expect(zaloTab).toHaveTitle('Zalo bot');
+  await zaloTab.close();
+  await expect(linkCard.getByRole('status')).toHaveText(`Đã chép /link ${code}`);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`/link ${code}`);
+
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `no sideways scroll at ${width} px`).toBe(true);
+      await linkCard.screenshot({ path: testInfo.outputPath(`link-card-zalo-${width}-${colorScheme}.png`), animations: 'disabled' });
+    }
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+
+  // The bot redeems the code (here from Telegram): the card says so within one 5 s check.
+  const webhook = { headers: { 'X-Telegram-Bot-Api-Secret-Token': TELEGRAM_SECRET } };
+  expect((await request.post('/api/webhooks/telegram', { ...webhook, data: telegramUpdate(Math.floor(Math.random() * 1e9), 1, `/start ${code}`) })).status()).toBe(200);
+  await expect(linkCard.getByText('Đã liên kết ✓ Telegram · Anh Nguyen')).toBeVisible({ timeout: 10_000 });
+  await expect(linkCard.getByText(code, { exact: true })).toBeHidden();
+  await linkCard.screenshot({ path: testInfo.outputPath('link-card-linked-1280.png'), animations: 'disabled' });
+});
+
 // BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card at any width.
 test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accounts: no sideways scroll on a phone', async ({ page, request }, testInfo) => {
   const { email } = await createAccount(request);
@@ -87,7 +133,7 @@ test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accou
   await logIn(page, email);
   await page.goto('/bot');
   await page.getByRole('button', { name: 'Tạo mã liên kết' }).click();
-  const code = (await page.getByRole('region', { name: 'Liên kết Telegram / Zalo' }).getByText(/^[A-Z2-9]{6}$/).textContent())!;
+  const code = (await page.getByRole('region', { name: 'Liên kết ứng dụng chat' }).getByText(/^[A-Z2-9]{6}$/).textContent())!;
   const longName = 'Nguyễn_Thị_Phương_Thảo_Official_Shop_Mỹ_Phẩm_Chính_Hãng_Giá_Rẻ';
   const webhook = { headers: { 'X-Telegram-Bot-Api-Secret-Token': TELEGRAM_SECRET } };
   const update = telegramUpdate(Math.floor(Math.random() * 1e9), 1, `/start ${code}`, { first_name: longName });

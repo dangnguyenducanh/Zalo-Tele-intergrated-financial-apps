@@ -4,8 +4,9 @@ import type { Transaction, TransactionInput } from '@/features/transactions/tran
 // Response shapes of /api/chat-links and /api/receipts, and of drafts (docs/04 §4.4, server/src/models/Transaction.js).
 export type ChatLink = { id: string; platform: 'telegram' | 'zalo'; displayName: string; createdAt: string };
 
-// POST /chat-links/code. telegramDeepLink is null when the server has no TELEGRAM_BOT_USERNAME.
-export type LinkCode = { code: string; expiresAt: string; telegramDeepLink: string | null };
+// POST /chat-links/code: one link per chat app, null when the server lacks that app's setting (docs/04 §4.4).
+export type ChatApp = 'telegram' | 'whatsapp' | 'zalo';
+export type LinkCode = { code: string; expiresAt: string; links: Record<ChatApp, string | null> };
 
 export type ReceiptItem = { name: string; quantity?: number; unitPrice?: number; amount?: number };
 
