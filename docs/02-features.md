@@ -6,7 +6,7 @@
 |---|:-:|:-:|:-:|
 | Register, log in | ✅ | — | — |
 | Manage own wallets, categories, transactions, budgets | — | ✅ | ✅ (own data only) |
-| Link Telegram/Zalo, use the bots | — | ✅ | ✅ |
+| Link Telegram/Zalo/WhatsApp, use the bots | — | ✅ | ✅ |
 | See own statistics, sessions; change language/theme/password | — | ✅ | ✅ |
 | List users, lock/unlock, change role | — | — | ✅ |
 | Manage **default categories** (templates copied to new users) | — | — | ✅ |
@@ -27,8 +27,8 @@ Each feature is a complete slice (screen → API → collection), and most have 
 | F4 | **Transactions**: add/edit/delete; filter by date range, type, wallet, category, status, text; pagination | C R U D | Transactions |
 | F5 | **Monthly budgets**: limit per category (or overall) per month; progress bars; over-budget warnings (web + bot) | C R U D | Budgets, Dashboard |
 | F6 | **Statistics**: total balance of active wallets; month figures (income, expense, net, budget left); this month vs last month in weekly columns (spending or income); spending by category as a ranked list; category budgets to watch | R | Dashboard |
-| F7 | **Bot linking**: one-time code / Telegram deep link; list and unlink chat accounts | C R D | Bot inbox |
-| F8 | **Bot capture (Telegram + Zalo)**: text → draft → confirm; receipt photo → KIE → draft → confirm; `/today`, `/month` | C U D (drafts) | (chat) + Bot inbox |
+| F7 | **Bot linking**: one-time code / Telegram deep link; list and unlink chat accounts. *Planned (§2.10):* one button per app (Telegram, WhatsApp, Zalo) and linking that starts in the chat | C R D | Bot inbox, *Link (planned)* |
+| F8 | **Bot capture (Telegram + Zalo, *WhatsApp planned in §2.10*)**: text → draft → confirm; receipt photo → KIE → draft → confirm; `/today`, `/month` | C U D (drafts) | (chat) + Bot inbox |
 | F9 | **Bot inbox (web)**: review drafts from any source; edit, confirm or discard; see receipt line items | R U D | Bot inbox |
 | F10 | **Receipt upload (web)**: upload a photo on the web; KIE → draft | C | Bot inbox |
 | F11 | **Admin**: users (lock/unlock, role), default categories, system stats | C R U D | Admin users, Admin categories |
@@ -42,8 +42,11 @@ Each feature is a complete slice (screen → API → collection), and most have 
 - Any AI/LLM text parsing (decided: rule-based only).
 - Storing receipt images. The bot keeps the chat platform's file reference; the KIE result is stored on the transaction.
 - Email verification and password-reset emails (no mail provider in the free setup).
+- Unofficial WhatsApp libraries (Baileys, whatsapp-web.js): they break WhatsApp's terms, get numbers banned and need an always-on server. WhatsApp goes through Meta's Cloud API only (§2.10).
+- Messages the WhatsApp bot sends first (reminders, alerts outside a reply): they need paid, pre-approved Meta templates. The bot only replies.
+- Bots in group chats, on every platform.
 
-## 2.3 Screens (11 routes; the slides require at least 6)
+## 2.3 Screens (11 routes, plus `/link` planned in §2.10; the slides require at least 6)
 
 | Route | Screen | Main content |
 |---|---|---|
@@ -54,27 +57,28 @@ Each feature is a complete slice (screen → API → collection), and most have 
 | `/wallets` | Wallets | Wallet cards with balance; add/edit/archive/delete |
 | `/categories` | Categories | Tabs expense/income; list with icon/colour/keywords; add/edit/delete |
 | `/budgets` | Budgets | Month picker; overall and per-category limits with progress bar; add/edit/delete; copy last month |
-| `/bot` | Bot inbox | Link Telegram/Zalo (code, deep link, QR), linked accounts, drafts list (source icon, receipt items), upload receipt |
+| `/bot` | Bot inbox | Link Telegram/Zalo (code, deep link, QR), linked accounts, drafts list (source icon, receipt items), upload receipt. *Planned:* the link card of §2.10.2 with WhatsApp |
+| `/link` *(planned)* | Link a chat | Opened from the bot's "tap to link" message: "Link **Zalo · Anh** to your account?" with Confirm / Cancel (§2.10.3). Logs in first if needed |
 | `/settings` | Settings | Profile, password, language, theme, sessions (current + others, revoke) |
 | `/admin/users` | Admin · Users | System stats (F11), search, role/status chips, lock/unlock, change role |
 | `/admin/categories` | Admin · Default categories | Template list (vi/en names, keywords), add/edit/delete |
 | `*` | 404 | Link home |
 
-## 2.4 Bot behaviour (Telegram and Zalo)
+## 2.4 Bot behaviour (Telegram, Zalo, and WhatsApp planned)
 
-The same **bot core** serves both platforms. Only sending/receiving and confirm UI differ.
+The same **bot core** serves every platform. Only sending/receiving and confirm UI differ. The WhatsApp column is planned (§2.10).
 
-| | Telegram | Zalo |
-|---|---|---|
-| Link account | Deep link `https://t.me/<bot>?start=<CODE>` (one tap) or `/link CODE` | Send `/link CODE` |
-| Confirm a draft | Inline buttons **✅ Lưu / ❌ Huỷ** (callback query) | Reply **`ok`** to save or **`huy`** to discard (Zalo Bot API has no buttons). After a message with several lines, each `ok`/`huy` acts on the newest draft still waiting, and the reply names the next one |
-| Edit a draft | Button **✏️ Sửa** opens the web Bot inbox | Reply with just the right amount (e.g. `55k`): it replaces the waiting draft's amount and keeps its note and category. Anything else is edited on the web |
-| Receive photo | `message.photo` → `getFile` → download | `message.photo_url` → download |
-| Message limit | 4096 chars | 2000 chars |
+| | Telegram | Zalo | WhatsApp *(planned)* |
+|---|---|---|---|
+| Link account | Deep link `https://t.me/<bot>?start=<CODE>` (one tap) or `/link CODE` | Send `/link CODE` (*planned:* "Copy & open Zalo" button) | `https://wa.me/<number>?text=%2Flink%20<CODE>` opens the chat with `/link CODE` typed; the user taps Send |
+| Confirm a draft | Inline buttons **✅ Lưu / ❌ Huỷ** (callback query) | Reply **`ok`** to save or **`huy`** to discard (Zalo Bot API has no buttons). After a message with several lines, each `ok`/`huy` acts on the newest draft still waiting, and the reply names the next one | Reply buttons **✅ Lưu / ❌ Huỷ / ✏️ Sửa** (interactive `button` message); the tap arrives as `interactive.button_reply.id` |
+| Edit a draft | Button **✏️ Sửa** opens the web Bot inbox | Reply with just the right amount (e.g. `55k`): it replaces the waiting draft's amount and keeps its note and category. Anything else is edited on the web | Button **✏️ Sửa** makes the bot reply with the Bot inbox URL (reply buttons can't open a URL) |
+| Receive photo | `message.photo` → `getFile` → download | `message.photo_url` → download | `message.image.id` → `GET /<media-id>` → `url` → download with the access token (the URL lives 5 minutes) |
+| Message limit | 4096 chars | 2000 chars | 4096 chars for text; 1024 for the body of a button message; button titles ≤ 20 chars |
 
 **Commands:** `/start` (welcome or link), `/link CODE`, `/help`, `/today` (today's spending), `/month` (month total, the overall budget and each category budget with its usage, fullest first), `/lang vi|en`.
 
-**Unlinked chats** get: "Please link your account: open `<app>/bot` and send `/link CODE`" (in both languages).
+**Unlinked chats** get: "Please link your account: open `<app>/bot` and send `/link CODE`" (in both languages). *Planned:* the reply also carries a one-tap link to the website (§2.10.3).
 
 **Locked accounts:** when an admin locks the web account, its linked chats get "account locked" for every other message and button press (only `/start CODE` and `/link CODE` still answer "already linked"), and nothing is recorded.
 
@@ -156,3 +160,106 @@ Each step ends deployable, so there is always something to show.
 6. **Dashboard + budgets (F5, F6).**
 7. **Receipts (F8 photo, F9, F10):** KIE in Docker + Cloudflare Tunnel, bot inbox.
 8. **Admin (F11), i18n and theme polish (F12), sessions page.**
+9. **One-tap linking and WhatsApp (§2.10, planned):** the new link card and `wa.me`/Zalo buttons first (no new platform needed to ship it), then linking from the chat with `/link`, then the WhatsApp adapter.
+
+## 2.10 One-tap linking and WhatsApp (planned)
+
+**Why.** Linking a chat app must take as few steps as each app allows, the same way on all three, for real users, not only demo phones. D2AI Lab (`d2ai.ript.vn/ho-so`) links Telegram with a one-time deep link and "open Telegram and press Start"; F7 already does that for Telegram. The gaps: Zalo users type `/link CODE` by hand, and there is no WhatsApp bot.
+
+**Decided.**
+- WhatsApp goes through **Meta's WhatsApp Cloud API directly** (not a provider like Twilio, not an unofficial library). It is one more adapter behind the same bot core and webhook pattern as Telegram and Zalo, on Vercel.
+- Linking works **from both ends**: start on the website (§2.10.2) or start in the chat (§2.10.3). Both use the existing `linkCodes` collection.
+
+**Success looks like:** Telegram is linked in 1 tap + Start, WhatsApp in 1 tap + Send, Zalo in 1 tap + paste + send from the website, or 1 tap + Confirm when starting from any chat. No one has to read a code and type it.
+
+### 2.10.1 Platform facts this design rests on
+
+| | Telegram | Zalo Bot Platform | WhatsApp Cloud API |
+|---|---|---|---|
+| Open the bot with data in it | `t.me/<bot>?start=<payload>`: the bot receives `/start <payload>` after the user taps Start | No payload in the bot link, and the bot can't message first | `wa.me/<number>?text=<urlencoded>`: the chat opens with the text typed; the user taps Send |
+| Buttons | Inline keyboard | None | Up to 3 reply buttons per message |
+| Cost and limits | Free | Free Basic plan: 50 users per bot, 3,000 messages a month | Messages from users are free; the bot's replies are free up to 1,000 a month per business number (since 1 Oct 2026), then billed per message. The bot may reply only within 24 hours of the user's last message |
+| Owner setup | BotFather | Zalo Bot Creator (phone app) | Meta app with the WhatsApp use case, a Meta business portfolio, a phone number not already on WhatsApp, an approved display name, a permanent (system user) access token, and a payment method once past the free replies |
+
+### 2.10.2 Linking from the website (`/bot` link card)
+
+Same button and code as F7 today; what changes is what the card shows once a code exists:
+
+```
+Link a chat app                                  code ABC123 · 9:41 left
+( Telegram | WhatsApp | Zalo )        ← pick the app; the default is the first one not linked yet
+[ ✈ Open Telegram ]   One tap, then press Start.
+[ QR of the same link ]               ← for people on a computer: scan with the phone
+→ "Linked ✓ Telegram · Anh" appears as soon as the bot redeems the code
+```
+
+| App | Button | What it does | Instruction line |
+|---|---|---|---|
+| Telegram | **Open Telegram** | Opens `https://t.me/<bot>?start=<CODE>` (as today) | One tap, then press Start |
+| WhatsApp | **Open WhatsApp** | Opens `https://wa.me/<WHATSAPP_NUMBER>?text=%2Flink%20<CODE>` | `/link CODE` is already typed: tap Send |
+| Zalo | **Copy & open Zalo** | Copies `/link CODE` to the clipboard (`navigator.clipboard.writeText`), then opens `ZALO_BOT_URL` in a new tab | Paste and send. If copying fails, the card says "Copy it yourself" and the `/link CODE` text stays visible and selectable |
+
+- The QR code encodes the selected app's link. For Zalo the phone still needs the code, so the code stays large on screen.
+- An app whose settings are missing on the server (its link is `null`) is left out of the picker.
+- Unchanged from F7: 6-character code, 10 minutes, single use, 5 codes per user per 10 minutes, checking for the new link every 5 s while the code is live, and focus moving to the code.
+- **API change:** `POST /api/chat-links/code` returns `{ code, expiresAt, links: { telegram, whatsapp, zalo } }` (each a URL or `null`) instead of `telegramDeepLink`. The client changes in the same PR.
+
+### 2.10.3 Linking from the chat (`/link` screen)
+
+1. A chat that is not linked sends anything except `/start CODE` or `/link CODE` (a wrong or expired code counts as "anything").
+2. The bot creates a **claim link**: a random 32-character base64url token (24 bytes), 10 minutes, single use. It is stored in `linkCodes` as its SHA-256 with the chat's details (`chat: { platform, platformUserId, chatId, displayName }`) and no `userId`. Any older live claim link for the same chat is deleted first, so a chat has at most one.
+3. The bot replies in both languages: the current "please link" text, plus "Or tap to link: `<APP_URL>/link?t=<token>` (valid 10 minutes)".
+4. `/link?t=…` on the website: the page reads the token, removes it from the address bar (`history.replaceState`), and sends the user to log in first if needed (back to `/link` after login, token kept in memory/sessionStorage, not in the URL).
+5. It calls `POST /api/chat-links/claim/preview { token }` and shows: "Link **Zalo · Anh** to **<your name> (<your email>)**? [Confirm] [Cancel]", with a warning above the buttons: "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account." Cancel goes to `/bot` and leaves the token to expire.
+6. Confirm calls `POST /api/chat-links/claim { token }`. In one atomic update the token must be unused, unexpired and a claim link (has `chat`); it is marked used and a `chatLinks` row is created for the logged-in user.
+7. The website goes to `/bot` with "Linked ✓ Zalo · Anh". The bot sends the chat "Đã liên kết với tài khoản <name>" in the user's language (the same text as `/link CODE` success).
+
+**Threat and why the Confirm step:** a claim link links the chat that asked for it to whoever opens it, so it can be used for phishing. An attacker messages the bot from their own unlinked chat, sends the claim link to a victim, and if the victim confirms, the attacker's chat is linked to the victim's account: it can read `/today` and `/month` and create and confirm transactions there. The display name on the confirm screen comes from the chat app and can be faked, so it is not proof. It can't take over the web login. Mitigations: the explicit warning on the confirm screen (step 5); the 10-minute single-use token; and after a link made this way, the Bot inbox shows a notice "New chat linked from a chat link: **Zalo · Anh**. Not you? [Unlink]" until the user dismisses it, and the linked accounts list keeps the unlink button. Linking from the website (§2.10.2) has no such risk because the code starts in the logged-in account.
+
+**API (both need login; tokens travel in the body, never in a URL the server logs):**
+
+| Endpoint | Success | Errors |
+|---|---|---|
+| `POST /api/chat-links/claim/preview { token }` | 200 `{ platform, displayName }` | 404 `LINK_TOKEN_INVALID` (unknown, used or expired) |
+| `POST /api/chat-links/claim { token }` | 201 `{ id, platform, displayName, createdAt, viaClaim: true }` | 404 `LINK_TOKEN_INVALID`; 409 `CHAT_ALREADY_LINKED` (that chat was linked meanwhile; the token is still spent) |
+
+**Screen states:** loading; confirm; done (redirect); "This link has expired or was already used. Send any message to the bot to get a new one."; "This chat is already linked to an account." Both error screens have a "Go to Bot inbox" button.
+
+### 2.10.4 The WhatsApp bot
+
+- **Webhook:** `/api/webhooks/whatsapp`, subscribed to the `messages` field.
+  - `GET` is Meta's setup check: if `hub.mode=subscribe` and `hub.verify_token` equals `WHATSAPP_VERIFY_TOKEN`, answer 200 with `hub.challenge` as plain text; otherwise 403.
+  - `POST` must carry `X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body with WHATSAPP_APP_SECRET>`, compared in constant time; otherwise 401 and nothing is processed. The HMAC needs the exact bytes Meta sent, but the global `express.json` in `server/src/app.js` parses every body before the routers run, and re-serialising `req.body` does not give the same bytes. So `app.js` changes the global parser to `express.json({ limit, verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/webhooks/whatsapp')) req.rawBody = buf } })` and the route signs `req.rawBody`.
+  - Read `entry[].changes[].value`: `messages[]` are handled, `statuses[]` (sent/delivered/read) are ignored, and both still get 200 so Meta doesn't retry.
+  - Duplicate deliveries create no second draft: the message `id` (`wamid…`) goes into `chatRef.messageId` like Telegram's and Zalo's `message_id`, and the unique chatRef index stops the copy. (As on the other platforms, a redelivered command may be answered twice.)
+- **Incoming message → bot core message:** `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID, `from_user_id` on the message / `user_id` on the contact). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key and is not stored. Replies are sent with the `recipient` field set to the BSUID; `displayName` is `value.contacts[0].profile.name`; `type: text` → `text.body`; `type: image` → photo by `image.id`; `type: interactive` with `button_reply` → a button press with `button_reply.id`. Other types (audio, sticker, location…) get the help text.
+- **Sending:** `POST https://graph.facebook.com/<version>/<WHATSAPP_PHONE_NUMBER_ID>/messages` with `messaging_product: "whatsapp"`, `recipient_type: "individual"`, `recipient: <BSUID>` (no `to`: Meta reserves `to` for phone numbers, and BSUIDs must go in `recipient`), and either `type: "text"` or `type: "interactive"` with `interactive.type: "button"`. The Graph API version is one constant in the adapter. Long replies are split at 4096 characters.
+- **Drafts:** each draft is sent as a button message (✅ Lưu, ❌ Huỷ, ✏️ Sửa) whose button ids carry the same action and draft id as Telegram's callback data, so the core's existing confirm/discard path is reused. ✏️ Sửa replies with `<APP_URL>/bot`.
+- **Receipts:** `GET /<image.id>` with the access token gives a `url` valid for 5 minutes; download it with the same token and pass it to KIE as with the other platforms.
+- **Privacy:** the phone number is never stored (the key is the BSUID). The web shows the WhatsApp profile name, and admin stats count chats per platform without identifiers.
+- Locked accounts, `/today`, `/month`, `/lang`, `/help` and budget alerts behave exactly as in §2.4.
+
+### 2.10.5 Data, settings and setup
+
+- Every closed list of platforms gains `whatsapp`: `chatLinks.platform`, `transactions.source` and `transactions.chatRef.platform` (Mongoose enums; without the last one every WhatsApp draft fails validation), the zod `source` filter in `server/src/routes/transactions.js`, and the platform/source lists of the admin stats in `server/src/services/admin.js`. The Bot inbox and Transactions show a WhatsApp source icon; admin stats count WhatsApp chats.
+- `chatLinks` gains `viaClaim` (boolean, default `false`; `true` for a link made by a claim link) and `claimNoticeDismissedAt` (date or `null`). `GET /api/chat-links` also returns `viaClaim` and `claimNoticeDismissedAt`; the Bot inbox shows the "Not you? [Unlink]" notice for every link with `viaClaim && !claimNoticeDismissedAt`. `PATCH /api/chat-links/:id/claim-notice` (own links only, no body) sets `claimNoticeDismissedAt = now` → 204; 404 for another user's or unknown id.
+- `linkCodes`: `userId` becomes optional and a `chat` sub-document is added. Exactly one of them is set: `userId` for a code made on the website, `chat` for a claim link made by the bot. Redeeming in the chat (`/link CODE`) only matches rows with `userId`; claiming on the website only matches rows with `chat`, so neither kind works in the other's place. The TTL index and the hash-only storage stay.
+- New environment variables: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_NUMBER` (international format, digits only, for `wa.me`), and `ZALO_BOT_URL` (the bot's share link from Zalo Bot Creator). A platform with missing settings is skipped by the webhook-registration script and hidden in the link card.
+- `docs/03` (collections), `docs/04` (endpoints and error codes), `docs/05` (link card, `/link` screen), `docs/06` (Meta setup steps and secrets) and `docs/07` (cases below) are updated in the PR that builds each part.
+
+### 2.10.6 Acceptance checks
+
+| Check | Proves |
+|---|---|
+| Link card: each app's button opens the right URL with the live code; the QR matches the selected app; an app with no settings is hidden | Website linking for all three apps |
+| Zalo button: the clipboard holds `/link CODE`; with the clipboard blocked, the fallback text shows | Zalo linking never dead-ends |
+| `/link CODE` from WhatsApp links the chat and the card shows "Linked ✓" within 5 s | `wa.me` prefill works end to end |
+| Unlinked chat message → claim link; a second message → a new link and the first stops working | One live claim link per chat |
+| `/link?t=` logged out → login → confirm screen → Confirm → linked; the chat gets the success message | Linking from the chat |
+| A used, expired or code-type token at `/claim` → 404 `LINK_TOKEN_INVALID`; a chat linked meanwhile → 409 | Claim rules |
+| WhatsApp webhook: bad signature → 401 and nothing stored; `GET` setup check with the right/wrong token → challenge/403; a status update → 200, nothing stored; the same `wamid` twice → one draft | Webhook security and idempotency |
+| WhatsApp `phở 45k` → button message → ✅ → saved; ❌ → discarded; ✏️ → Bot inbox URL; a receipt photo → KIE draft | WhatsApp capture matches Telegram |
+| A message without `from` (username user) links and captures by BSUID; no phone number is stored or returned | Identity and privacy |
+| A claim link opened by someone else shows the warning; after Confirm the Bot inbox shows the "Not you? Unlink" notice | Phishing mitigation |
+
+**Left to the builder:** component and file layout, i18n keys and the exact wording of the instruction lines (vi + en), how the button ids are encoded within WhatsApp's 256-character id limit, and the Graph API version pinned at build time.
