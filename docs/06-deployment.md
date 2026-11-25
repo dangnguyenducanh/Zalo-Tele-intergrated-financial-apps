@@ -73,7 +73,8 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `APP_URL` | per target: `PROD_URL` or `STAGING_URL` from `server/.env` |
 | `MONGODB_DB` | per target: `finance` or `finance_staging` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | §6.4 |
-| `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET` | §6.5 |
+| `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET`, `ZALO_BOT_URL` | §6.5 |
+| `WHATSAPP_NUMBER` | the WhatsApp bot's number, international format, digits only (e.g. `849…`); optional: without it the link card has no WhatsApp button |
 | `KIE_URL` | the value of `KIE_PUBLIC_URL` (§6.6); if that is empty, a non-local `KIE_URL` is pushed as is |
 | `KIE_API_KEY` | §6.6 |
 
@@ -121,7 +122,8 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -d "url=htt
 curl -s "https://bot-api.zaloplatforms.com/bot$ZALO_BOT_TOKEN/setWebhook" -H 'Content-Type: application/json' -d "{\"url\":\"https://<project>.vercel.app/api/webhooks/zalo\",\"secret_token\":\"$ZALO_WEBHOOK_SECRET\"}"
 ```
 
-4. Check it with `getWebhookInfo` (same base URL), then send the bot a text and a photo. Look at the **first real payloads** in Vercel → Logs to confirm `event_name`, `message.chat.id` and `message.photo_url` (field names come from community SDKs).
+4. For the web link card's **Copy & open Zalo** button, copy the bot's share link (Zalo Bot Creator → the bot → share, an `https://zalo.me/…` link) into `ZALO_BOT_URL` with `tools/set-secret.sh ZALO_BOT_URL`. Optional: without it the card has no Zalo button, and `/link CODE` still works when typed.
+5. Check it with `getWebhookInfo` (same base URL), then send the bot a text and a photo. Look at the **first real payloads** in Vercel → Logs to confirm `event_name`, `message.chat.id` and `message.photo_url` (field names come from community SDKs).
 
 ## 6.6 KIE service (Docker + Cloudflare Tunnel)
 

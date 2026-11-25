@@ -27,7 +27,7 @@ trust proxy 1 → helmet → express.json({ limit: '1mb' }) → cookie-parser �
 
 - no `KIE_URL` → `POST /receipts` answers 503 `FEATURE_NOT_CONFIGURED` for a valid JPEG/PNG upload (the missing-field 400 and the 415 come first; the bots say the receipt reader is not answering);
 - no webhook secret → that platform's webhook answers 401 to everything;
-- no `TELEGRAM_BOT_USERNAME` → `telegramDeepLink` is `null`.
+- no `TELEGRAM_BOT_USERNAME`, `WHATSAPP_NUMBER` or `ZALO_BOT_URL` → that app's entry in the link code's `links` is `null`, and the web link card hides the app.
 
 An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required variables and the `APP_URL`, bot and KIE variables get harmless defaults, so the test suites run without `server/.env` (`MONGODB_DB` and the `SEED_*` variables stay unset).
 
@@ -46,6 +46,8 @@ An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required 
 | `TELEGRAM_WEBHOOK_SECRET` | 1–256 chars `[A-Za-z0-9_-]` |
 | `ZALO_BOT_TOKEN` | from Zalo Bot Platform |
 | `ZALO_WEBHOOK_SECRET` | 8–256 chars |
+| `ZALO_BOT_URL` | the Zalo bot's share link from Zalo Bot Creator, must be an `https://` URL (the link card's "Copy & open Zalo") |
+| `WHATSAPP_NUMBER` | the WhatsApp bot's number in international format, digits only (6–15, no `+`), for `wa.me` links |
 | `KIE_URL` | `https://<tunnel-host>`, must be a URL |
 | `KIE_API_KEY` | shared secret sent as `X-KIE-Key` (see §4.8) |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | used by `npm run seed` and `npm run seed:test` only |
@@ -132,7 +134,7 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 
 | Method | Path | Auth | Body | Success | Errors |
 |---|---|---|---|---|---|
-| POST | `/chat-links/code` | 🔒 | — | **201** `{code, expiresAt, telegramDeepLink}` (`null` without `TELEGRAM_BOT_USERNAME`) | 429 `RATE_LIMITED` (5 per user per 10 min) |
+| POST | `/chat-links/code` | 🔒 | — | **201** `{code, expiresAt, links: {telegram, whatsapp, zalo}}`: `https://t.me/<TELEGRAM_BOT_USERNAME>?start=<CODE>`, `https://wa.me/<WHATSAPP_NUMBER>?text=%2Flink%20<CODE>` and `ZALO_BOT_URL` (no code: Zalo bot links carry no data); each `null` when its setting is missing | 429 `RATE_LIMITED` (5 per user per 10 min) |
 | GET | `/chat-links` | 🔒 | — | **200** `[{id, platform, displayName, createdAt}]` | — |
 | DELETE | `/chat-links/:id` | 🔒 | — | **204** | 404 |
 
