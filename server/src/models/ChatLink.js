@@ -11,6 +11,8 @@ const chatLinkSchema = new mongoose.Schema(
     chatId: { type: String, required: true }, // where the bot replies
     displayName: { type: String, default: '' }, // shown on the Bot inbox
     pendingTransactionId: { type: ObjectId, ref: 'Transaction', default: null }, // the draft a typed "ok"/"huy" acts on
+    viaClaim: { type: Boolean, default: false }, // made by a claim link: the Bot inbox asks "Not you? [Unlink]"
+    claimNoticeDismissedAt: { type: Date, default: null }, // when the user dismissed that notice
   },
   { timestamps: true, collection: 'chatLinks' },
 );
