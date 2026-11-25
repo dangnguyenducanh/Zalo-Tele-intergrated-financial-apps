@@ -24,6 +24,8 @@ export function parseEnv(source) {
     TELEGRAM_WEBHOOK_SECRET: optional(z.string().regex(/^[A-Za-z0-9_-]{1,256}$/), 'test-telegram-secret'),
     ZALO_BOT_TOKEN: optional(z.string(), 'test-zalo-token'),
     ZALO_WEBHOOK_SECRET: optional(z.string().min(8).max(256), 'test-zalo-secret'),
+    ZALO_BOT_URL: optional(z.url({ protocol: /^https$/ }), 'https://zalo.me/test-bot'), // the bot's share link (Zalo Bot Creator)
+    WHATSAPP_NUMBER: optional(z.string().regex(/^\d{6,15}$/), '84900000000'), // international, digits only, for wa.me links
     KIE_URL: optional(z.url(), 'http://127.0.0.1:9'),
     KIE_API_KEY: optional(z.string(), 'test-kie-key'),
     SEED_ADMIN_EMAIL: z.string().optional(), // used by `npm run seed` only
