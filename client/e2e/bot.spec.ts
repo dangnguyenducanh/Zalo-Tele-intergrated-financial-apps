@@ -86,7 +86,7 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
 });
 
 // docs/02 §2.10.2: one button per chat app. The test API has all three settings (config/env.js test defaults).
-test('TC-F7-15 link card in a real browser: each app\'s URL, Zalo copies "/link CODE" or says it could not, "Linked ✓"; 375 and 1280 px, light and dark', async ({ page, context, request }, testInfo) => {
+test('TC-F7-15 link card in a real browser: each app\'s URL, Zalo copies "/link CODE" or says it could not, "Linked ✓"; 360 to 1280 px, light and dark', async ({ page, context, request }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   // The Zalo button opens the bot in a new tab: answer it here, so the test never reaches the real zalo.me (BUG-002).
   await context.route(/^https:\/\/zalo\.me\//, (route) => route.fulfill({ contentType: 'text/html', body: '<title>Zalo bot</title>' }));
@@ -116,11 +116,17 @@ test('TC-F7-15 link card in a real browser: each app\'s URL, Zalo copies "/link 
   await expect(linkCard.getByRole('status').filter({ hasText: 'Đã chép' })).toHaveText(`Đã chép /link ${code}`);
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`/link ${code}`);
 
-  for (const width of [375, 1280]) {
+  // From 900 px the card sits in a narrow column beside the side drawer: the three-app picker has to wrap there.
+  for (const width of [360, 375, 390, 900, 1024, 1100, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
       expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `no sideways scroll at ${width} px`).toBe(true);
+      const cardBox = (await linkCard.boundingBox())!;
+      for (const [name, part] of [['picker', picker], ['QR code', linkCard.getByRole('img', { name: 'Mã QR mở bot Zalo' })]] as const) {
+        const box = (await part.boundingBox())!;
+        expect(box.x + box.width, `${name} inside the card at ${width} px`).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+      }
       await linkCard.screenshot({ path: testInfo.outputPath(`link-card-zalo-${width}-${colorScheme}.png`), animations: 'disabled' });
     }
   }

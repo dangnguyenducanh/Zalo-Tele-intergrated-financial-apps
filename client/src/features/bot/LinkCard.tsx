@@ -2,13 +2,15 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import TelegramIcon from '@mui/icons-material/Telegram';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { Alert, Box, Button, Paper, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAppDispatch } from '@/app/hooks';
 import { apiErrorMessage } from '@/features/categories/helpers';
-import { useCreateLinkCodeMutation, useGetChatLinksQuery, type ChatApp, type ChatLink, type LinkCode } from './botApi';
+import { botApi, nameOf, useCreateLinkCodeMutation, useGetChatLinksQuery, type ChatApp, type ChatLink, type LinkCode } from './botApi';
 import { qrSvgPath } from './qrCode';
 
 const CHECK_LINKS_MS = 5000; // while a code is live, look for the new chat link every 5 s
+const CODE_LIFETIME_MS = 10 * 60 * 1000; // a code was made this long before its expiresAt (CODE_TTL_MS in server/src/services/chatLinks.js)
 const APPS: ChatApp[] = ['telegram', 'whatsapp', 'zalo'];
 const BUTTON = {
   telegram: { label: 'link.openTelegram', icon: <TelegramIcon /> },
@@ -23,21 +25,31 @@ function firstApp(code: LinkCode, linked: ChatLink[]): ChatApp | null {
   return apps.find((app) => !linked.some((link) => link.platform === app)) ?? apps[0] ?? null;
 }
 
+// The chat linked while this code was valid, which is how the card knows the bot redeemed it. Both times are the
+// server's, so any copy of the list can be judged, however old: a link made before the code or after it expired
+// did not come from it.
+function redeemedLink(code: LinkCode, links: ChatLink[]) {
+  const expires = Date.parse(code.expiresAt);
+  return links.find((link) => {
+    const made = Date.parse(link.createdAt);
+    return made >= expires - CODE_LIFETIME_MS && made <= expires;
+  });
+}
+
 // "Generate code" → the one-time code with a countdown, then one button per chat app (docs/02 §2.10.2):
 // Telegram and WhatsApp links carry the code; Zalo's can't, so its button copies "/link CODE" and opens the bot.
 // The QR code holds the same link for people on a computer. The bot redeems the code; this card only shows it
-// and says "Linked ✓" when the 5 s check finds a chat link that was not there when the code was made.
+// and says "Linked ✓" when the 5 s check finds a chat link made while the code was valid.
 export default function LinkCard() {
   const { t } = useTranslation('bot');
   const titleId = useId();
-  const [createLinkCode] = useCreateLinkCodeMutation();
-  const [generating, setGenerating] = useState(false); // the POST and the fresh link list after it
+  const dispatch = useAppDispatch();
+  const [createLinkCode, { isLoading }] = useCreateLinkCodeMutation();
   const [code, setCode] = useState<LinkCode | null>(null);
-  const [app, setApp] = useState<ChatApp | null>(null);
-  const [linkedBefore, setLinkedBefore] = useState<string[] | null>(null); // link ids when the code was made
+  const [picked, setPicked] = useState<ChatApp | null>(null); // the app the user chose or opened
   const [linked, setLinked] = useState<ChatLink | null>(null); // the link that redeemed the code
   const [copy, setCopy] = useState<'done' | 'failed' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null); // the failed request, translated when shown (BUG-031)
   const [now, setNow] = useState(() => Date.now());
   const codeBox = useRef<HTMLDivElement>(null);
   const linkedBox = useRef<HTMLDivElement>(null);
@@ -47,16 +59,12 @@ export default function LinkCard() {
   // The account appears under "Linked accounts" as soon as the user has sent the code to the bot.
   const { data: chatLinks, refetch: refetchLinks } = useGetChatLinksQuery(undefined, { pollingInterval: secondsLeft > 0 ? CHECK_LINKS_MS : 0 });
   const live = secondsLeft > 0;
+  // Until the user picks or opens one, the first app not linked yet; it follows the list as that arrives.
+  const app = code && (picked ?? firstApp(code, chatLinks ?? []));
 
-  // A link that was not there when the code was made: the bot redeemed it, so the code is spent. Updating state
-  // while rendering (React's "previous render" pattern) swaps the code for "Linked ✓" and stops the 5 s checks.
-  // linkedBefore is null when the list could not be loaded then: no "Linked ✓" rather than a wrong one.
-  // Only a link made before the code expired (both server times): one made later, found when an unlink or Retry
-  // reloads the list, did not redeem this code.
-  const newLink =
-    code && linkedBefore
-      ? chatLinks?.find((link) => !linkedBefore.includes(link.id) && Date.parse(link.createdAt) <= Date.parse(code.expiresAt))
-      : undefined;
+  // The bot redeemed the code, so the code is spent. Updating state while rendering (React's "previous render"
+  // pattern) swaps the code for "Linked ✓" and stops the 5 s checks.
+  const newLink = code && redeemedLink(code, chatLinks ?? []);
   if (newLink) {
     setLinked(newLink);
     setCode(null);
@@ -64,11 +72,18 @@ export default function LinkCard() {
   // "Linked ✓" only while that link still exists: unlinking it below takes the message away (no stale "Linked ✓").
   const stillLinked = linked && chatLinks?.some((link) => link.id === linked.id) ? linked : null;
 
+  // A list read from now on. refetch() alone would join a request that is still running, which may have read the
+  // list too early, so wait for that one to finish first.
+  const reloadLinks = useCallback(async () => {
+    await dispatch(botApi.util.getRunningQueryThunk('getChatLinks', undefined));
+    await refetchLinks();
+  }, [dispatch, refetchLinks]);
+
   // One last check when the code expires: it may have been redeemed after the last 5 s check.
   const expired = code !== null && !live;
   useEffect(() => {
-    if (expired) void refetchLinks();
-  }, [expired, refetchLinks]);
+    if (expired) void reloadLinks().catch(() => undefined); // refetch() throws if the page was left meanwhile
+  }, [expired, reloadLinks]);
 
   useEffect(() => {
     if (!live) return;
@@ -88,22 +103,17 @@ export default function LinkCard() {
 
   async function generate() {
     setError(null);
-    setGenerating(true);
     try {
       const created = await createLinkCode().unwrap();
-      // The links that exist now, always fetched fresh: the cached list misses links made in another tab or by a
-      // code redeemed after the last check, and would report them as "Linked ✓" for this code.
-      const before = await refetchLinks().unwrap().catch(() => undefined);
       setNow(Date.now());
       setCode(created);
-      setApp(firstApp(created, before ?? []));
-      setLinkedBefore(before?.map((link) => link.id) ?? null);
+      setPicked(null);
       setLinked(null);
       setCopy(null);
+      // The cached list misses chats linked elsewhere, and the starting app depends on it. The code does not wait.
+      void reloadLinks().catch(() => undefined);
     } catch (err) {
-      setError(apiErrorMessage(err)); // e.g. 429 after 5 codes in 10 minutes
-    } finally {
-      setGenerating(false);
+      setError(err); // e.g. 429 after 5 codes in 10 minutes
     }
   }
 
@@ -127,9 +137,9 @@ export default function LinkCard() {
         {t('link.heading')}
       </Typography>
       <Typography sx={{ color: 'text.secondary', mb: 2 }}>{t('link.description')}</Typography>
-      {error && (
+      {error !== null && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          {apiErrorMessage(error)}
         </Alert>
       )}
       {/* There from the moment a code exists, so "Linked ✓" arrives in a region screen readers already watch. */}
@@ -139,7 +149,7 @@ export default function LinkCard() {
             // The chat name is user text with no length limit: it wraps anywhere instead of running out of the card.
             // role="none": the region around it announces it politely, not as an alert.
             <Alert role="none" severity="success" sx={{ mb: 2, '& .MuiAlert-message': { overflowWrap: 'anywhere' } }}>
-              {t('link.linked', { name: `${t(`sources.${stillLinked.platform}`)} · ${stillLinked.displayName}` })}
+              {t('link.linked', { name: nameOf(t, stillLinked) })}
             </Alert>
           )}
         </div>
@@ -166,8 +176,10 @@ export default function LinkCard() {
               color="primary"
               aria-label={t('link.app')}
               value={app}
-              onChange={(_, picked: ChatApp | null) => {
-                if (picked) setApp(picked); // pressing the selected app again keeps it
+              // Beside the side drawer (900–1150 px) the card is narrower than three apps: wrap, never leave the card.
+              sx={{ flexWrap: 'wrap', maxWidth: '100%' }}
+              onChange={(_, option: ChatApp | null) => {
+                if (option) setPicked(option); // pressing the selected app again keeps it
                 setCopy(null);
               }}
             >
@@ -187,7 +199,10 @@ export default function LinkCard() {
                 href={code.links[app]}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={app === 'zalo' ? () => copyCommand(`/link ${code.code}`) : undefined}
+                onClick={() => {
+                  setPicked(app); // a list that arrives now must not switch the card to another app
+                  if (app === 'zalo') copyCommand(`/link ${code.code}`);
+                }}
               >
                 {t(BUTTON[app].label)}
               </Button>
@@ -213,7 +228,7 @@ export default function LinkCard() {
               {t('link.expired')}
             </Alert>
           )}
-          <Button variant="contained" loading={generating} onClick={() => void generate()}>
+          <Button variant="contained" loading={isLoading} onClick={() => void generate()}>
             {t(code || stillLinked ? 'link.regenerate' : 'link.generate')}
           </Button>
         </>

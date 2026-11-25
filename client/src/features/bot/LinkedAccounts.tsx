@@ -7,7 +7,7 @@ import { showSnackbar } from '@/app/uiSlice';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { apiErrorMessage } from '@/features/categories/helpers';
 import { formatDate } from '@/i18n/format';
-import { useDeleteChatLinkMutation, useGetChatLinksQuery, type ChatLink } from './botApi';
+import { nameOf, useDeleteChatLinkMutation, useGetChatLinksQuery, type ChatLink } from './botApi';
 import { sourceIcon } from './sourceIcon';
 
 // The Telegram/Zalo accounts linked to this web account (GET /chat-links), each with Unlink (DELETE /chat-links/:id).
@@ -21,8 +21,6 @@ export default function LinkedAccounts() {
   const [deleteChatLink] = useDeleteChatLinkMutation();
   const [unlinking, setUnlinking] = useState<ChatLink | null>(null);
 
-  const nameOf = (link: ChatLink) => `${t(`sources.${link.platform}`)} · ${link.displayName || link.platform}`;
-
   async function unlink() {
     const link = unlinking;
     setUnlinking(null);
@@ -30,7 +28,7 @@ export default function LinkedAccounts() {
     try {
       await deleteChatLink(link.id).unwrap();
       heading.current?.focus(); // the Unlink button leaves with its row: keep focus on the page, not <body>
-      dispatch(showSnackbar({ message: t('accounts.unlinked', { name: nameOf(link) }), severity: 'success' }));
+      dispatch(showSnackbar({ message: t('accounts.unlinked', { name: nameOf(t, link) }), severity: 'success' }));
     } catch (error) {
       dispatch(showSnackbar({ message: apiErrorMessage(error), severity: 'error' }));
     }
@@ -54,7 +52,7 @@ export default function LinkedAccounts() {
               key={link.id}
               disableGutters
               secondaryAction={
-                <IconButton edge="end" aria-label={t('accounts.unlink', { name: nameOf(link) })} onClick={() => setUnlinking(link)}>
+                <IconButton edge="end" aria-label={t('accounts.unlink', { name: nameOf(t, link) })} onClick={() => setUnlinking(link)}>
                   <LinkOffIcon />
                 </IconButton>
               }
@@ -62,7 +60,7 @@ export default function LinkedAccounts() {
               <ListItemIcon sx={{ minWidth: 40 }}>{sourceIcon(link.platform)}</ListItemIcon>
               {/* A chat name can be 64 characters with no spaces: let it break anywhere rather than widen the page. */}
               <ListItemText
-                primary={nameOf(link)}
+                primary={nameOf(t, link)}
                 secondary={t('accounts.linkedOn', { date: formatDate(link.createdAt, language) })}
                 slotProps={{ primary: { sx: { overflowWrap: 'anywhere' } } }}
               />
@@ -73,7 +71,7 @@ export default function LinkedAccounts() {
       <ConfirmDialog
         open={unlinking !== null}
         title={t('accounts.unlinkTitle')}
-        message={unlinking ? t('accounts.unlinkMessage', { name: nameOf(unlinking) }) : ''}
+        message={unlinking ? t('accounts.unlinkMessage', { name: nameOf(t, unlinking) }) : ''}
         confirmLabel={t('accounts.unlinkConfirm')}
         destructive
         onConfirm={() => void unlink()}

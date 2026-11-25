@@ -42,7 +42,7 @@ let drafts: (Draft & { deleted?: boolean })[] = [];
 let links: ChatLink[] = [];
 let sent: { method: string; url: string; body?: unknown }[] = [];
 let confirmAnswer: { budgetWarning?: { percent: number; threshold: 80 | 100 } } = {};
-let codeAnswer: () => Response;
+let codeAnswer: () => Response | Promise<Response>;
 let receiptAnswer: () => Response | Promise<Response>;
 let uploads: File[] = [];
 
@@ -133,6 +133,28 @@ beforeEach(() => {
 });
 
 const card = (name: string) => screen.findByRole('form', { name });
+
+// Holds the next GET /chat-links. Like a slow server, it answers with the list as it was when the request arrived.
+function holdNextList() {
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const held = { asked: false, release: () => release() };
+  server.use(
+    http.get(
+      '*/api/chat-links',
+      async () => {
+        const read = [...links];
+        held.asked = true;
+        await gate;
+        return HttpResponse.json(read);
+      },
+      { once: true },
+    ),
+  );
+  return held;
+}
+// When the bot made a link, on the server's clock: now, or `ms` ago.
+const at = (ms = 0) => new Date(Date.now() - ms).toISOString();
 const writes = () => sent.filter((s) => s.method !== 'GET').map((s) => `${s.method} ${s.url}`);
 
 test('TC-F9-03 drafts from every source: edit the amount inline, Confirm sends the change with the confirm', async () => {
@@ -339,35 +361,45 @@ test('TC-F10-06 the receipt status and error switch to English with the rest of 
   expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo bản nháp từ hoá đơn.');
 });
 
-test('TC-F7-06 Generate stays disabled while the fresh link list is still loading after the code arrived', async () => {
+test('TC-F7-06 one click makes one code: Generate is disabled until it arrives, and the code does not wait for the link list', async () => {
   const user = userEvent.setup();
   renderApp('/bot');
   const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
   expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
 
-  let answerLinks = () => {};
-  const slowList = new Promise<void>((resolve) => (answerLinks = resolve)); // e.g. a cold start
-  let listAsked = false;
-  server.use(
-    http.get('*/api/chat-links', async () => {
-      listAsked = true;
-      await slowList;
-      return HttpResponse.json(links);
-    }),
-  );
+  let answerCode = () => {};
+  const slowCode = new Promise<void>((resolve) => (answerCode = resolve)); // e.g. a cold start
   let posts = 0;
-  codeAnswer = () => (posts++, codeWith('ABC234', { telegram: TG('ABC234') })());
+  codeAnswer = async () => {
+    posts++;
+    await slowCode;
+    return codeWith('ABC234', { telegram: TG('ABC234') })();
+  };
+  const list = holdNextList(); // and the list stays slow after the code has arrived
   const generate = screen.getByRole('button', { name: 'Tạo mã liên kết' });
   await user.click(generate);
-  // The card asks for the list only after the POST has answered: from here on the list alone keeps the button busy.
-  await waitFor(() => expect(listAsked).toBe(true));
-  // RTK Query tells React about that answer on the next animation frame: let it render before looking at the button.
-  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+  await waitFor(() => expect(posts).toBe(1));
   expect(generate).toBeDisabled();
 
-  answerLinks();
+  answerCode();
   expect(await screen.findByText('ABC234')).toBeInTheDocument();
+  await waitFor(() => expect(list.asked).toBe(true));
+  expect(screen.queryByRole('button', { name: /^Tạo mã/ })).not.toBeInTheDocument(); // nothing left to press twice
   expect(posts).toBe(1);
+  list.release();
+});
+
+test('TC-F7-06 a failed code request is translated when shown: its message follows a language switch (BUG-031)', async () => {
+  const user = userEvent.setup();
+  codeAnswer = () => fail(500, 'INTERNAL');
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const linkCard = screen.getByRole('region', { name: CARD });
+  expect(await within(linkCard).findByText('Máy chủ gặp sự cố. Vui lòng thử lại sau.')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /Đổi ngôn ngữ sang English/ }));
+  expect(await screen.findByText('The server ran into a problem. Please try again later.')).toBeInTheDocument();
+  expect(screen.queryByText('Máy chủ gặp sự cố. Vui lòng thử lại sau.')).not.toBeInTheDocument();
 });
 
 // BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card, not widen the page.
@@ -447,7 +479,7 @@ test('TC-F7-12 link card: Telegram linked and no WhatsApp on the server: it star
   renderApp('/bot');
   await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
   const picker = await screen.findByRole('group', { name: 'Ứng dụng chat' });
-  expect(within(picker).getByRole('button', { name: 'Zalo' })).toHaveAttribute('aria-pressed', 'true');
+  await waitFor(() => expect(within(picker).getByRole('button', { name: 'Zalo' })).toHaveAttribute('aria-pressed', 'true'));
   expect(screen.getByRole('link', { name: 'Chép mã & mở Zalo' })).toHaveAttribute('href', ZALO);
 });
 
@@ -460,7 +492,7 @@ test('TC-F7-12 link card: the default app is the first one not linked yet, else 
   renderApp('/bot');
   await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
   const picker = await screen.findByRole('group', { name: 'Ứng dụng chat' });
-  expect(within(picker).getByRole('button', { name: 'WhatsApp' })).toHaveAttribute('aria-pressed', 'true');
+  await waitFor(() => expect(within(picker).getByRole('button', { name: 'WhatsApp' })).toHaveAttribute('aria-pressed', 'true'));
   expect(screen.getByRole('link', { name: 'Mở WhatsApp' })).toHaveAttribute('href', WA('ABC234'));
   expect(screen.getByText('Tin nhắn /link ABC234 đã được gõ sẵn: chỉ cần bấm Gửi.')).toBeInTheDocument();
 });
@@ -519,7 +551,7 @@ test('TC-F7-14 the card says "Linked ✓ <app> · <name>" as soon as the 5 s che
     await act(() => vi.advanceTimersByTimeAsync(5000));
     expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
 
-    links = [...links, { id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: NOW }]; // the bot redeemed the code
+    links = [...links, { id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: at() }]; // the bot redeemed the code
     await act(() => vi.advanceTimersByTimeAsync(5000));
     const done = await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh Nguyen');
     expect(done.closest('[tabindex="-1"]')).toHaveFocus(); // the spent code left; focus follows the news, not <body>
@@ -547,7 +579,7 @@ test('TC-F7-14 "Linked ✓" is announced in a status region and leaves focus in 
     const regions = within(linkCard).getAllByRole('status'); // already there before the news, so it gets read out
     await user.click(amount); // while the phone sends the code, the user goes on with a draft
 
-    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: NOW }];
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: at() }];
     await act(() => vi.advanceTimersByTimeAsync(5000));
     const done = await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh Nguyen');
     expect(regions).toContain(done.closest('[role="status"]'));
@@ -566,11 +598,11 @@ test('TC-F7-14 a chat linked in another tab while the page sat idle is not "Link
     const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
     expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
 
-    links = [{ id: 'l1', platform: 'telegram', displayName: 'Other Tab', createdAt: NOW }]; // linked on another device
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Other Tab', createdAt: at(60_000) }]; // linked on another device a minute ago
     await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
     const linkCard = screen.getByRole('region', { name: CARD });
     expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
-    expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument(); // Telegram is linked now
+    expect(await within(linkCard).findByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument(); // Telegram is linked now
     await act(() => vi.advanceTimersByTimeAsync(5000));
     expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
     expect(within(linkCard).getByText('ABC234')).toBeInTheDocument();
@@ -650,6 +682,140 @@ test('TC-F7-14 "Linked ✓", then unlink that account: no "Linked ✓" any more,
     expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
     expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
     expect(await within(linkCard).findByRole('button', { name: 'Tạo mã liên kết' })).toBeInTheDocument(); // once the dialog has closed
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 a chat linked while an older list request is still running is not "Linked ✓" for the new code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const firstLoad = holdNextList(); // the page's first list request, read before the link below exists
+    renderApp('/bot');
+    const generate = await screen.findByRole('button', { name: 'Tạo mã liên kết' });
+    await waitFor(() => expect(firstLoad.asked).toBe(true));
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Phone TG', createdAt: at(1000) }]; // linked on the phone
+    await user.click(generate);
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+
+    firstLoad.release();
+    // A new list request follows the old one at once (not only at the next 5 s check), so the card starts on WhatsApp.
+    expect(await within(linkCard).findByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('ABC234')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 the last check at expiry is sent even when an older list request is still running', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234') }, 3000); // expires before the first 5 s check
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+    const running = holdNextList(); // the request made right after the code: still running when it expires
+    await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    await waitFor(() => expect(running.asked).toBe(true));
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: at() }]; // redeemed after that request was read
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(within(linkCard).getByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+
+    running.release();
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 "Create a new code" while the last check is still running: an older link is not "Linked ✓" for the new code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234') }, 3000);
+    renderApp('/bot');
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(1000)); // the list request made after the code is done
+    const lastCheck = holdNextList();
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    await waitFor(() => expect(lastCheck.asked).toBe(true));
+
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Phone TG', createdAt: at() }]; // after ABC234 expired
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    codeAnswer = codeWith('XYZ567', { telegram: TG('XYZ567') });
+    await user.click(within(linkCard).getByRole('button', { name: 'Tạo mã mới' }));
+    expect(await within(linkCard).findByText('XYZ567')).toBeInTheDocument();
+    lastCheck.release();
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('XYZ567')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 one failed list request after the code does not turn "Linked ✓" off; the starting app comes from the list the page has', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    links = [{ id: 'l0', platform: 'telegram', displayName: 'Anh', createdAt: NOW }];
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    expect(await within(linked).findByText('Telegram · Anh')).toBeInTheDocument();
+    let failed = 0;
+    server.use(http.get('*/api/chat-links', () => (failed++, fail(500, 'INTERNAL')), { once: true }));
+    await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    expect(await within(linked).findByText('Không tải được danh sách tài khoản.')).toBeInTheDocument();
+    expect(failed).toBe(1);
+    expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument(); // Telegram is linked
+
+    links = [...links, { id: 'l1', platform: 'zalo', displayName: 'Lan Zalo', createdAt: at() }]; // the bot redeemed the code
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Zalo · Lan Zalo')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 the app the user opened stays picked when a late list says it was linked already', async () => {
+  const user = userEvent.setup();
+  const firstLoad = holdNextList();
+  links = [{ id: 'l0', platform: 'telegram', displayName: 'Anh', createdAt: NOW }];
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const open = await screen.findByRole('link', { name: 'Mở Telegram' }); // no list yet: the first app
+  await user.click(open);
+  firstLoad.release();
+  const linked = screen.getByRole('region', { name: 'Tài khoản đã liên kết' });
+  expect(await within(linked).findByText('Telegram · Anh')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Mở Telegram' })).toBeInTheDocument();
+});
+
+// bug-prevention §1: Linked accounts and the link card name a chat with one shared function.
+test('TC-F7-14 a chat with an empty name is named the same in "Linked ✓" and in Linked accounts', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'zalo', displayName: '', createdAt: at() }]; // Zalo may send no display name
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Zalo · zalo')).toBeInTheDocument();
+    expect(within(linked).getByText('Zalo · zalo')).toBeInTheDocument();
   } finally {
     vi.useRealTimers();
   }
