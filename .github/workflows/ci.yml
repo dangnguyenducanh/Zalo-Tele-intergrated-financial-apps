@@ -20,6 +20,14 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      # The Qwen receipt service (agent/receipts): a fake model, no GPU. Python and packages as in its vLLM image.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: agent/receipts/requirements-ci.txt
+      - run: pip install -r agent/receipts/requirements-ci.txt
+      - run: python -m pytest agent/receipts --junitxml=test-results/receipts-pytest.xml
       - uses: actions/upload-artifact@v7
         if: always()
         with:

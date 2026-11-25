@@ -3,6 +3,10 @@ node_modules/
 dist/
 .vercel/
 
+# Python (agent/)
+__pycache__/
+.pytest_cache/
+
 # secrets: never commit real env files
 .env
 .env.*
