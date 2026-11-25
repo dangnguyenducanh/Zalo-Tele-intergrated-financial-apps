@@ -24,6 +24,16 @@ export function parseEnv(source) {
     TELEGRAM_WEBHOOK_SECRET: optional(z.string().regex(/^[A-Za-z0-9_-]{1,256}$/), 'test-telegram-secret'),
     ZALO_BOT_TOKEN: optional(z.string(), 'test-zalo-token'),
     ZALO_WEBHOOK_SECRET: optional(z.string().min(8).max(256), 'test-zalo-secret'),
+    // The bot's share link (Zalo Bot Creator). The link card's QR code holds 106 bytes at most (client qrCode.ts).
+    // The "//" is checked too: zod also takes "https:zalo.me/1", which as an href is a path on our own site.
+    ZALO_BOT_URL: optional(
+      z
+        .url({ protocol: /^https$/ })
+        .regex(/^https:\/\//i, 'must start with https://')
+        .refine((url) => Buffer.byteLength(url) <= 106, 'at most 106 bytes, so it fits the QR code'),
+      'https://zalo.me/test-bot',
+    ),
+    WHATSAPP_NUMBER: optional(z.string().regex(/^[1-9]\d{5,14}$/), '84900000000'), // international (no leading 0), digits only, for wa.me links
     KIE_URL: optional(z.url(), 'http://127.0.0.1:9'),
     KIE_API_KEY: optional(z.string(), 'test-kie-key'),
     SEED_ADMIN_EMAIL: z.string().optional(), // used by `npm run seed` only

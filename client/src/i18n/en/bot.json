@@ -6,11 +6,12 @@
     "telegram": "Telegram",
     "zalo": "Zalo",
     "receipt": "Receipt",
-    "web": "Web"
+    "web": "Web",
+    "whatsapp": "WhatsApp"
   },
   "link": {
     "title": "Link Telegram / Zalo",
-    "description": "Create a one-time code, valid for 10 minutes, and send it to the bot.",
+    "description": "Create a one-time code, valid for 10 minutes, and send it to the bot on Telegram, WhatsApp or Zalo.",
     "generate": "Create link code",
     "regenerate": "Create a new code",
     "code": "Link code",
@@ -19,7 +20,22 @@
     "telegram": "Telegram: press Open Telegram, or scan the QR code with your phone.",
     "openTelegram": "Open Telegram",
     "qr": "QR code that opens the Telegram bot with the link code",
-    "zalo": "Zalo (or Telegram): send this message to the bot"
+    "zalo": "Zalo (or Telegram): send this message to the bot",
+    "heading": "Link Telegram / WhatsApp / Zalo",
+    "app": "Chat app",
+    "openWhatsapp": "Open WhatsApp",
+    "openZalo": "Copy & open Zalo",
+    "steps": {
+      "telegram": "Press the button below, then press Start in Telegram.",
+      "whatsapp": "The message /link {{code}} is already typed: just tap Send.",
+      "zalo": "The button below copies /link {{code}} and opens the Zalo bot: paste it into the chat and send."
+    },
+    "qrFor": "QR code that opens {{app}} with the link code",
+    "qrZalo": "QR code that opens the Zalo bot",
+    "manual": "You can also send this message to the bot yourself:",
+    "copied": "Copied /link {{code}}",
+    "copyFailed": "Could not copy. Copy the message below yourself and send it to the Zalo bot.",
+    "linked": "Linked ✓ {{name}}"
   },
   "accounts": {
     "title": "Linked accounts",

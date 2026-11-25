@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vi
 import app from '../src/app.js';
 import enText from '../src/bot/messages.en.js';
 import viText from '../src/bot/messages.vi.js';
+import { env } from '../src/config/env.js';
 import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
@@ -136,12 +137,13 @@ test('TC-F7-01 POST /chat-links/code returns a 6-char code valid for 10 minutes 
   const res = await me.post('/chat-links/code');
   expect(res.status).toBe(201);
 
-  const { code, expiresAt, telegramDeepLink } = res.body;
+  const { code, expiresAt, links } = res.body;
   expect(code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/); // no I/O/0/1 look-alikes
+  // The link card assumes this lifetime too (CODE_LIFETIME_MS in client/src/features/bot/LinkCard.tsx): change both.
   const ttl = new Date(expiresAt).getTime() - before;
   expect(ttl).toBeGreaterThanOrEqual(10 * 60 * 1000);
   expect(ttl).toBeLessThan(10 * 60 * 1000 + 5000);
-  expect(telegramDeepLink).toBe(`https://t.me/test_bot?start=${code}`);
+  expect(links.telegram).toBe(`https://t.me/test_bot?start=${code}`);
 
   // The database has the SHA-256 of the code and no field with the code itself.
   const rows = await LinkCode.find().lean();
@@ -154,6 +156,50 @@ test('TC-F7-01 POST /chat-links/code returns a 6-char code valid for 10 minutes 
   const statuses = [];
   for (let i = 0; i < 5; i++) statuses.push((await me.post('/chat-links/code')).status);
   expect(statuses).toEqual([201, 201, 201, 201, 429]);
+});
+
+test('TC-F7-10 the code comes with one link per chat app: Telegram start, WhatsApp prefilled "/link CODE", the Zalo bot', async () => {
+  const { accessToken } = await registerUser();
+  const res = await api(accessToken).post('/chat-links/code');
+  expect(res.status).toBe(201);
+
+  const { code, links } = res.body;
+  expect(res.body).not.toHaveProperty('telegramDeepLink'); // replaced by links (docs/02 §2.10.2)
+  expect(links).toEqual({
+    telegram: `https://t.me/test_bot?start=${code}`,
+    whatsapp: `https://wa.me/${env.WHATSAPP_NUMBER}?text=%2Flink%20${code}`,
+    zalo: env.ZALO_BOT_URL, // Zalo links carry no payload: the user pastes "/link CODE"
+  });
+  expect(new URL(links.whatsapp).searchParams.get('text')).toBe(`/link ${code}`); // what WhatsApp types for the user
+});
+
+test('TC-F7-11 each missing setting makes only that app\'s link null', async () => {
+  const { accessToken } = await registerUser();
+  const settings = { telegram: 'TELEGRAM_BOT_USERNAME', whatsapp: 'WHATSAPP_NUMBER', zalo: 'ZALO_BOT_URL' };
+  for (const [app, key] of Object.entries(settings)) {
+    const saved = env[key];
+    env[key] = undefined;
+    try {
+      const { body } = await api(accessToken).post('/chat-links/code');
+      expect(Object.keys(settings).filter((other) => body.links[other] === null), key).toEqual([app]);
+    } finally {
+      env[key] = saved;
+    }
+  }
+});
+
+test('TC-F7-11 an app whose setting is missing gets a null link, so the card hides it', async () => {
+  const { accessToken } = await registerUser();
+  const saved = { ...env };
+  try {
+    for (const key of ['TELEGRAM_BOT_USERNAME', 'WHATSAPP_NUMBER', 'ZALO_BOT_URL']) env[key] = undefined;
+    const res = await api(accessToken).post('/chat-links/code');
+    expect(res.status).toBe(201);
+    expect(res.body.code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/); // "/link CODE" still works in any chat
+    expect(res.body.links).toEqual({ telegram: null, whatsapp: null, zalo: null });
+  } finally {
+    Object.assign(env, saved);
+  }
 });
 
 test('TC-F7-02 a link code links one chat, once, before it expires', async () => {

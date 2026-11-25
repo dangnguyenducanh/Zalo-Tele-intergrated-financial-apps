@@ -122,3 +122,10 @@ export function qrMatrix(text: string): boolean[][] {
   }
   return dark;
 }
+
+// The symbol as one SVG path of 1×1 squares, shifted by a 4-module light margin (the quiet zone); `size` includes it.
+export function qrSvgPath(text: string): { size: number; path: string } {
+  const modules = qrMatrix(text);
+  const path = modules.flatMap((row, y) => row.map((dark, x) => (dark ? `M${x + 4} ${y + 4}h1v1h-1z` : ''))).join('');
+  return { size: modules.length + 8, path };
+}

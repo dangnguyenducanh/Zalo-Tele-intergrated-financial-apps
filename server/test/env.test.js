@@ -45,3 +45,31 @@ test('TC-NF-09 test mode fills every variable with a default and coerces numbers
   expect(env.JWT_ACCESS_SECRET.length).toBeGreaterThanOrEqual(32);
   expect(env.TELEGRAM_WEBHOOK_SECRET).toBe('test-telegram-secret');
 });
+
+test('TC-F7-11 WHATSAPP_NUMBER must be international digits and ZALO_BOT_URL an https URL that fits the card QR; both are optional', () => {
+  const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64) };
+  const unset = parseEnv(base);
+  expect(unset.WHATSAPP_NUMBER).toBeUndefined();
+  expect(unset.ZALO_BOT_URL).toBeUndefined();
+  expect(parseEnv({ ...base, WHATSAPP_NUMBER: '84901234567', ZALO_BOT_URL: 'https://zalo.me/123' })).toMatchObject({
+    WHATSAPP_NUMBER: '84901234567',
+    ZALO_BOT_URL: 'https://zalo.me/123',
+  });
+  // The link card's QR encoder holds at most 106 bytes (client qrCode.ts).
+  const zaloUrl = (bytes) => `https://zalo.me/${'a'.repeat(bytes - 'https://zalo.me/'.length)}`;
+  expect(parseEnv({ ...base, ZALO_BOT_URL: zaloUrl(106) }).ZALO_BOT_URL).toHaveLength(106);
+  // wa.me wants the international number without "+", spaces, dashes or a leading 0; a plain http link is refused.
+  for (const bad of [
+    { WHATSAPP_NUMBER: '+84 901 234 567' },
+    { WHATSAPP_NUMBER: '0901-234-567' },
+    { WHATSAPP_NUMBER: '0901234567' },
+    { ZALO_BOT_URL: 'http://zalo.me/123' },
+    { ZALO_BOT_URL: 'zalo.me/123' },
+    { ZALO_BOT_URL: 'https:zalo.me/123' }, // as an href this opens our own site's /zalo.me/123
+    { ZALO_BOT_URL: 'https:/zalo.me/123' },
+    { ZALO_BOT_URL: zaloUrl(107) },
+    { ZALO_BOT_URL: `https://zalo.me/${'ạ'.repeat(31)}` }, // 47 characters, 109 bytes
+  ]) {
+    expect(() => parseEnv({ ...base, ...bad }), JSON.stringify(bad)).toThrow(Object.keys(bad)[0]);
+  }
+});

@@ -1,11 +1,17 @@
+import type { TFunction } from 'i18next';
 import { api } from '@/app/api';
 import type { Transaction, TransactionInput } from '@/features/transactions/transactionsApi';
 
 // Response shapes of /api/chat-links and /api/receipts, and of drafts (docs/04 §4.4, server/src/models/Transaction.js).
 export type ChatLink = { id: string; platform: 'telegram' | 'zalo'; displayName: string; createdAt: string };
 
-// POST /chat-links/code. telegramDeepLink is null when the server has no TELEGRAM_BOT_USERNAME.
-export type LinkCode = { code: string; expiresAt: string; telegramDeepLink: string | null };
+// "Telegram · Anh", with t from the bot namespace: how Linked accounts and the link card name a linked chat.
+// A chat with no name (Zalo may send none) shows its platform instead of ending in a bare "·".
+export const nameOf = (t: TFunction<'bot'>, link: ChatLink) => `${t(`sources.${link.platform}`)} · ${link.displayName || link.platform}`;
+
+// POST /chat-links/code: one link per chat app, null when the server lacks that app's setting (docs/04 §4.4).
+export type ChatApp = 'telegram' | 'whatsapp' | 'zalo';
+export type LinkCode = { code: string; expiresAt: string; links: Record<ChatApp, string | null> };
 
 export type ReceiptItem = { name: string; quantity?: number; unitPrice?: number; amount?: number };
 
