@@ -1,0 +1,135 @@
+{
+  "fields": {
+    "merchant": "THE COFFEE CORNER",
+    "date": "24/11/2026",
+    "total": "115000",
+    "address": "45 Nguyn Văn C, P. Cu Kho, Q.1 Cà phê sa đá x2 50.000"
+  },
+  "line_items": [
+    {
+      "name": "Cà phê sa đá x2",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 50000,
+      "confidence": 0.9978161454200745,
+      "line_index": 4,
+      "bbox": [
+        256.6666564941406,
+        771.6666870117188,
+        941.6666870117188,
+        805
+      ],
+      "raw_text": "Cà phê sa đá x2 50.000"
+    },
+    {
+      "name": "Bánh mì thit",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 30000,
+      "confidence": 0.9961035251617432,
+      "line_index": 5,
+      "bbox": [
+        256.6666564941406,
+        810,
+        941.6666870117188,
+        843.3333129882812
+      ],
+      "raw_text": "Bánh mì thit 30.000"
+    },
+    {
+      "name": "Trà đào cam sá",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 35000,
+      "confidence": 0.9542742371559143,
+      "line_index": 6,
+      "bbox": [
+        255,
+        850,
+        943.3333129882812,
+        883.3333129882812
+      ],
+      "raw_text": "Trà đào cam sá 35.000"
+    },
+    {
+      "name": "TOTAL",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 115000,
+      "confidence": 0.9999616742134094,
+      "line_index": 7,
+      "bbox": [
+        251.6666717529297,
+        918.3333129882812,
+        945,
+        953.3333129882812
+      ],
+      "raw_text": "TOTAL 115.000"
+    },
+    {
+      "name": "CASH",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 200000,
+      "confidence": 0.9999813437461853,
+      "line_index": 8,
+      "bbox": [
+        253.3333282470703,
+        958.3333129882812,
+        945,
+        990
+      ],
+      "raw_text": "CASH 200.000"
+    },
+    {
+      "name": "CHANGE",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 85000,
+      "confidence": 0.999986469745636,
+      "line_index": 9,
+      "bbox": [
+        253.3333282470703,
+        998.3333129882812,
+        946.6666870117188,
+        1030
+      ],
+      "raw_text": "CHANGE 85.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 515000,
+    "extracted_total": 115000,
+    "difference": 400000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      6
+    ]
+  },
+  "full_text": "THE COFFEE CORNER\n45 Nguyn Văn C, P. Cu Kho, Q.1\nHÓA DON BÁN HÀNG\nNgày: 24/11/2026 08:12\nCà phê sa đá x2 50.000\nBánh mì thit 30.000\nTrà đào cam sá 35.000\nTOTAL 115.000\nCASH 200.000\nCHANGE 85.000",
+  "lines": [
+    "THE COFFEE CORNER",
+    "45 Nguyn Văn C, P. Cu Kho, Q.1",
+    "HÓA DON BÁN HÀNG",
+    "Ngày: 24/11/2026 08:12",
+    "Cà phê sa đá x2 50.000",
+    "Bánh mì thit 30.000",
+    "Trà đào cam sá 35.000",
+    "TOTAL 115.000",
+    "CASH 200.000",
+    "CHANGE 85.000"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 68.27,
+    "ocr_ms": 4364.9,
+    "kie_ms": 5.7
+  }
+}

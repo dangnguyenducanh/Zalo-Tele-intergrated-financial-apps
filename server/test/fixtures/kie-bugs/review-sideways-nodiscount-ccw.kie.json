@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "merchant": "WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1 Hotline: 024 7106 6866 HÓA DON BÁN HÀNG Sô'CT: 2611240045789 Ngày: 24/11/2026 19:05 Rau muôńg VietGAP 500g 1 × 18.900 Thit heo xay 300g 1 × 45.900 Süa tuoi tiêt trùng 1L 1 × 32.900 Nuóc tuong 500ml 1 × 17.400 Tông tiên hàng Tiên cân thanh toán Tiên khách dua Tiên thôi lai Khách hàng: 09xx xxx 512 Điêm còn lai: 0 Căm on Quý khách. Hęn gǎp li!",
+    "date": "24/11/2026",
+    "total": "",
+    "address": ""
+  },
+  "line_items": [
+    {
+      "name": "NV: 30451",
+      "quantity": null,
+      "unit_price": 200000,
+      "amount": 84900,
+      "confidence": 0.996845006942749,
+      "line_index": 0,
+      "bbox": [
+        580,
+        270,
+        1093.3333740234375,
+        426.6666564941406
+      ],
+      "raw_text": "NV: 30451 18.900 45.900 32.900 17.400 115.100 115.100 200.000 84.900"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 84900,
+    "extracted_total": null,
+    "difference": null,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      0
+    ]
+  },
+  "full_text": "NV: 30451 18.900 45.900 32.900 17.400 115.100 115.100 200.000 84.900\nWinMart+\nWM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1 Hotline: 024 7106 6866 HÓA DON BÁN HÀNG Sô'CT: 2611240045789 Ngày: 24/11/2026 19:05 Rau muôńg VietGAP 500g 1 × 18.900 Thit heo xay 300g 1 × 45.900 Süa tuoi tiêt trùng 1L 1 × 32.900 Nuóc tuong 500ml 1 × 17.400 Tông tiên hàng Tiên cân thanh toán Tiên khách dua Tiên thôi lai Khách hàng: 09xx xxx 512 Điêm còn lai: 0 Căm on Quý khách. Hęn gǎp li!",
+  "lines": [
+    "NV: 30451 18.900 45.900 32.900 17.400 115.100 115.100 200.000 84.900",
+    "WinMart+",
+    "WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1 Hotline: 024 7106 6866 HÓA DON BÁN HÀNG Sô'CT: 2611240045789 Ngày: 24/11/2026 19:05 Rau muôńg VietGAP 500g 1 × 18.900 Thit heo xay 300g 1 × 45.900 Süa tuoi tiêt trùng 1L 1 × 32.900 Nuóc tuong 500ml 1 × 17.400 Tông tiên hàng Tiên cân thanh toán Tiên khách dua Tiên thôi lai Khách hàng: 09xx xxx 512 Điêm còn lai: 0 Căm on Quý khách. Hęn gǎp li!"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 45.58,
+    "ocr_ms": 5142.91,
+    "kie_ms": 4.64
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "fields": {
+    "merchant": "THE BEAN CAFE",
+    "date": "25/11/2026",
+    "total": "69120",
+    "address": "21 Lý T Trong, Q.1, TP.HCM"
+  },
+  "line_items": [
+    {
+      "name": "Phin Sǔa Đá (M)",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 39000,
+      "confidence": 0.9370453953742981,
+      "line_index": 3,
+      "bbox": [
+        283.3333435058594,
+        705,
+        908.3333129882812,
+        745
+      ],
+      "raw_text": "Phin Sǔa Đá (M) 39.000"
+    },
+    {
+      "name": "Bánh mì gà",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 25000,
+      "confidence": 0.9976344108581543,
+      "line_index": 4,
+      "bbox": [
+        286.6666564941406,
+        736.6666870117188,
+        910,
+        778.3333129882812
+      ],
+      "raw_text": "Bánh mì gà 25.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 64000,
+    "extracted_total": 69120,
+    "difference": 5120,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      3
+    ]
+  },
+  "full_text": "THE BEAN CAFE\n21 Lý T Trong, Q.1, TP.HCM\nOrder #A1042 25/11/2026 08:12\nPhin Sǔa Đá (M) 39.000\nBánh mì gà 25.000\nSubtotal 64.000\nVAT 8% 5.120\nTOTAL 69.120\nCash 100.000\nChange 30.880\nThank you!",
+  "lines": [
+    "THE BEAN CAFE",
+    "21 Lý T Trong, Q.1, TP.HCM",
+    "Order #A1042 25/11/2026 08:12",
+    "Phin Sǔa Đá (M) 39.000",
+    "Bánh mì gà 25.000",
+    "Subtotal 64.000",
+    "VAT 8% 5.120",
+    "TOTAL 69.120",
+    "Cash 100.000",
+    "Change 30.880",
+    "Thank you!"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 42.69,
+    "ocr_ms": 3664.5,
+    "kie_ms": 3.7
+  }
+}

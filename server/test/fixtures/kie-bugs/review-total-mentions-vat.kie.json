@@ -1,0 +1,105 @@
+{
+  "fields": {
+    "merchant": "NHÀ HÀNG BÊP VIÊT",
+    "date": "25/11/2026",
+    "total": "350000",
+    "address": "12 Hai Bà Trung, Q.1, TP.HCM"
+  },
+  "line_items": [
+    {
+      "name": "Lâù thái hǎi sàn",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 350000,
+      "confidence": 0.9250291585922241,
+      "line_index": 4,
+      "bbox": [
+        285,
+        755,
+        910,
+        798.3333129882812
+      ],
+      "raw_text": "Lâù thái hǎi sàn 350.000"
+    },
+    {
+      "name": "Gà nuóng muôi ót",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 150000,
+      "confidence": 0.9570711851119995,
+      "line_index": 5,
+      "bbox": [
+        283.3333435058594,
+        791.6666870117188,
+        911.6666870117188,
+        833.3333129882812
+      ],
+      "raw_text": "Gà nuóng muôi ót 150.000"
+    },
+    {
+      "name": "Tam tính",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 500000,
+      "confidence": 0.9259249567985535,
+      "line_index": 6,
+      "bbox": [
+        283.3333435058594,
+        856.6666870117188,
+        913.3333129882812,
+        900
+      ],
+      "raw_text": "Tam tính 500.000"
+    },
+    {
+      "name": "VAT 8%",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 40000,
+      "confidence": 0.999926745891571,
+      "line_index": 7,
+      "bbox": [
+        285,
+        891.6666870117188,
+        915,
+        930
+      ],
+      "raw_text": "VAT 8% 40.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 1040000,
+    "extracted_total": 350000,
+    "difference": 690000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      4
+    ]
+  },
+  "full_text": "NHÀ HÀNG BÊP VIÊT\n12 Hai Bà Trung, Q.1, TP.HCM\nPHIÊU THANH TOÁN\nBàn: 05 25/11/2026 19:40\nLâù thái hǎi sàn 350.000\nGà nuóng muôi ót 150.000\nTam tính 500.000\nVAT 8% 40.000\nTông cng (Đã gôm 8% VAT) 540.000\nHęn gǎp lai quý khách!",
+  "lines": [
+    "NHÀ HÀNG BÊP VIÊT",
+    "12 Hai Bà Trung, Q.1, TP.HCM",
+    "PHIÊU THANH TOÁN",
+    "Bàn: 05 25/11/2026 19:40",
+    "Lâù thái hǎi sàn 350.000",
+    "Gà nuóng muôi ót 150.000",
+    "Tam tính 500.000",
+    "VAT 8% 40.000",
+    "Tông cng (Đã gôm 8% VAT) 540.000",
+    "Hęn gǎp lai quý khách!"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 46.85,
+    "ocr_ms": 3984.18,
+    "kie_ms": 3.6
+  }
+}

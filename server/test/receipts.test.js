@@ -408,6 +408,8 @@ test('TC-F10-08 an amount in words ("Bằng chữ"), accents dropped and as OCR 
     ['hai muoi mot nghin', 21000],
     ['mot tram linh nam nghin', 105000],
     ['mot ty hai tram trieu', 1200000000],
+    ['mot ti hai tram trieu', 1200000000], // "tỉ", the other spelling of "tỷ"
+    ['nam muoi nham nghin', 55000], // "nhăm" = 5 after "mươi"
     ['dong chan', 0],
   ];
   for (const [words, number] of cases) expect(wordsToNumber(words), words).toBe(number);
@@ -445,8 +447,15 @@ test('TC-F10-10 a sideways WinMart+ photo gives "Tiền cần thanh toán" 92.40
   }
 });
 
-// Variants found in review (PR #70): KIE's answer as text lines, with KIE's total as `total`.
-const textAnswer = (lines, total = '') => ({ fields: { total }, line_items: [], reconciliation: {}, full_text: lines.join('\n'), lines });
+// Variants found in review (PR #70): KIE's answer as text lines, with KIE's total as `total` and whether KIE's own
+// line items add up to it as `consistent` (false on most real photos).
+const textAnswer = (lines, total = '', consistent = undefined) => ({
+  fields: { total },
+  line_items: [],
+  reconciliation: consistent === undefined ? {} : { is_math_consistent: consistent },
+  full_text: lines.join('\n'),
+  lines,
+});
 const withLines = (answer, lines, total = answer.fields.total) => ({ ...answer, fields: { ...answer.fields, total }, full_text: lines.join('\n'), lines });
 
 test('TC-F10-12 a torn receipt is estimated from its item lines in every layout, never from one price, a list price, a phone number or a code (BUG-036)', async () => {
@@ -502,6 +511,113 @@ test('TC-F10-15 a total printed without thousands separators, or with decimals, 
     expect([draft.amount, draft.receipt.estimated], lines[20]).toEqual([116000, undefined]);
   }
   expect((await draftFrom(textAnswer(['SHOP', 'Áo thun 92,400.00', 'Tổng cộng: 92,400.00'], '92400.00'))).amount).toBe(92400);
+});
+
+// Review round 2 on PR #70: live KIE answers for receipts rendered by the reviewers (fixtures/kie-bugs/review-*), the
+// recorded mcocr answers (fixtures/kie-bugs/mcocr-*, photos in fixtures/receipts) and text variants of them.
+const read = async (answer) => {
+  const draft = await draftFrom(typeof answer === 'string' ? await kieAnswer(answer) : answer);
+  return [draft.amount, draft.receipt.estimated ?? false];
+};
+
+test('TC-F10-16 a discount printed without a minus, or twice, is taken off: the total after it is read, not the one before (BUG-034)', async () => {
+  // Live KIE: "Tổng cộng 115.000", "Chiết khấu 20% 23.000", "Thanh toán 92.000" (KIE right), also as if KIE took 115.000.
+  const cafe = await kieAnswer('review-discount-unsigned');
+  expect(await read(cafe)).toEqual([92000, false]);
+  expect(await read({ ...cafe, fields: { ...cafe.fields, total: '115000' } })).toEqual([92000, false]);
+  // Live KIE: "Tổng tiền 115.100", "Giảm giá 22.700", "Tổng cộng 92.400"; KIE took 115.100.
+  expect(await read('review-discount-unsigned-B')).toEqual([92400, false]);
+  // The same photo turned 2.4°: KIE puts each value one line above its label ("115.100", "Tổng tiền 22.700",
+  // "Giảm giá 92.400", "Tổng cộng") and took 22.700.
+  expect(await read('review-discount-unsigned-B-shifted')).toEqual([92400, false]);
+  // A last label without its value is not always a shifted photo: with no cross-check after shifting, the reading stays.
+  expect(await read(textAnswer(['SHOP', 'Nước 10.000', 'Bánh 25.000', 'Tổng cộng 35.000', 'Tiền khách đưa'], '35000', false))).toEqual([35000, false]);
+  const items = ['Cà phê sữa đá 2 x 25.000 50.000', 'Bánh mì thịt 30.000', 'Trà đào 35.000'];
+  expect(await read(textAnswer([...items, 'Tổng cộng: 115.000', 'Khuyến mãi: 23.000', 'Thanh toán: 92.000'], '115000', true))).toEqual([92000, false]);
+  expect(await read(textAnswer([...items, 'Tạm tính: 115.000', 'Giảm giá: 15.000', 'VAT 8%: 8.000', 'Tổng cộng: 108.000'], '108000'))).toEqual([108000, false]);
+  // The same 5.000 off twice is 10.000 off; 25.000 − 5.000 is an item's price, not the total.
+  const twice = ['Trứng gà 1 20.000 20.000', 'KM -5.000', 'Mì 1 15.000 15.000', 'KM -5.000', 'Tổng tiền hàng 35.000', 'Thanh toán 25.000'];
+  expect(await read(textAnswer(twice, '35000', false))).toEqual([25000, false]);
+});
+
+test('TC-F10-17 a total under a bare or English label ("Tổng:", "TOTAL", "Thành tiền", "Cộng tiền") is read, not doubled into an estimate', async () => {
+  // Live KIE, KIE right each time but its own items do not add up: "Tổng: 115.000"; "TOTAL 115.000", "CASH 200.000",
+  // "CHANGE 85.000"; "Subtotal 64.000", "VAT 8% 5.120", "TOTAL 69.120", "Cash 100.000", "Change 30.880".
+  expect(await read('review-bare-total')).toEqual([115000, false]);
+  expect(await read('review-english-total')).toEqual([115000, false]);
+  expect(await read('review-english-vat')).toEqual([69120, false]);
+  // Real mcocr text with only its total label changed ("TÖNG TIEN PHÃI T.TOÁN 114.700"), KIE's items not adding up.
+  const cftxo = await kieAnswer('mcocr-cftxo');
+  for (const name of ['TOTAL', 'TỔNG:', 'THÀNH TIỀN', 'CỘNG TIỀN', 'Tổng thành tiền:']) {
+    const lines = cftxo.lines.map((line) => line.replace('TÖNG TIEN PHÃI T.TOÁN', name));
+    expect(await read(withLines(cftxo, lines)), name).toEqual([114700, false]);
+  }
+  // Real mcocr text where OCR cut the labels' first letters ("g công : 124,000", "à lai VND: 76,000"), as if KIE's items
+  // did not add up.
+  const ykqth = await kieAnswer('mcocr-ykqth');
+  expect(await read({ ...ykqth, reconciliation: { ...ykqth.reconciliation, is_math_consistent: false } })).toEqual([124000, false]);
+  const shop = ['Trứng gà vỉ 10 1 20.000 20.000', 'Mì Omachi bò 3 5.000 15.000', 'Pepsi lon 2 9.000 18.000'];
+  for (const total of ['Thành tiền 53.000', 'Cộng: 53.000', 'TỔNG: 53.000']) {
+    expect(await read(textAnswer([...shop, total, 'Tiền khách đưa 100.000', 'Tiền thối lại 47.000'], '53000', false)), total).toEqual([53000, false]);
+    expect(await read(textAnswer([...shop, total], '', false)), total).toEqual([53000, false]);
+  }
+  // A total word that is not a total: "Công ty", and a value-only line above a bare label that belongs to an item name.
+  expect(await read(textAnswer(['CÔNG TY TNHH AN', '1.000.000', 'Bánh mì pate', '15.000', 'Tổng cộng', '53.000'], '53000', false))).toEqual([53000, false]);
+});
+
+test('TC-F10-18 a grand-total label that mentions VAT in any words is the total, not the VAT line (BUG-034)', async () => {
+  // Live KIE: "Tạm tính 500.000", "VAT 8% 40.000", "Tổng cộng (Đã gồm 8% VAT) 540.000"; KIE took one dish, 350.000.
+  expect(await read('review-total-mentions-vat')).toEqual([540000, false]);
+  // Live KIE: "Tổng tiền hàng 115.100", "Giảm giá -22.700", "Tổng cộng (đã có VAT) 92.400"; KIE took 115.100.
+  expect(await read('review-total-mentions-vat-B')).toEqual([92400, false]);
+  const labels = ['Tổng cộng (đã bao gồm VAT)', 'Tổng cộng (Đã gồm 8% VAT)', 'Tổng cộng (đã bao gồm 8% VAT)', 'Tổng cộng (bao gồm VAT 8%)', 'Tổng cộng (đã có VAT)', 'Tổng cộng (có VAT)', 'Tổng cộng sau VAT', 'Thành tiền sau VAT', 'Tổng tiền thanh toán (VAT 8%)', 'Tổng cộng (incl. VAT)', 'Tổng thanh toán (đã bao gồm thuế GTGT 8%)'];
+  for (const name of labels) {
+    const bill = ['NHÀ HÀNG BẾP VIỆT', 'Lẩu thái hải sản 350.000', 'Gà nướng muối ớt 150.000', 'Tạm tính 500.000', 'VAT 8% 40.000', `${name} 540.000`];
+    expect(await read(textAnswer(bill, '500000', true)), `${name}, KIE took the subtotal`).toEqual([540000, false]);
+    expect(await read(textAnswer(bill, '540000', false)), `${name}, KIE right`).toEqual([540000, false]);
+  }
+  // A tax line still is one, with or without a total word in front: "Tiền thuế 10%", "Tổng tiền thuế GTGT".
+  expect(await read(textAnswer(['CÔNG TY ABC', 'Bàn phím cơ 6.800.000', 'Cộng tiền hàng: 6.800.000', 'Tiền thuế 10%: 680.000', 'Tổng cộng: 7.480.000'], '6800000', true))).toEqual([7480000, false]);
+  expect(await read(textAnswer(['CÔNG TY ABC', 'Hàng A 1.000.000', 'Tổng tiền hàng: 1.000.000', 'Tổng tiền thuế GTGT: 100.000', 'Tổng cộng: 1.100.000'], '1000000', true))).toEqual([1100000, false]);
+});
+
+test('TC-F10-19 cash handed over under a "thanh toán" label is not the total when the change is printed: cash − change is (BUG-034)', async () => {
+  // Live KIE: "Tổng cộng 35.000", "Thanh toán 50.000", "Tiền thừa 15.000"; KIE took 50.000.
+  expect(await read('review-cash-then-change')).toEqual([35000, false]);
+  for (const [cash, change] of [['Đã thanh toán 50.000', 'Tiền thừa 15.000'], ['Khách hàng thanh toán 50.000', 'Trả lại 15.000']]) {
+    expect(await read(textAnswer(['SHOP', 'Nước 10.000', 'Bánh 25.000', 'Tổng cộng 35.000', cash, change], '35000', true)), cash).toEqual([35000, false]);
+  }
+  // KIE with the orientation flag on, values one row up and no discount (bug037-sideways-A.orient without its points
+  // line): "Tiền cần thanh toán 200.000" is the cash, "Tiền khách đưa 84.900" the change.
+  const shifted = (await kieAnswer('bug037-sideways-A.orient')).lines.slice(0, 14);
+  shifted.push('115.100', 'Tông tiên hàng 115.100', 'Tiên cân thanh toán 200.000', 'Tiên khách đua 84.900', 'Tiên thôi lai');
+  expect(await read(textAnswer(shifted, '200000', false))).toEqual([115100, false]);
+});
+
+test('TC-F10-20 a sideways WinMart+ photo with no discount gives its total, not the cash, the change or one price (BUG-037)', async () => {
+  // Live KIE as it runs today (orientation flag off) on the BUG-037 receipt without its points line: payable 115.100,
+  // cash 200.000, change 84.900. Clockwise KIE took 200.000; anticlockwise it read no total. The upright photo is the control.
+  for (const name of ['review-sideways-nodiscount-cw', 'review-sideways-nodiscount-ccw', 'review-upright-nodiscount']) {
+    expect(await read(name), name).toEqual([115100, false]);
+  }
+});
+
+test('TC-F10-21 a torn receipt never adds a phone number, a code, points or a list price, wherever they stand on the line (BUG-036)', async () => {
+  const items = ['Cà phê 20.000', 'Bánh mì 15.000'];
+  for (const line of ['CỬA HÀNG MINH KHANG - ĐT: (+84) 912.345.678', 'ĐC: 12 Lê Lợi - ĐT: (028) 38.221.234', 'Liên hệ: +84 912.345.678', 'Số: 12.345', 'Số dư điểm: 12.500', 'Tích điểm: 1.250 điểm']) {
+    expect(await read(textAnswer(['QUÁN ABC', line, ...items])), line).toEqual([35000, true]);
+  }
+  expect(await read(textAnswer(['QUÁN ABC', 'Cà phê 20.000', 'Giá gốc: 25.000', 'Bánh mì 15.000']))).toEqual([35000, true]);
+  // "ĐT" in an item's name without a phone number after it is still an item.
+  expect(await read(textAnswer(['PHỤ KIỆN AN', 'Ốp lưng ĐT 50.000', 'Cáp sạc 30.000']))).toEqual([80000, true]);
+});
+
+test('TC-F10-22 a total printed without separators is read when KIE or the amount in words says the same number (BUG-035)', async () => {
+  const dotted = ['SHOP', 'Nước 10.000', 'Bánh 25.000', 'Tổng cộng 35000'];
+  expect(await read(textAnswer(dotted, '35000', false))).toEqual([35000, false]);
+  expect(await read(textAnswer(['SHOP', 'Nước 10000', 'Bánh 25000', 'Tổng cộng 35000'], '35000', false))).toEqual([35000, false]);
+  const voucher = ['PHIẾU THU', 'Số: PT-09/2023', 'Số tiền: 2500000 đ', 'Bằng chữ: Hai triệu năm trăm nghìn đồng'];
+  expect(await read(textAnswer(voucher, '2023'))).toEqual([2500000, false]);
 });
 
 test('TC-F8-24 a receipt whose total is torn off: the bot says the amount is an estimate from the item lines (BUG-036)', async () => {

@@ -1,0 +1,109 @@
+{
+  "fields": {
+    "merchant": "SIÊU THI MINI AN PHÚ",
+    "date": "24/11/2026",
+    "total": "22700",
+    "address": "45 Nguyn Văn Cù, P. Cu Kho, Q.1"
+  },
+  "line_items": [
+    {
+      "name": "Rau mung 500g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 45900,
+      "confidence": 0.9999863505363464,
+      "line_index": 6,
+      "bbox": [
+        253.3333282470703,
+        758.3333129882812,
+        943.3333129882812,
+        813.3333129882812
+      ],
+      "raw_text": "Rau mung 500g 45.900"
+    },
+    {
+      "name": "Thit heo xay 300g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 32900,
+      "confidence": 0.9970859289169312,
+      "line_index": 7,
+      "bbox": [
+        255,
+        796.6666870117188,
+        946.6666870117188,
+        851.6666870117188
+      ],
+      "raw_text": "Thit heo xay 300g 32.900"
+    },
+    {
+      "name": "Sa tuơi TH 1L",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 17400,
+      "confidence": 0.9416866898536682,
+      "line_index": 8,
+      "bbox": [
+        253.3333282470703,
+        835,
+        948.3333129882812,
+        891.6666870117188
+      ],
+      "raw_text": "Sa tuơi TH 1L 17.400"
+    },
+    {
+      "name": "Nuc tuơng Chinsu",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 115100,
+      "confidence": 0.93485027551651,
+      "line_index": 10,
+      "bbox": [
+        256.6666564941406,
+        873.3333129882812,
+        951.6666870117188,
+        960
+      ],
+      "raw_text": "Nuc tuơng Chinsu 115.100"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 211300,
+    "extracted_total": 22700,
+    "difference": 188600,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      10
+    ]
+  },
+  "full_text": "SIÊU THI MINI AN PHÚ\n45 Nguyn Văn Cù, P. Cu Kho, Q.1\nHÓA DON BÁN HÀNG\n08:12\nNgày: 24/11/2026\n18.900\nRau mung 500g 45.900\nThit heo xay 300g 32.900\nSa tuơi TH 1L 17.400\nNuc tuơng Chinsu\n115.100\nTőng tin 22.700\nGiàm giá 92.400\nTng cng",
+  "lines": [
+    "SIÊU THI MINI AN PHÚ",
+    "45 Nguyn Văn Cù, P. Cu Kho, Q.1",
+    "HÓA DON BÁN HÀNG",
+    "08:12",
+    "Ngày: 24/11/2026",
+    "18.900",
+    "Rau mung 500g 45.900",
+    "Thit heo xay 300g 32.900",
+    "Sa tuơi TH 1L 17.400",
+    "Nuc tuơng Chinsu",
+    "115.100",
+    "Tőng tin 22.700",
+    "Giàm giá 92.400",
+    "Tng cng"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 45.82,
+    "ocr_ms": 3439.88,
+    "kie_ms": 4.35
+  }
+}

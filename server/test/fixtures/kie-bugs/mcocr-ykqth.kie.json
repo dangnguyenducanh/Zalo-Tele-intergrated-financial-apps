@@ -1,0 +1,93 @@
+{
+  "fields": {
+    "merchant": "HÓA DON BÁN HANG",
+    "date": "15/08/2020",
+    "total": "124000",
+    "address": "ên hàng SL DVT Đon giá Thành tiên"
+  },
+  "line_items": [
+    {
+      "name": "mm tôm trung thành 300g N0",
+      "quantity": 1,
+      "unit_price": 22000,
+      "amount": 22000,
+      "confidence": 0.956873893737793,
+      "line_index": 5,
+      "bbox": [
+        127,
+        349,
+        630,
+        410
+      ],
+      "raw_text": "934752050018 mm tôm trung thành 300g N0 1 CHA 22,000 22,000"
+    },
+    {
+      "name": "Mm Nam ngu đê nhi 900ml NT",
+      "quantity": 1,
+      "unit_price": 14000,
+      "amount": 14000,
+      "confidence": 0.9809775352478027,
+      "line_index": 7,
+      "bbox": [
+        128,
+        418,
+        637,
+        480
+      ],
+      "raw_text": "36136161648 Mm Nam ngu đê nhi 900ml NT 1 CHA 14,000 14,000"
+    },
+    {
+      "name": "Du Simply 2L NT",
+      "quantity": 1,
+      "unit_price": 88000,
+      "amount": 88000,
+      "confidence": 0.9995912909507751,
+      "line_index": 9,
+      "bbox": [
+        127,
+        491,
+        645,
+        556
+      ],
+      "raw_text": "1002560000 Du Simply 2L NT 1 CHA 88,000 88,000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 124000,
+    "extracted_total": 124000,
+    "difference": 0,
+    "tolerance": 1000,
+    "is_math_consistent": true,
+    "suspected_line_indices": []
+  },
+  "full_text": "MINIMART ANAN\nCh Súi Phú Thi Gia Lâm\nHÓA DON BÁN HANG\nên hàng SL DVT Đon giá Thành tiên\n934752050018 mm tôm trung thành 300g N0\n1 CHA 22,000 22,000\n36136161648 Mm Nam ngu đê nhi 900ml NT\n1 CHA 14,000 14,000\n1002560000 Du Simply 2L NT\n1 CHA 88,000 88,000\ngső: 3\ng công : 124,000\nkhách trá: VND 200,000\nà lai VND: 76,000\nGD:000AC2212008002083 Ngàv: 15/08/2020-16:53",
+  "lines": [
+    "MINIMART ANAN",
+    "Ch Súi Phú Thi Gia Lâm",
+    "HÓA DON BÁN HANG",
+    "ên hàng SL DVT Đon giá Thành tiên",
+    "934752050018 mm tôm trung thành 300g N0",
+    "1 CHA 22,000 22,000",
+    "36136161648 Mm Nam ngu đê nhi 900ml NT",
+    "1 CHA 14,000 14,000",
+    "1002560000 Du Simply 2L NT",
+    "1 CHA 88,000 88,000",
+    "gső: 3",
+    "g công : 124,000",
+    "khách trá: VND 200,000",
+    "à lai VND: 76,000",
+    "GD:000AC2212008002083 Ngàv: 15/08/2020-16:53"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_hough(-11.69)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 16.57,
+    "ocr_ms": 5495.69,
+    "kie_ms": 10.9
+  }
+}

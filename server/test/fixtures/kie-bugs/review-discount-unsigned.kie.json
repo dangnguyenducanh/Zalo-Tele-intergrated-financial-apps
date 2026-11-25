@@ -1,0 +1,92 @@
+{
+  "fields": {
+    "merchant": "QUÁN CÀ PHÊ MÔC",
+    "date": "24/11/2026",
+    "total": "92000",
+    "address": "45 Nguyn Văn C, P. Cu Kho, Q.1 Cà phê sa đá x2 50.000"
+  },
+  "line_items": [
+    {
+      "name": "Cà phê sa đá x2",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 50000,
+      "confidence": 0.9977417588233948,
+      "line_index": 4,
+      "bbox": [
+        256.6666564941406,
+        733.3333129882812,
+        940,
+        766.6666870117188
+      ],
+      "raw_text": "Cà phê sa đá x2 50.000"
+    },
+    {
+      "name": "Bánh mì thit",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 30000,
+      "confidence": 0.9541239738464355,
+      "line_index": 5,
+      "bbox": [
+        256.6666564941406,
+        771.6666870117188,
+        941.6666870117188,
+        805
+      ],
+      "raw_text": "Bánh mì thit 30.000"
+    },
+    {
+      "name": "Trà đào cam så",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 35000,
+      "confidence": 0.965726375579834,
+      "line_index": 6,
+      "bbox": [
+        256.6666564941406,
+        808.3333129882812,
+        941.6666870117188,
+        841.6666870117188
+      ],
+      "raw_text": "Trà đào cam så 35.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 115000,
+    "extracted_total": 92000,
+    "difference": 23000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      5
+    ]
+  },
+  "full_text": "QUÁN CÀ PHÊ MÔC\n45 Nguyn Văn C, P. Cu Kho, Q.1\nHÓA DON BÁN HÀNG\nNgày: 24/11/2026 08:12\nCà phê sa đá x2 50.000\nBánh mì thit 30.000\nTrà đào cam så 35.000\nTng cng 115.000\nChit khãu 20% 23.000\nThanh toán 92.000\nTin khách đua 100.000\nTin tha 8.000",
+  "lines": [
+    "QUÁN CÀ PHÊ MÔC",
+    "45 Nguyn Văn C, P. Cu Kho, Q.1",
+    "HÓA DON BÁN HÀNG",
+    "Ngày: 24/11/2026 08:12",
+    "Cà phê sa đá x2 50.000",
+    "Bánh mì thit 30.000",
+    "Trà đào cam så 35.000",
+    "Tng cng 115.000",
+    "Chit khãu 20% 23.000",
+    "Thanh toán 92.000",
+    "Tin khách đua 100.000",
+    "Tin tha 8.000"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 67.23,
+    "ocr_ms": 6974.73,
+    "kie_ms": 7.37
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "fields": {
+    "merchant": "QUÁN CÀ PHÊ MÔC",
+    "date": "24/11/2026",
+    "total": "115000",
+    "address": "45 Nguyn Văn C, P. Cu Kho, Q.1 Cà phê sa đá x2 50.000"
+  },
+  "line_items": [
+    {
+      "name": "Cà phê sa đá x2",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 50000,
+      "confidence": 0.9795624017715454,
+      "line_index": 4,
+      "bbox": [
+        253.3333282470703,
+        806.6666870117188,
+        941.6666870117188,
+        845
+      ],
+      "raw_text": "Cà phê sa đá x2 50.000"
+    },
+    {
+      "name": "Bánh mì thit",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 30000,
+      "confidence": 0.9996625781059265,
+      "line_index": 5,
+      "bbox": [
+        253.3333282470703,
+        850,
+        943.3333129882812,
+        880
+      ],
+      "raw_text": "Bánh mì thit 30.000"
+    },
+    {
+      "name": "Trà đào cam sá",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 35000,
+      "confidence": 0.9407944083213806,
+      "line_index": 6,
+      "bbox": [
+        253.3333282470703,
+        888.3333129882812,
+        943.3333129882812,
+        921.6666870117188
+      ],
+      "raw_text": "Trà đào cam sá 35.000"
+    },
+    {
+      "name": "Tng",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 115000,
+      "confidence": 0.9996494054794312,
+      "line_index": 7,
+      "bbox": [
+        246.6666717529297,
+        951.6666870117188,
+        945,
+        1000
+      ],
+      "raw_text": "Tng: 115.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 230000,
+    "extracted_total": 115000,
+    "difference": 115000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      6
+    ]
+  },
+  "full_text": "QUÁN CÀ PHÊ MÔC\n45 Nguyn Văn C, P. Cu Kho, Q.1\nHÓA DON BÁN HÀNG\nNgày: 24/11/2026 08:12\nCà phê sa đá x2 50.000\nBánh mì thit 30.000\nTrà đào cam sá 35.000\nTng: 115.000",
+  "lines": [
+    "QUÁN CÀ PHÊ MÔC",
+    "45 Nguyn Văn C, P. Cu Kho, Q.1",
+    "HÓA DON BÁN HÀNG",
+    "Ngày: 24/11/2026 08:12",
+    "Cà phê sa đá x2 50.000",
+    "Bánh mì thit 30.000",
+    "Trà đào cam sá 35.000",
+    "Tng: 115.000"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 75.18,
+    "ocr_ms": 6084.06,
+    "kie_ms": 5.35
+  }
+}

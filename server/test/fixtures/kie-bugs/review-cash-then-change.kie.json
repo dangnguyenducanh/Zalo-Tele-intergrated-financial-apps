@@ -1,0 +1,74 @@
+{
+  "fields": {
+    "merchant": "TAP HÓA MINH ANH",
+    "date": "24/11/2026",
+    "total": "50000",
+    "address": "45 Nguyn Văn Cù, P. Cu Kho, Q.1"
+  },
+  "line_items": [
+    {
+      "name": "Nuc sui Lavie 500ml x2",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 10000,
+      "confidence": 0.9983924627304077,
+      "line_index": 4,
+      "bbox": [
+        256.6666564941406,
+        788.3333129882812,
+        943.3333129882812,
+        823.3333129882812
+      ],
+      "raw_text": "Nuc sui Lavie 500ml x2 10.000"
+    },
+    {
+      "name": "Bánh quy Cosy",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 25000,
+      "confidence": 0.9736471176147461,
+      "line_index": 5,
+      "bbox": [
+        253.3333282470703,
+        830,
+        943.3333129882812,
+        865
+      ],
+      "raw_text": "Bánh quy Cosy 25.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 35000,
+    "extracted_total": 50000,
+    "difference": 15000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      5
+    ]
+  },
+  "full_text": "TAP HÓA MINH ANH\n45 Nguyn Văn Cù, P. Cu Kho, Q.1\nHÓA DON BÁN HÀNG\nNgày: 24/11/2026 08:12\nNuc sui Lavie 500ml x2 10.000\nBánh quy Cosy 25.000\nTng cng 35.000\nThanh toán 50.000\nTién thùa 15.000",
+  "lines": [
+    "TAP HÓA MINH ANH",
+    "45 Nguyn Văn Cù, P. Cu Kho, Q.1",
+    "HÓA DON BÁN HÀNG",
+    "Ngày: 24/11/2026 08:12",
+    "Nuc sui Lavie 500ml x2 10.000",
+    "Bánh quy Cosy 25.000",
+    "Tng cng 35.000",
+    "Thanh toán 50.000",
+    "Tién thùa 15.000"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 54.9,
+    "ocr_ms": 4510.73,
+    "kie_ms": 3.23
+  }
+}
