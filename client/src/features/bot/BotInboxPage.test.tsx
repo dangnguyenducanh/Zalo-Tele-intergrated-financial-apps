@@ -337,6 +337,27 @@ test('TC-F10-06 the receipt status and error switch to English with the rest of 
   expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo bản nháp từ hoá đơn.');
 });
 
+test('TC-F7-06 Generate stays busy until the fresh link list is back, so a slow GET /chat-links cannot send a second code request', async () => {
+  const user = userEvent.setup();
+  renderApp('/bot');
+  const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+  expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+
+  let answerLinks = () => {};
+  const slowList = new Promise<void>((resolve) => (answerLinks = resolve)); // e.g. a cold start
+  server.use(http.get('*/api/chat-links', async () => (await slowList, HttpResponse.json(links))));
+  let posts = 0;
+  codeAnswer = () => (posts++, codeWith('ABC234', { telegram: TG('ABC234') })());
+  const generate = screen.getByRole('button', { name: 'Tạo mã liên kết' });
+  await user.click(generate);
+  await waitFor(() => expect(posts).toBe(1));
+  expect(generate).toBeDisabled(); // the POST is done, the list is not: a second tap does nothing
+
+  answerLinks();
+  expect(await screen.findByText('ABC234')).toBeInTheDocument();
+  expect(posts).toBe(1);
+});
+
 // BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card, not widen the page.
 test('TC-F7-09 a long linked-chat name with no spaces may break anywhere, so it stays inside the card', async () => {
   const name = 'Nguyễn_Thị_Phương_Thảo_Official_Shop_Mỹ_Phẩm_Chính_Hãng_Giá_Rẻ';

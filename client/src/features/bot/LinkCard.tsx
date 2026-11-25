@@ -30,7 +30,8 @@ function firstApp(code: LinkCode, linked: ChatLink[]): ChatApp | null {
 export default function LinkCard() {
   const { t } = useTranslation('bot');
   const titleId = useId();
-  const [createLinkCode, { isLoading }] = useCreateLinkCodeMutation();
+  const [createLinkCode] = useCreateLinkCodeMutation();
+  const [generating, setGenerating] = useState(false); // the POST and the fresh link list after it
   const [code, setCode] = useState<LinkCode | null>(null);
   const [app, setApp] = useState<ChatApp | null>(null);
   const [linkedBefore, setLinkedBefore] = useState<string[] | null>(null); // link ids when the code was made
@@ -85,6 +86,7 @@ export default function LinkCard() {
 
   async function generate() {
     setError(null);
+    setGenerating(true);
     try {
       const created = await createLinkCode().unwrap();
       // The links that exist now, always fetched fresh: the cached list misses links made in another tab or by a
@@ -98,6 +100,8 @@ export default function LinkCard() {
       setCopy(null);
     } catch (err) {
       setError(apiErrorMessage(err)); // e.g. 429 after 5 codes in 10 minutes
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -202,7 +206,7 @@ export default function LinkCard() {
               </Alert>
             )
           )}
-          <Button variant="contained" loading={isLoading} onClick={() => void generate()}>
+          <Button variant="contained" loading={generating} onClick={() => void generate()}>
             {t(code || stillLinked ? 'link.regenerate' : 'link.generate')}
           </Button>
         </>
