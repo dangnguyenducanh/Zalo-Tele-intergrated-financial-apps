@@ -40,10 +40,14 @@ export async function listChatLinks(userId) {
   }));
 }
 
-// DELETE /chat-links/:id: unlink. The chat can then be linked again, to any account.
+// DELETE /chat-links/:id: unlink. The chat can then be linked again, to any account, with a new code or claim link:
+// a claim link it got before it was linked (say with a website code) must not work again.
 export async function deleteChatLink(userId, linkId) {
-  const { deletedCount } = await ChatLink.deleteOne({ _id: linkId, userId });
-  if (deletedCount === 0) throw new AppError(404, 'NOT_FOUND', 'Chat link not found');
+  const link = await ChatLink.findOne({ _id: linkId, userId });
+  if (!link) throw new AppError(404, 'NOT_FOUND', 'Chat link not found');
+  // The claim link goes first: a Confirm running right now looks for its row after linking (claimChat).
+  await LinkCode.deleteOne({ 'chat.platform': link.platform, 'chat.platformUserId': link.platformUserId });
+  await link.deleteOne();
 }
 
 // PATCH /chat-links/:id/claim-notice: the user has seen the "Not you? [Unlink]" notice of a claim-made link.
@@ -109,13 +113,18 @@ export async function previewClaim(token) {
 
 // POST /chat-links/claim: one atomic update spends the token (so it works once), then the chat is linked to
 // this user. A chat that got linked meanwhile is refused by the unique chatLinks index; the token stays spent.
+// A chat that was linked and unlinked meanwhile has no claim row any more, so the new link is taken back.
 export async function claimChat(userId, token) {
   const claim = await LinkCode.findOneAndUpdate(liveClaim(token), { usedAt: new Date() }).lean();
   if (!claim) throw invalidToken();
+  let link;
   try {
-    return await ChatLink.create({ ...claim.chat, userId, viaClaim: true });
+    link = await ChatLink.create({ ...claim.chat, userId, viaClaim: true });
   } catch (err) {
     if (err.code === 11000) throw new AppError(409, 'CHAT_ALREADY_LINKED', 'This chat is already linked to an account');
     throw err;
   }
+  if (await LinkCode.exists({ _id: claim._id })) return link;
+  await link.deleteOne();
+  throw invalidToken();
 }

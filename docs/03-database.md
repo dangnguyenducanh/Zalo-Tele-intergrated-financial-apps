@@ -188,10 +188,11 @@ A one-time secret that links a chat to a web account. Two kinds of row:
 | Matches only rows with | `userId` | `chat` |
 | How many | at most 5 new codes per user per 10 minutes (rate limit) | at most one live claim link per chat |
 
-- **Exactly one of `userId` and `chat` is set**, checked by a model validator.
+- **Exactly one of `userId` and `chat` is set**, checked by a model validator on `create`/`save`. The bot's upsert of a claim link is an `updateOne`, which does not run that validator; there the rule holds because the update never writes `userId`.
 - **Neither kind works in the other's place.** Each lookup is one atomic update (`codeHash`, `usedAt: null`, `expiresAt` in the future → set `usedAt`) that also requires `userId` (redeeming in the chat) or `chat` (claiming on the website). `POST /api/chat-links/claim/preview` matches the same way and changes nothing, so Cancel leaves the token to expire. No match (unknown, used, expired, or the other kind) → 404 `LINK_TOKEN_INVALID` on the website.
 - **Hashing.** Both kinds are stored as a SHA-256 (hex). A code is trimmed and upper-cased before hashing; base64url is case-sensitive, so a token is hashed exactly as received.
 - **One claim link per chat.** The bot writes it with one atomic upsert on (`chat.platform`, `chat.platformUserId`), which replaces the chat's older row, so the older link stops working.
+- **Unlinking deletes the chat's claim row** (`DELETE /api/chat-links/:id`). A claim link made before the chat was linked (say with a website code) therefore never works again; while the chat is linked it answers 409. The claim row is deleted before the `chatLinks` row, and a claim reads its row again after creating its link, so an unlink running at the same moment as Confirm wins: the new link is removed and the claim answers 404.
 
 Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`; `{ 'chat.platform': 1, 'chat.platformUserId': 1 }` **unique, partial** (only rows with `chat.platformUserId`), which keeps "one claim link per chat" true when two messages of a chat are handled at the same moment (MongoDB retries the losing upsert).
 

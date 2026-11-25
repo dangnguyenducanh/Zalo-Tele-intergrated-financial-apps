@@ -756,6 +756,58 @@ test('TC-F7-19 a chat linked meanwhile answers 409 and spends the token; a token
   expect(calls).toHaveLength(1);
 });
 
+// A claim link for chat A, then chat A is linked to user B with a website code, which leaves that link unused.
+async function claimLinkThenCode() {
+  const token = await askClaimLink();
+  const b = api((await registerUser()).accessToken);
+  await say(`/link ${(await b.post('/chat-links/code')).body.code}`);
+  const [link] = (await b.get('/chat-links')).body;
+  const a = api((await registerUser()).accessToken);
+  return { token, a, unlink: (who = b) => who.delete(`/chat-links/${link.id}`) }; // unlinked by B unless told otherwise
+}
+
+test('TC-F7-19 unlinking a chat kills the claim link it got before it was linked', async () => {
+  const otherChats = await askClaimLink('hi', CHAT_B);
+  const { token, a, unlink } = await claimLinkThenCode();
+
+  expect((await unlink(a)).status).toBe(404); // not A's link: nothing is removed
+  expect(await LinkCode.countDocuments({ 'chat.platformUserId': String(CHAT_A) })).toBe(1);
+
+  expect((await unlink()).status).toBe(204);
+  calls.length = 0;
+  for (const call of [preview, claim]) expect(outcome(await call(a, token)), call.name).toEqual([404, 'LINK_TOKEN_INVALID']);
+  expect(await ChatLink.countDocuments()).toBe(0);
+  expect(calls).toEqual([]);
+  expect((await preview(a, otherChats)).status).toBe(200); // another chat's link is untouched
+});
+
+test('TC-F7-19 an unlink while Confirm is running wins: the claim links nothing', async () => {
+  const { token, a, unlink } = await claimLinkThenCode();
+  // Hold the claim after it has spent the token and before it writes the chatLinks row.
+  let resume;
+  const paused = new Promise((resolve) => {
+    resume = resolve;
+  });
+  const create = ChatLink.create.bind(ChatLink);
+  const spy = vi.spyOn(ChatLink, 'create').mockImplementationOnce(async (doc) => {
+    await paused;
+    return create(doc);
+  });
+  try {
+    calls.length = 0;
+    const claiming = claim(a, token);
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    expect((await unlink()).status).toBe(204);
+    resume();
+    expect(outcome(await claiming)).toEqual([404, 'LINK_TOKEN_INVALID']);
+    expect(await ChatLink.countDocuments()).toBe(0);
+    expect(calls).toEqual([]);
+  } finally {
+    resume();
+    spy.mockRestore();
+  }
+});
+
 test('TC-F7-21 only claim-made links carry the "Not you?" notice, and only their owner can dismiss it', async () => {
   const lan = await linkedUser(CHAT_A); // by code
   const me = lan.me;
