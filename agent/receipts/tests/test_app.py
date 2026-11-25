@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import random
+import struct
 import tempfile
 
 import httpx
@@ -217,6 +218,45 @@ def test_bad_uploads(client, model, data, content_type, status):
     """TC-F10-28 unreadable → 400, too large → 413, not JPEG or PNG → 415, and the model is not called"""
     assert analyze(client, data, content_type=content_type).status_code == status
     assert model.calls == []
+
+
+def turned_with_bad_exif(tag, kind, value):
+    """A 400 x 300 JPEG with orientation 6 and one more EXIF tag stored with the wrong type."""
+    entries = [(274, 3, 1, struct.pack('<HH', 6, 0)), (tag, kind, 4 if kind == 2 else 1, value)]
+    ifd = struct.pack('<H', len(entries)) + b''.join(struct.pack('<HHI4s', *entry) for entry in entries) + bytes(4)
+    out = io.BytesIO()
+    Image.new('RGB', (400, 300), 'white').save(out, 'JPEG', exif=b'Exif\0\0II*\0' + struct.pack('<I', 8) + ifd)
+    return out.getvalue()
+
+
+@pytest.mark.parametrize('tag, kind, value', [
+    (282, 2, b'abc\0'),  # XResolution as text
+    (256, 2, b'abc\0'),  # ImageWidth as text
+    (282, 9, struct.pack('<i', -5)),  # XResolution as a negative number
+], ids=['text resolution', 'text width', 'negative resolution'])
+def test_turned_photo_with_bad_exif(client, model, tag, kind, value):
+    """TC-F10-28 a turned photo with an ill-typed EXIF tag is read upright, not answered with a 500"""
+    assert analyze(client, turned_with_bad_exif(tag, kind, value)).status_code == 200
+    sent = Image.open(io.BytesIO(sent_image(model.calls[0])[1]))
+    assert sent.size == (300, 400)
+    assert sent.getexif().get(274, 1) == 1  # nothing left for the model's side to turn a second time
+
+
+@pytest.mark.parametrize('orientation, corner', [(2, (1, 0)), (3, (1, 1)), (4, (0, 1)), (5, (0, 0)), (6, (1, 0)),
+                                                 (7, (1, 1)), (8, (0, 1))])
+def test_every_exif_orientation(client, model, orientation, corner):
+    """TC-F10-29 each of the seven EXIF turns puts the stored top-left corner where the camera says (BUG-037)"""
+    image = Image.new('RGB', (64, 48), 'white')
+    image.paste((255, 0, 0), (0, 0, 16, 16))
+    exif, out = Image.Exif(), io.BytesIO()
+    exif[274] = orientation
+    image.save(out, 'JPEG', exif=exif.tobytes(), quality=95)
+    assert analyze(client, out.getvalue()).status_code == 200
+    sent = Image.open(io.BytesIO(sent_image(model.calls[0])[1])).convert('RGB')
+    assert sent.size == ((48, 64) if orientation >= 5 else (64, 48))
+    x, y = corner
+    red, green, _ = sent.getpixel((x * (sent.width - 9) + 4, y * (sent.height - 9) + 4))
+    assert red > 200 and green < 60
 
 
 def test_missing_image_field(client):

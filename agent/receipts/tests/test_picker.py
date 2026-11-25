@@ -56,6 +56,191 @@ def test_discount_points_cash_change(expected, recorded):
     assert pick_total(recorded) == expected
 
 
+# The line copies of the PR #124 review (the right total is 87000), where a really printed amount won: change, cash
+# received and savings.
+REVIEW_COPIES = {
+    'change, "phải trả lại"': [('Tổng cộng', 87000), ('Tiền khách đưa', 100000), ('Tiền phải trả lại', 13000)],
+    'change after the amount to pay': [('Khách phải trả', 87000), ('Tiền mặt', 100000), ('Phải trả lại khách', 13000)],
+    'change, upper case': [('TỔNG CỘNG', 87000), ('TIỀN MẶT', 100000), ('TIỀN PHẢI TRẢ LẠI', 13000)],
+    'change, "còn phải trả lại"': [('Tổng thanh toán', 87000), ('Khách đưa', 100000), ('Còn phải trả lại', 13000)],
+    'cash received as "số tiền nhận"': [('Thành tiền', 87000), ('Số tiền nhận', 100000), ('Số tiền thừa', 13000)],
+    'cash received as "thanh toán"': [('Tổng cộng', 87000), ('Thanh toán', 100000), ('Tiền thừa', 13000)],
+    '"thanh toán" cash under "thành tiền"': [('Thành tiền', 87000), ('Thanh toán', 100000), ('Tiền thừa', 13000)],
+    'savings': [('Tổng cộng', 87000), ('Tổng tiền tiết kiệm', 22700)],
+    'savings after the change': [('TỔNG CỘNG', 87000), ('Tiền khách đưa', 100000), ('Tiền thối lại', 13000),
+                                 ('Tổng tiền đã tiết kiệm', 8000)],
+    'savings in English': [('TOTAL', 87000), ('Total savings', 8000)],
+}
+
+
+@pytest.mark.parametrize('copied', REVIEW_COPIES.values(), ids=REVIEW_COPIES.keys())
+def test_change_cash_received_and_savings_are_never_the_total(copied):
+    """TC-F10-24 change, cash received and savings are never the total, even when really printed (BUG-037)"""
+    recorded = lines(*copied)
+    assert choose_total(87000, recorded) == 87000
+    assert pick_total(recorded) in (87000, None)
+    for _, wrong in copied:  # even a direct read that took the wrong line does not get it through
+        assert choose_total(wrong, recorded) in (87000, None), wrong
+
+
+NEVER_THE_TOTAL = [
+    # change
+    'Tiền phải trả lại', 'Phải trả lại khách', 'Số tiền phải trả lại', 'Cần trả lại', 'Còn phải trả lại',
+    'Tiền thừa phải trả khách', 'Phải trả khách', 'Tiền phải thối lại', 'Tiền phải đổi lại', 'Trả lại tiền thừa',
+    'Hoàn lại khách', 'Amount to pay back', 'Change due',
+    # cash received
+    'Số tiền nhận', 'Số tiền đã nhận', 'Tổng tiền nhận', 'Tiền nhận của khách', 'Số tiền khách gửi', 'Tiền khách gửi',
+    'Tổng tiền khách đưa', 'Số tiền khách trả', 'Total received', 'Amount received', 'Total cash tendered',
+    # savings
+    'Số tiền tiết kiệm', 'Tổng tiền tiết kiệm', 'Tổng tiền đã tiết kiệm', 'TỔNG CỘNG TIẾT KIỆM', 'Total savings',
+    'Total saved', 'Total you save',
+    # debts and balances
+    'Số tiền còn nợ', 'Tổng tiền còn nợ', 'Tổng nợ', 'Tổng công nợ', 'Số tiền nợ cũ', 'Tổng số dư',
+]
+
+
+@pytest.mark.parametrize('label', NEVER_THE_TOTAL)
+def test_a_line_that_is_never_the_total(label):
+    """TC-F10-24 no wording of change, cash received, savings or a debt is picked, in any label group (BUG-037)"""
+    assert pick_total(lines(('Tổng cộng', 115100), (label, 15000))) == 115100
+    assert pick_total(lines(('Tiền cần thanh toán', 92400), (label, 7600))) == 92400
+    assert pick_total(lines((label, 7600))) is None
+    assert choose_total(7600, lines((label, 7600))) is None
+
+
+@pytest.mark.parametrize('label', ['Số tiền đặt cọc', 'Số tiền trong quỹ', 'Số tiền làm tròn', 'Số tiền gửi xe'])
+def test_so_tien_of_something_else_does_not_beat_the_total(label):
+    """TC-F10-25 only a bare voucher "Số tiền" ranks above "Tổng cộng" (BUG-035)"""
+    assert pick_total(lines(('Tổng cộng', 115100), (label, 15000))) == 115100
+
+
+@pytest.mark.parametrize('label', ['Số tiền:', 'SỐ TIỀN (VNĐ)', 'Số tiền (Amount):', 'Số tiền bằng số', 'Số tiền thu',
+                                   'Số tiền chi', 'Số tiền thanh toán', 'Số tiền giao dịch', 'Số tiền chuyển khoản',
+                                   'Đã nhận đủ số tiền', 'Đã nhận đủ số tiền (viết bằng chữ)'])
+def test_voucher_so_tien_wordings(label):
+    """TC-F10-25 the amount line of a voucher or transfer slip is still read, also "Đã nhận đủ số tiền" (BUG-035)"""
+    assert pick_total(lines((label, 2500000), ('TỔNG', 3000000))) == 2500000
+
+
+# A total printed after VAT or a discount: (the VAT or discount line, its amount, the label below it, the total).
+AFTER_LINES = [
+    ('Thuế VAT 8%', 9208, 'Tổng cộng sau VAT', 124308),
+    ('Thuế GTGT', 9208, 'Tổng cộng sau thuế GTGT', 124308),
+    ('VAT', 9208, 'TỔNG SAU THUẾ', 124308),
+    ('VAT', 9208, 'TOTAL AFTER TAX', 124308),
+    ('Giảm giá', 23100, 'Tổng cộng sau giảm giá', 92000),
+    ('Giảm giá', 23100, 'Tổng tiền sau giảm giá', 92000),
+    ('Chiết khấu 20%', 23100, 'Tổng tiền sau chiết khấu', 92000),
+    ('Khuyến mãi', 23100, 'Cộng sau khuyến mãi', 92000),
+    ('Trừ điểm', 22700, 'Tổng tiền sau khi trừ điểm', 92400),
+    ('Điểm tích lũy', -22700, 'Tổng tiền sau trừ điểm', 92400),
+    ('Discount', 23100, 'Total after discount', 92000),
+]
+
+
+@pytest.mark.parametrize('adjustment, off, label, total', AFTER_LINES, ids=[row[2] for row in AFTER_LINES])
+def test_the_total_after_vat_or_a_discount(adjustment, off, label, total):
+    """TC-F10-23 the total printed after VAT or a discount is the total, not the figure before it (BUG-034)"""
+    recorded = lines(('Tổng cộng', 115100), (adjustment, off), (label, total))
+    assert pick_total(recorded) == total
+    assert choose_total(total, recorded) == total
+    assert choose_total(115100, recorded) == total
+
+
+# A VAT or discount line below the picked figure changes it, and no line is recognised as the figure after it.
+CHANGED_LATER = {
+    'VAT added below': [('Tổng cộng', 115100), ('Thuế VAT 8%', 9208)],
+    'discount below': [('Tổng cộng', 115100), ('Giảm giá', 23100)],
+    'discount with a minus sign': [('TỔNG CỘNG', 115100), ('CHIẾT KHẤU', -23100)],
+    'points taken off': [('Tổng cộng', 115100), ('Điểm tích lũy', -22700)],
+    'points spent': [('Tổng cộng', 115100), ('Đổi điểm', 22700)],
+    'voucher used': [('Total', 115100), ('Voucher', 20000)],
+    'VAT, then a total in other words': [('Tổng cộng', 115100), ('Thuế GTGT', 9208), ('Thành tiền sau thuế', 124308)],
+    'VAT on two lines': [('Tổng cộng', 115100), ('Thuế suất GTGT: 8%', 9208), ('Tiền thuế GTGT', 9208)],
+    'voucher amount, then VAT': [('Số tiền', 115100), ('VAT 8%', 9208)],
+    'total after a discount, then VAT': [('Tổng cộng sau giảm giá', 92000), ('VAT 8%', 7360), ('Tổng cộng', 99360)],
+    'sum of the discounts, then the figure they leave': [('Tổng cộng', 115100), ('Tổng giảm giá', 23100), ('TC', 92000)],
+    'paid more than the figure above the VAT': [('Tổng cộng', 115100), ('VAT 8%', 9208), ('Tiền mặt', 124308)],
+}
+
+
+@pytest.mark.parametrize('copied', CHANGED_LATER.values(), ids=CHANGED_LATER.keys())
+def test_a_figure_a_later_vat_or_discount_line_changes_is_not_presented(copied):
+    """TC-F10-23 a figure that a later VAT or discount line changes is not presented as the total (BUG-034)"""
+    recorded = lines(*copied)
+    assert pick_total(recorded) is None
+    assert choose_total(copied[0][1], recorded) is None
+
+
+def test_a_direct_total_that_adds_up_with_vat_and_discounts_is_kept():
+    """TC-F10-23 subtotal + VAT - discounts confirms the direct total, and nothing else (BUG-034)"""
+    vat = lines(('Tổng cộng', 115100), ('Thuế VAT 8%', 9208))
+    assert choose_total(124308, vat) == 124308
+    both = lines(('Tổng cộng', 100000), ('Giảm giá', 10000), ('Thuế GTGT', 7200))
+    assert choose_total(97200, both) == 97200
+    assert choose_total(92000, lines(('Tổng cộng', 115100), ('Giảm giá', 23100))) == 92000
+    assert choose_total(100000, vat) is None
+
+
+# VAT and discount lines below the picked figure that leave it as it is.
+UNCHANGED = {
+    '"trong đó" VAT': [('Tổng cộng', 87000), ('Trong đó VAT 8%', 6444)],
+    'a note that prices include VAT': [('Tổng cộng', 87000), ('(Giá đã bao gồm thuế GTGT)', 6444)],
+    'the figure before VAT is printed above': [('Tiền trước thuế', 80556), ('Tổng cộng', 87000), ('VAT 8%', 6444)],
+    'goods less discount plus VAT gives it': [('Tổng tiền hàng', 90000), ('Tổng cộng', 87000), ('Giảm giá', 10000),
+                                              ('Thuế GTGT', 7000)],
+    'it was paid, cash less change': [('Tổng cộng', 87000), ('VAT 8%', 6444), ('Tiền mặt', 100000), ('Tiền thừa', 13000)],
+    'it was paid by card': [('Tổng cộng', 87000), ('VAT 8%', 6444), ('Thẻ ngân hàng', 87000)],
+    'the total says VAT is included': [('Tổng cộng (đã bao gồm VAT)', 87000), ('VAT 8%', 6444)],
+    'the total is the one after VAT': [('Tổng cộng sau VAT', 87000), ('VAT 8%', 6444)],
+    'an amount to pay, then the VAT in it': [('Khách phải trả', 87000), ('VAT 8%', 6444)],
+    'no discount and no VAT': [('Tổng cộng', 87000), ('Giảm giá', 0), ('Thuế', 0)],
+    'points earned and a points balance': [('Tổng cộng', 87000), ('Điểm tích lũy', 87), ('Tổng điểm', 1520)],
+    'the sum of the discounts already taken off': [('Tổng cộng', 87000), ('Tổng tiền đã giảm', 8000)],
+    'savings': [('Tổng cộng', 87000), ('Bạn đã tiết kiệm', 8000)],
+}
+
+
+@pytest.mark.parametrize('copied', UNCHANGED.values(), ids=UNCHANGED.keys())
+def test_a_total_that_later_lines_leave_alone_is_kept(copied):
+    """TC-F10-23 a total that already holds the VAT and discounts printed below it is kept (BUG-034)"""
+    recorded = lines(*copied)
+    assert pick_total(recorded) == 87000
+    assert choose_total(87000, recorded) == 87000
+
+
+def test_two_reads_naming_different_totals_give_no_total():
+    """TC-F10-24 a picked line does not silently override another total line the direct read took (BUG-037)"""
+    assert choose_total(87000, lines(('Tổng cộng', 87000), ('Thanh toán', 100000))) is None
+    assert choose_total(115100, lines(('Tổng cộng', 115100), ('Thanh toán', 92000))) is None
+    assert choose_total(80000, lines(('Tổng thanh toán', 80000), ('Khách phải trả', 87000))) is None
+    # A better label still wins, and the model's own conversion of the amount in words never counts.
+    assert choose_total(115000, lines(('Tổng cộng', 115000), ('Khách cần trả', 92000))) == 92000
+    assert choose_total(2000000, lines(('SỐ TIỀN', 2500000), ('Số tiền viết bằng chữ', 2000000))) == 2500000
+
+
+@pytest.mark.parametrize('label', [
+    'Total (incl. VAT)', 'TOTAL INCL. TAX', 'Total including VAT', 'Total (VAT included)', 'Total (inc. VAT)',
+    'Tổng cộng (có VAT)', 'Tổng cộng (gồm 8% VAT)', 'Tổng cộng (giá đã có VAT)', 'Tổng cộng (bao gồm 8% VAT)',
+    'Tổng cộng (đã bao gồm thuế GTGT 8%)', 'Tổng tiền đã gồm thuế', 'Tổng cộng (VAT 8% đã bao gồm)',
+])
+def test_a_vat_included_total(label):
+    """TC-F10-23 a total printed as holding the VAT is read (BUG-034)"""
+    assert pick_total(lines(('Cộng tiền hàng', 115100), ('Thuế GTGT', 9208), (label, 124308))) == 124308
+    assert choose_total(124308, lines((label, 124308))) == 124308
+
+
+@pytest.mark.parametrize('label', [
+    'Tổng cộng chưa bao gồm VAT', 'Tổng cộng (chưa có VAT)', 'Tổng tiền không bao gồm thuế', 'Total excl. VAT',
+    'Total (not including VAT)', 'Total before tax', 'Tổng cộng trước thuế', 'Tổng thanh toán chưa VAT',
+    'Tổng tiền trước chiết khấu', 'VAT included', 'Thuế VAT đã bao gồm', 'Tổng thuế sau giảm giá',
+])
+def test_a_figure_without_vat_or_the_vat_itself_is_not_the_total(label):
+    """TC-F10-23 a figure before VAT or discounts, or the VAT amount itself, is never the total (BUG-034)"""
+    assert pick_total(lines((label, 115100))) is None
+    assert choose_total(115100, lines((label, 115100))) is None
+
+
 def test_voucher_so_tien():
     """TC-F10-25 a receipt voucher gives "Số tiền", not the made-up lines around it (BUG-035)"""
     recorded = lines(('SỐ TIỀN', 2500000), ('BẰNG CHỮ', 2000000), ('KÈM THEO', 500000), ('TỔNG', 3000000), ('TRẢ NHỎ', 1000000))
@@ -87,6 +272,8 @@ def test_printed_amounts_reads_only_money_shaped_numbers():
     money = ['Tổng cộng tiền thanh toán: 7.480.000', 'SỐ TIỀN: 2.500.000đ', 'TỔNG 87,000', 'Total 45000 VND',
              'Phải trả 92.400,00', '-22.700', '1 x 18.900', 'VND143,000', 'Tổng thanh toán 2.000']
     assert printed_amounts(money) >= {7480000, 2500000, 87000, 45000, 92400, 22700, 18900, 143000, 2000}
+    # "Việt Nam" is not the "năm" of a date, and a label glued to its amount by a dot is not a code.
+    assert printed_amounts(['Siêu thị Việt Nam 45.000', 'Tổng.52.000']) == {45000, 52000}
 
 
 TORN_A_LINES = lines(('TỔNG CỘNG:', 53000), ('Tiền khách đã:', 53000), ('Tiền đổi trả:', 0), ('Thành tiền', 20000),
