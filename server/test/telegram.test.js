@@ -172,6 +172,21 @@ test('TC-F7-10 the code comes with one link per chat app: Telegram start, WhatsA
   expect(new URL(links.whatsapp).searchParams.get('text')).toBe(`/link ${code}`); // what WhatsApp types for the user
 });
 
+test('TC-F7-11 each missing setting makes only that app\'s link null', async () => {
+  const { accessToken } = await registerUser();
+  const settings = { telegram: 'TELEGRAM_BOT_USERNAME', whatsapp: 'WHATSAPP_NUMBER', zalo: 'ZALO_BOT_URL' };
+  for (const [app, key] of Object.entries(settings)) {
+    const saved = env[key];
+    env[key] = undefined;
+    try {
+      const { body } = await api(accessToken).post('/chat-links/code');
+      expect(Object.keys(settings).filter((other) => body.links[other] === null), key).toEqual([app]);
+    } finally {
+      env[key] = saved;
+    }
+  }
+});
+
 test('TC-F7-11 an app whose setting is missing gets a null link, so the card hides it', async () => {
   const { accessToken } = await registerUser();
   const saved = { ...env };

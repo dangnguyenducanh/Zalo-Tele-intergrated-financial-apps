@@ -87,7 +87,7 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `MONGODB_DB` | per target: `finance` or `finance_staging` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | §6.4 |
 | `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET`, `ZALO_BOT_URL` | §6.5 |
-| `WHATSAPP_NUMBER` | the WhatsApp bot's number, international format, digits only (e.g. `849…`); optional: without it the link card has no WhatsApp button (§6.12) |
+| `WHATSAPP_NUMBER` | the WhatsApp bot's number, international format, digits only, no leading 0 (e.g. `849…`); optional: without it the link card has no WhatsApp button (§6.12) |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` *(planned, §2.10)* | §6.12 |
 | `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS`, `CRON_SECRET` *(planned, §2.11)* | §6.13 (`AGENT_URL` is pushed from `AGENT_PUBLIC_URL`, like `KIE_URL`) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` *(planned, §2.12)* | §6.14 |
@@ -143,7 +143,7 @@ node --env-file=server/.env server/src/scripts/setWebhooks.js https://<project>.
 ```
 
 4. Check it with `getWebhookInfo` (same base URL), then send the bot a text and a photo. Look at the **first real payloads** in Vercel → Logs to confirm `event_name`, `message.chat.id` and `message.photo_url` (field names come from community SDKs).
-5. `ZALO_BOT_URL` for the link card's **Copy & open Zalo** button (§2.10.2): in **Zalo Bot Creator**, pick the bot to open its details page and copy the bot's share link, an `https://` link such as `https://zalo.me/…` (this menu path is not verified yet: the only source found documents the bot's group-invite link, so check it on a phone and correct this step). Save it with `tools/set-secret.sh ZALO_BOT_URL` (or together with the WhatsApp values, §6.12), then check on a phone that the link opens the bot's chat. Optional: without it, Zalo is left out of the link card, and `/link CODE` still works when typed. The value must start with `https://`, and `WHATSAPP_NUMBER` must be digits only (no `+`, spaces or dashes): the API checks both at startup and **does not start** with a bad value, so check them before you redeploy.
+5. `ZALO_BOT_URL` for the link card's **Copy & open Zalo** button (§2.10.2): in **Zalo Bot Creator**, pick the bot to open its details page and copy the bot's share link, an `https://` link such as `https://zalo.me/…` (this menu path is not verified yet: the only source found documents the bot's group-invite link, so check it on a phone and correct this step). Save it with `tools/set-secret.sh ZALO_BOT_URL` (or together with the WhatsApp values, §6.12), then check on a phone that the link opens the bot's chat. Optional: without it, Zalo is left out of the link card, and `/link CODE` still works when typed. The value must start with `https://` and be at most 106 bytes (it goes into the card's QR code), and `WHATSAPP_NUMBER` must be digits only with the country code first (no `+`, spaces, dashes or leading 0): the API checks both at startup and **does not start** with a bad value, so check them before you redeploy.
 
 ## 6.6 KIE service (Docker + Cloudflare Tunnel)
 

@@ -11,7 +11,7 @@
   },
   "link": {
     "title": "Liên kết Telegram / Zalo",
-    "description": "Tạo mã một lần, có hiệu lực 10 phút, rồi gửi mã cho bot.",
+    "description": "Tạo mã một lần, có hiệu lực 10 phút, rồi gửi mã cho bot Telegram, WhatsApp hoặc Zalo.",
     "generate": "Tạo mã liên kết",
     "regenerate": "Tạo mã mới",
     "code": "Mã liên kết",
@@ -21,7 +21,7 @@
     "openTelegram": "Mở Telegram",
     "qr": "Mã QR mở bot Telegram với mã liên kết",
     "zalo": "Zalo (hoặc Telegram): gửi tin nhắn sau cho bot",
-    "heading": "Liên kết ứng dụng chat",
+    "heading": "Liên kết Telegram / WhatsApp / Zalo",
     "app": "Ứng dụng chat",
     "openWhatsapp": "Mở WhatsApp",
     "openZalo": "Chép mã & mở Zalo",

@@ -46,6 +46,7 @@ let codeAnswer: () => Response;
 let receiptAnswer: () => Response | Promise<Response>;
 let uploads: File[] = [];
 
+const CARD = 'Liên kết Telegram / WhatsApp / Zalo'; // the link card's title (docs/05 §5.9.6)
 const TG = (code: string) => `https://t.me/test_bot?start=${code}`;
 const WA = (code: string) => `https://wa.me/84900000000?text=%2Flink%20${code}`;
 const ZALO = 'https://zalo.me/test-bot';
@@ -239,7 +240,8 @@ test('TC-F7-06 link card: the code with a countdown, an app button with its QR a
   expect(account).toHaveTextContent('Liên kết ngày 20 thg 11, 2026');
 
   await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
-  const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  const linkCard = screen.getByRole('region', { name: CARD });
+  expect(within(linkCard).getByText('Tạo mã một lần, có hiệu lực 10 phút, rồi gửi mã cho bot Telegram, WhatsApp hoặc Zalo.')).toBeInTheDocument();
   expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
   expect(document.activeElement).toHaveTextContent(/^Mã liên kếtABC234Hết hạn sau/); // the code replaced the button and has focus
   expect(within(linkCard).getByRole('timer')).toHaveTextContent(/Hết hạn sau (10:00|9:5\d)/);
@@ -270,7 +272,7 @@ test('TC-F7-06 link card: an expired code offers a new one; no app button withou
   await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
   expect(await screen.findByText('XYZ789')).toBeInTheDocument();
   expect(screen.getByText('/link XYZ789')).toBeInTheDocument(); // typing the command works in any chat
-  const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  const linkCard = screen.getByRole('region', { name: CARD });
   expect(within(linkCard).queryByRole('link')).not.toBeInTheDocument();
   expect(within(linkCard).queryByRole('group', { name: 'Ứng dụng chat' })).not.toBeInTheDocument();
   expect(within(linkCard).queryByRole('img', { name: /^Mã QR/ })).not.toBeInTheDocument();
@@ -404,7 +406,7 @@ test('TC-F7-12 link card: only configured apps are offered; the picker switches 
   renderApp('/bot');
   await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
 
-  const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  const linkCard = screen.getByRole('region', { name: CARD });
   const picker = await within(linkCard).findByRole('group', { name: 'Ứng dụng chat' });
   expect(within(picker).getAllByRole('button').map((b) => b.textContent)).toEqual(['Telegram', 'Zalo']);
   expect(within(picker).getByRole('button', { name: 'Telegram' })).toHaveAttribute('aria-pressed', 'true'); // nothing linked: the first app
@@ -420,6 +422,33 @@ test('TC-F7-12 link card: only configured apps are offered; the picker switches 
   expect(within(linkCard).getByText('Nút bên dưới chép /link ABC234 và mở bot Zalo: dán vào ô chat rồi gửi.')).toBeInTheDocument();
   expect(qrPathOf(linkCard, 'Zalo')).toBe(qrSvgPath(ZALO).path);
   expect(within(linkCard).getByText('ABC234')).toBeInTheDocument(); // the code stays on screen: the phone still needs it for Zalo
+});
+
+test('TC-F7-12 link card: with all three apps it starts on Telegram; picking WhatsApp swaps the button and QR and keeps focus on the picker', async () => {
+  const user = userEvent.setup();
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const linkCard = screen.getByRole('region', { name: CARD });
+  const picker = await within(linkCard).findByRole('group', { name: 'Ứng dụng chat' });
+  expect(within(picker).getAllByRole('button').map((b) => b.textContent)).toEqual(['Telegram', 'WhatsApp', 'Zalo']);
+  expect(within(picker).getByRole('button', { name: 'Telegram' })).toHaveAttribute('aria-pressed', 'true');
+
+  const whatsapp = within(picker).getByRole('button', { name: 'WhatsApp' });
+  await user.click(whatsapp);
+  expect(whatsapp).toHaveFocus();
+  expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toHaveAttribute('href', WA('ABC234'));
+  expect(qrPathOf(linkCard, 'WhatsApp')).toBe(qrSvgPath(WA('ABC234')).path);
+});
+
+test('TC-F7-12 link card: Telegram linked and no WhatsApp on the server: it starts on Zalo', async () => {
+  const user = userEvent.setup();
+  links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: NOW }];
+  codeAnswer = codeWith('ABC234', { telegram: TG('ABC234'), zalo: ZALO });
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const picker = await screen.findByRole('group', { name: 'Ứng dụng chat' });
+  expect(within(picker).getByRole('button', { name: 'Zalo' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('link', { name: 'Chép mã & mở Zalo' })).toHaveAttribute('href', ZALO);
 });
 
 test('TC-F7-12 link card: the default app is the first one not linked yet, else the first shown', async () => {
@@ -456,18 +485,23 @@ test('TC-F7-13 Zalo: "Copy & open Zalo" puts /link CODE on the clipboard; when c
   renderApp('/bot');
   await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
 
-  const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  const linkCard = screen.getByRole('region', { name: CARD });
   const zalo = await within(linkCard).findByRole('link', { name: 'Chép mã & mở Zalo' });
   expect(within(linkCard).queryByRole('group', { name: 'Ứng dụng chat' })).not.toBeInTheDocument(); // one app: no picker
+  expect(zalo).toHaveAttribute('href', ZALO);
+  expect(zalo).toHaveAttribute('target', '_blank');
+  expect(qrPathOf(linkCard, 'Zalo')).toBe(qrSvgPath(ZALO).path);
+  expect(within(linkCard).getByText('ABC234')).toBeVisible();
   await user.click(zalo);
   expect(await navigator.clipboard.readText()).toBe('/link ABC234');
-  expect(await within(linkCard).findByRole('status')).toHaveTextContent('Đã chép /link ABC234');
+  expect((await within(linkCard).findByText('Đã chép /link ABC234')).closest('[role="status"]')).not.toBeNull();
 
   // Clipboard blocked (permission denied, or no clipboard on a plain-http page): never a dead end.
   const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'));
   await user.click(zalo);
   expect(writeText).toHaveBeenCalledWith('/link ABC234');
-  expect(await within(linkCard).findByRole('status')).toHaveTextContent('Không chép được. Hãy tự chép tin nhắn bên dưới rồi gửi cho bot Zalo.');
+  const failure = await within(linkCard).findByText('Không chép được. Hãy tự chép tin nhắn bên dưới rồi gửi cho bot Zalo.');
+  expect(failure.closest('[role="status"]')).not.toBeNull();
   const command = within(linkCard).getByText('/link ABC234');
   expect(command).toBeVisible();
   expect(getComputedStyle(command).userSelect).not.toBe('none');
@@ -480,7 +514,7 @@ test('TC-F7-14 the card says "Linked ✓ <app> · <name>" as soon as the 5 s che
     links = [{ id: 'l0', platform: 'zalo', displayName: 'Lan Zalo', createdAt: NOW }]; // linked before: not "new"
     renderApp('/bot');
     await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
-    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    const linkCard = screen.getByRole('region', { name: CARD });
     expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(5000));
     expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
@@ -501,6 +535,29 @@ test('TC-F7-14 the card says "Linked ✓ <app> · <name>" as soon as the 5 s che
   }
 });
 
+test('TC-F7-14 "Linked ✓" is announced in a status region and leaves focus in the draft the user is editing', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const amount = within(await card('phở')).getByRole('textbox', { name: 'Số tiền (₫)' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    const regions = within(linkCard).getAllByRole('status'); // already there before the news, so it gets read out
+    await user.click(amount); // while the phone sends the code, the user goes on with a draft
+
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: NOW }];
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    const done = await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh Nguyen');
+    expect(regions).toContain(done.closest('[role="status"]'));
+    expect(within(linkCard).queryByRole('alert')).not.toBeInTheDocument();
+    expect(amount).toHaveFocus();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test('TC-F7-14 a chat linked in another tab while the page sat idle is not "Linked ✓" for the new code', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   try {
@@ -511,7 +568,7 @@ test('TC-F7-14 a chat linked in another tab while the page sat idle is not "Link
 
     links = [{ id: 'l1', platform: 'telegram', displayName: 'Other Tab', createdAt: NOW }]; // linked on another device
     await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
-    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    const linkCard = screen.getByRole('region', { name: CARD });
     expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
     expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument(); // Telegram is linked now
     await act(() => vi.advanceTimersByTimeAsync(5000));
@@ -531,7 +588,7 @@ test('TC-F7-14 an expired, unused code is not "Linked ✓" when an unlink reload
     renderApp('/bot');
     const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
     await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
-    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    const linkCard = screen.getByRole('region', { name: CARD });
     expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(4000));
     expect(await within(linkCard).findByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
@@ -556,7 +613,7 @@ test('TC-F7-14 a code redeemed after the last 5 s check is "Linked ✓" once it 
     renderApp('/bot');
     const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
     await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
-    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    const linkCard = screen.getByRole('region', { name: CARD });
     expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
     links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: new Date().toISOString() }]; // redeemed just before it expired
     await act(() => vi.advanceTimersByTimeAsync(4000));
@@ -582,7 +639,7 @@ test('TC-F7-14 "Linked ✓", then unlink that account: no "Linked ✓" any more,
     renderApp('/bot');
     const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
     await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
-    const linkCard = screen.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+    const linkCard = screen.getByRole('region', { name: CARD });
     expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
     links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: new Date().toISOString() }];
     await act(() => vi.advanceTimersByTimeAsync(5000));

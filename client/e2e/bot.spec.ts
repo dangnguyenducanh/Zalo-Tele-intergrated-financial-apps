@@ -8,6 +8,11 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 const PASSWORD = 'secret123';
 // The API runs with NODE_ENV=test, so its webhook secret is the test default unless the environment sets one.
 const TELEGRAM_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? 'test-telegram-secret';
+// The link card's settings, likewise the test defaults of server/src/config/env.js.
+const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME ?? 'test_bot';
+const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER ?? '84900000000';
+const ZALO_BOT_URL = process.env.ZALO_BOT_URL ?? 'https://zalo.me/test-bot';
+const CARD = 'Liên kết Telegram / WhatsApp / Zalo';
 test.use({ locale: 'vi-VN' });
 
 async function createAccount(request: APIRequestContext) {
@@ -45,7 +50,7 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
 
   // The code shown on the page, sent from a Telegram chat as "/start CODE" (what the deep link does).
   await page.getByRole('button', { name: 'Tạo mã liên kết' }).press('Enter'); // keyboard: focus must follow the code
-  const linkCard = page.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  const linkCard = page.getByRole('region', { name: CARD });
   await expect(linkCard.getByRole('img', { name: 'Mã QR mở Telegram với mã liên kết' })).toBeVisible();
   const code = (await linkCard.getByText(/^[A-Z2-9]{6}$/).textContent())!;
   await expect(page.locator(':focus')).toContainText(code);
@@ -81,7 +86,7 @@ test('TC-F9-01 link Telegram with the code on the page, then correct and confirm
 });
 
 // docs/02 §2.10.2: one button per chat app. The test API has all three settings (config/env.js test defaults).
-test('TC-F7-15 link card in a real browser: WhatsApp prefilled link, Zalo copies "/link CODE", "Linked ✓"; 375 and 1280 px, light and dark', async ({ page, context, request }, testInfo) => {
+test('TC-F7-15 link card in a real browser: each app\'s URL, Zalo copies "/link CODE" or says it could not, "Linked ✓"; 375 and 1280 px, light and dark', async ({ page, context, request }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   // The Zalo button opens the bot in a new tab: answer it here, so the test never reaches the real zalo.me (BUG-002).
   await context.route(/^https:\/\/zalo\.me\//, (route) => route.fulfill({ contentType: 'text/html', body: '<title>Zalo bot</title>' }));
@@ -90,22 +95,25 @@ test('TC-F7-15 link card in a real browser: WhatsApp prefilled link, Zalo copies
   await logIn(page, email);
   await page.goto('/bot');
   await page.getByRole('button', { name: 'Tạo mã liên kết' }).click();
-  const linkCard = page.getByRole('region', { name: 'Liên kết ứng dụng chat' });
+  const linkCard = page.getByRole('region', { name: CARD });
   const code = (await linkCard.getByText(/^[A-Z2-9]{6}$/).textContent())!;
   const picker = linkCard.getByRole('group', { name: 'Ứng dụng chat' });
   await expect(picker.getByRole('button')).toHaveText(['Telegram', 'WhatsApp', 'Zalo']);
   await expect(picker.getByRole('button', { name: 'Telegram' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(linkCard.getByRole('link', { name: 'Mở Telegram' })).toHaveAttribute('href', `https://t.me/${BOT_USERNAME}?start=${code}`);
 
   await picker.getByRole('button', { name: 'WhatsApp' }).click();
-  const whatsapp = linkCard.getByRole('link', { name: 'Mở WhatsApp' });
-  expect(new URL((await whatsapp.getAttribute('href'))!).searchParams.get('text')).toBe(`/link ${code}`);
+  await expect(linkCard.getByRole('link', { name: 'Mở WhatsApp' })).toHaveAttribute('href', `https://wa.me/${WHATSAPP_NUMBER}?text=%2Flink%20${code}`);
   await expect(linkCard.getByRole('img', { name: 'Mã QR mở WhatsApp với mã liên kết' })).toBeVisible();
 
   await picker.getByRole('button', { name: 'Zalo' }).click();
-  const [zaloTab] = await Promise.all([context.waitForEvent('page'), linkCard.getByRole('link', { name: 'Chép mã & mở Zalo' }).click()]);
+  const zalo = linkCard.getByRole('link', { name: 'Chép mã & mở Zalo' });
+  await expect(zalo).toHaveAttribute('href', ZALO_BOT_URL);
+  const [zaloTab] = await Promise.all([context.waitForEvent('page'), zalo.click()]);
+  await expect(zaloTab).toHaveURL(ZALO_BOT_URL);
   await expect(zaloTab).toHaveTitle('Zalo bot');
   await zaloTab.close();
-  await expect(linkCard.getByRole('status')).toHaveText(`Đã chép /link ${code}`);
+  await expect(linkCard.getByRole('status').filter({ hasText: 'Đã chép' })).toHaveText(`Đã chép /link ${code}`);
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`/link ${code}`);
 
   for (const width of [375, 1280]) {
@@ -121,9 +129,25 @@ test('TC-F7-15 link card in a real browser: WhatsApp prefilled link, Zalo copies
   // The bot redeems the code (here from Telegram): the card says so within one 5 s check.
   const webhook = { headers: { 'X-Telegram-Bot-Api-Secret-Token': TELEGRAM_SECRET } };
   expect((await request.post('/api/webhooks/telegram', { ...webhook, data: telegramUpdate(Math.floor(Math.random() * 1e9), 1, `/start ${code}`) })).status()).toBe(200);
-  await expect(linkCard.getByText('Đã liên kết ✓ Telegram · Anh Nguyen')).toBeVisible({ timeout: 10_000 });
+  await expect(linkCard.getByRole('status').filter({ hasText: 'Đã liên kết ✓ Telegram · Anh Nguyen' })).toBeVisible({ timeout: 10_000 });
   await expect(linkCard.getByText(code, { exact: true })).toBeHidden();
+  // Focus was on the Zalo button, which left with the code: it is on the message, not lost to <body>.
+  await expect(page.locator(':focus')).toHaveText('Đã liên kết ✓ Telegram · Anh Nguyen');
   await linkCard.screenshot({ path: testInfo.outputPath('link-card-linked-1280.png'), animations: 'disabled' });
+
+  // Copying refused: the Zalo bot still opens, the card says so and the command stays to be copied by hand.
+  await page.addInitScript(() => {
+    navigator.clipboard.writeText = () => Promise.reject(new DOMException('denied', 'NotAllowedError'));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Tạo mã liên kết' }).click();
+  await picker.getByRole('button', { name: 'Zalo' }).click();
+  const second = (await linkCard.getByText(/^[A-Z2-9]{6}$/).textContent())!;
+  const [secondTab] = await Promise.all([context.waitForEvent('page'), zalo.click()]);
+  await expect(secondTab).toHaveURL(ZALO_BOT_URL);
+  await secondTab.close();
+  await expect(linkCard.getByRole('status').filter({ hasText: 'Không chép được' })).toBeVisible();
+  await expect(linkCard.getByText(`/link ${second}`, { exact: true })).toBeVisible();
 });
 
 // BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card at any width.
@@ -133,7 +157,7 @@ test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accou
   await logIn(page, email);
   await page.goto('/bot');
   await page.getByRole('button', { name: 'Tạo mã liên kết' }).click();
-  const code = (await page.getByRole('region', { name: 'Liên kết ứng dụng chat' }).getByText(/^[A-Z2-9]{6}$/).textContent())!;
+  const code = (await page.getByRole('region', { name: CARD }).getByText(/^[A-Z2-9]{6}$/).textContent())!;
   const longName = 'Nguyễn_Thị_Phương_Thảo_Official_Shop_Mỹ_Phẩm_Chính_Hãng_Giá_Rẻ';
   const webhook = { headers: { 'X-Telegram-Bot-Api-Secret-Token': TELEGRAM_SECRET } };
   const update = telegramUpdate(Math.floor(Math.random() * 1e9), 1, `/start ${code}`, { first_name: longName });
@@ -142,7 +166,7 @@ test('TC-F7-09 a 62-character chat name with no spaces stays inside Linked accou
   await expect(accounts).toContainText(longName, { timeout: 10_000 });
   // The "Linked ✓" message in the link card shows the same name. Its box scrolls (overflow: auto), so the page
   // does not scroll sideways when the name runs past the edge: compare the box's own widths too.
-  const linkedMessage = page.getByRole('region', { name: 'Liên kết ứng dụng chat' }).locator('.MuiAlert-message');
+  const linkedMessage = page.getByRole('region', { name: CARD }).locator('.MuiAlert-message');
   await expect(linkedMessage).toHaveText(`Đã liên kết ✓ Telegram · ${longName}`, { timeout: 10_000 });
 
   for (const width of [360, 390, 375, 1280]) {

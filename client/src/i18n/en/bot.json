@@ -11,7 +11,7 @@
   },
   "link": {
     "title": "Link Telegram / Zalo",
-    "description": "Create a one-time code, valid for 10 minutes, and send it to the bot.",
+    "description": "Create a one-time code, valid for 10 minutes, and send it to the bot on Telegram, WhatsApp or Zalo.",
     "generate": "Create link code",
     "regenerate": "Create a new code",
     "code": "Link code",
@@ -21,7 +21,7 @@
     "openTelegram": "Open Telegram",
     "qr": "QR code that opens the Telegram bot with the link code",
     "zalo": "Zalo (or Telegram): send this message to the bot",
-    "heading": "Link a chat app",
+    "heading": "Link Telegram / WhatsApp / Zalo",
     "app": "Chat app",
     "openWhatsapp": "Open WhatsApp",
     "openZalo": "Copy & open Zalo",

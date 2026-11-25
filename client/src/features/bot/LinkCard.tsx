@@ -76,12 +76,14 @@ export default function LinkCard() {
     return () => clearInterval(timer);
   }, [live]);
 
-  // The Generate button is replaced by the code, and the code by "Linked ✓", so focus follows instead of <body>.
+  // The Generate button is replaced by the code, so focus follows it instead of falling to <body>.
   useEffect(() => {
     if (code) codeBox.current?.focus();
   }, [code]);
+  // "Linked ✓" is read out by its status region and takes focus from nothing that stays on the page (docs/05 §5.9.7).
+  // Only if focus was in the code block it replaces, which leaves it on <body>, does it move to the message.
   useEffect(() => {
-    if (linked) linkedBox.current?.focus();
+    if (linked && document.activeElement === document.body) linkedBox.current?.focus();
   }, [linked]);
 
   async function generate() {
@@ -129,6 +131,18 @@ export default function LinkCard() {
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
+      )}
+      {/* There from the moment a code exists, so "Linked ✓" arrives in a region screen readers already watch. */}
+      {(code || linked) && (
+        <div role="status" ref={linkedBox} tabIndex={-1}>
+          {stillLinked && (
+            // The chat name is user text with no length limit: it wraps anywhere instead of running out of the card.
+            // role="none": the region around it announces it politely, not as an alert.
+            <Alert role="none" severity="success" sx={{ mb: 2, '& .MuiAlert-message': { overflowWrap: 'anywhere' } }}>
+              {t('link.linked', { name: `${t(`sources.${stillLinked.platform}`)} · ${stillLinked.displayName}` })}
+            </Alert>
+          )}
+        </div>
       )}
 
       {code && live ? (
@@ -194,17 +208,10 @@ export default function LinkCard() {
         </Stack>
       ) : (
         <>
-          {stillLinked ? (
-            // The chat name is user text with no length limit: it wraps anywhere instead of running out of the card.
-            <Alert ref={linkedBox} tabIndex={-1} severity="success" sx={{ mb: 2, '& .MuiAlert-message': { overflowWrap: 'anywhere' } }}>
-              {t('link.linked', { name: `${t(`sources.${stillLinked.platform}`)} · ${stillLinked.displayName}` })}
+          {code && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t('link.expired')}
             </Alert>
-          ) : (
-            code && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {t('link.expired')}
-              </Alert>
-            )
           )}
           <Button variant="contained" loading={generating} onClick={() => void generate()}>
             {t(code || stillLinked ? 'link.regenerate' : 'link.generate')}

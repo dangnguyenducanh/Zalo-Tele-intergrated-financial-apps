@@ -54,8 +54,8 @@ An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required 
 | `TELEGRAM_WEBHOOK_SECRET` | 1–256 chars `[A-Za-z0-9_-]` |
 | `ZALO_BOT_TOKEN` | from Zalo Bot Platform |
 | `ZALO_WEBHOOK_SECRET` | 8–256 chars |
-| `ZALO_BOT_URL` | the Zalo bot's share link from Zalo Bot Creator, must be an `https://` URL (the link card's "Copy & open Zalo") |
-| `WHATSAPP_NUMBER` | the WhatsApp bot's number in international format, digits only (6–15, no `+`), for `wa.me` links |
+| `ZALO_BOT_URL` | the Zalo bot's share link from Zalo Bot Creator (the link card's "Copy & open Zalo"): an `https://` URL of at most 106 bytes, what the card's QR code holds |
+| `WHATSAPP_NUMBER` | the WhatsApp bot's number in international format, digits only (6–15, no `+` or leading 0), for `wa.me` links |
 | `WHATSAPP_ACCESS_TOKEN` *(planned, §2.10)* | permanent (system user) access token of the Meta app; sends messages and downloads receipt photos |
 | `WHATSAPP_PHONE_NUMBER_ID` *(planned)* | the business number's ID in the Graph API messages URL |
 | `WHATSAPP_APP_SECRET` *(planned)* | key of the `X-Hub-Signature-256` HMAC on webhook `POST`s |
