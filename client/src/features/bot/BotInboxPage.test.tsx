@@ -7,6 +7,7 @@ import type { Wallet } from '@/features/wallets/walletsApi';
 import { LAN, resetFake, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 import type { ChatLink, Draft } from './botApi';
+import { qrSvgPath } from './qrCode';
 import { resizeImage } from './resizeImage';
 
 // /bot against an in-memory /api/transactions (drafts), /chat-links and /receipts (MSW), docs/04 shapes.
@@ -41,9 +42,19 @@ let drafts: (Draft & { deleted?: boolean })[] = [];
 let links: ChatLink[] = [];
 let sent: { method: string; url: string; body?: unknown }[] = [];
 let confirmAnswer: { budgetWarning?: { percent: number; threshold: 80 | 100 } } = {};
-let codeAnswer: () => Response;
+let codeAnswer: () => Response | Promise<Response>;
 let receiptAnswer: () => Response | Promise<Response>;
 let uploads: File[] = [];
+
+const CARD = 'Liên kết Telegram / WhatsApp / Zalo'; // the link card's title (docs/05 §5.9.6)
+const TG = (code: string) => `https://t.me/test_bot?start=${code}`;
+const WA = (code: string) => `https://wa.me/84900000000?text=%2Flink%20${code}`;
+const ZALO = 'https://zalo.me/test-bot';
+const codeWith = (code: string, links: Partial<Record<'telegram' | 'whatsapp' | 'zalo', string>>, ttl = 600_000) => () =>
+  HttpResponse.json(
+    { code, expiresAt: new Date(Date.now() + ttl).toISOString(), links: { telegram: null, whatsapp: null, zalo: null, ...links } },
+    { status: 201 },
+  );
 
 const fail = (status: number, code: string) => HttpResponse.json({ error: { code, message: code } }, { status });
 
@@ -73,8 +84,7 @@ beforeEach(() => {
   sent = [];
   uploads = [];
   confirmAnswer = {};
-  codeAnswer = () =>
-    HttpResponse.json({ code: 'ABC234', expiresAt: new Date(Date.now() + 600_000).toISOString(), telegramDeepLink: 'https://t.me/test_bot?start=ABC234' }, { status: 201 });
+  codeAnswer = codeWith('ABC234', { telegram: TG('ABC234'), whatsapp: WA('ABC234'), zalo: ZALO });
   receiptAnswer = () => HttpResponse.json({ transaction: draft({ id: 'd9', amount: 50000, note: 'Circle K', source: 'receipt' }) }, { status: 201 });
   vi.mocked(resizeImage).mockReset().mockResolvedValue(new Blob(['small jpeg'], { type: 'image/jpeg' }));
 
@@ -123,6 +133,28 @@ beforeEach(() => {
 });
 
 const card = (name: string) => screen.findByRole('form', { name });
+
+// Holds the next GET /chat-links. Like a slow server, it answers with the list as it was when the request arrived.
+function holdNextList() {
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const held = { asked: false, release: () => release() };
+  server.use(
+    http.get(
+      '*/api/chat-links',
+      async () => {
+        const read = [...links];
+        held.asked = true;
+        await gate;
+        return HttpResponse.json(read);
+      },
+      { once: true },
+    ),
+  );
+  return held;
+}
+// When the bot made a link, on the server's clock: now, or `ms` ago.
+const at = (ms = 0) => new Date(Date.now() - ms).toISOString();
 const writes = () => sent.filter((s) => s.method !== 'GET').map((s) => `${s.method} ${s.url}`);
 
 test('TC-F9-03 drafts from every source: edit the amount inline, Confirm sends the change with the confirm', async () => {
@@ -219,7 +251,7 @@ test('TC-F9-06 a stale card confirmed in the chat meanwhile: a changed amount is
   expect(drafts[0]).toMatchObject({ amount: 45000, status: 'confirmed' });
 });
 
-test('TC-F7-06 link card: the code with a countdown, the Telegram link + QR and the Zalo command; unlink an account', async () => {
+test('TC-F7-06 link card: the code with a countdown, an app button with its QR and the /link command; unlink an account', async () => {
   const user = userEvent.setup();
   links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: NOW }];
   renderApp('/bot');
@@ -230,12 +262,14 @@ test('TC-F7-06 link card: the code with a countdown, the Telegram link + QR and 
   expect(account).toHaveTextContent('Liên kết ngày 20 thg 11, 2026');
 
   await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
-  const linkCard = screen.getByRole('region', { name: 'Liên kết Telegram / Zalo' });
+  const linkCard = screen.getByRole('region', { name: CARD });
+  expect(within(linkCard).getByText('Tạo mã một lần, có hiệu lực 10 phút, rồi gửi mã cho bot Telegram, WhatsApp hoặc Zalo.')).toBeInTheDocument();
   expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
   expect(document.activeElement).toHaveTextContent(/^Mã liên kếtABC234Hết hạn sau/); // the code replaced the button and has focus
   expect(within(linkCard).getByRole('timer')).toHaveTextContent(/Hết hạn sau (10:00|9:5\d)/);
-  expect(within(linkCard).getByRole('link', { name: 'Mở Telegram' })).toHaveAttribute('href', 'https://t.me/test_bot?start=ABC234');
-  expect(within(linkCard).getByRole('img', { name: 'Mã QR mở bot Telegram với mã liên kết' })).toBeInTheDocument();
+  // Telegram is linked already, so the card starts on the next app (TC-F7-12).
+  expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toHaveAttribute('href', WA('ABC234'));
+  expect(within(linkCard).getByRole('img', { name: 'Mã QR mở WhatsApp với mã liên kết' })).toBeInTheDocument();
   expect(within(linkCard).getByText('/link ABC234')).toBeInTheDocument();
 
   await user.click(within(linked).getByRole('button', { name: 'Huỷ liên kết Telegram · Anh Nguyen' }));
@@ -245,9 +279,9 @@ test('TC-F7-06 link card: the code with a countdown, the Telegram link + QR and 
   await waitFor(() => expect(within(linked).getByRole('heading', { name: 'Tài khoản đã liên kết' })).toHaveFocus());
 });
 
-test('TC-F7-06 link card: an expired code offers a new one; no Telegram link without a bot name; 429 is translated', async () => {
+test('TC-F7-06 link card: an expired code offers a new one; no app button without app settings; 429 is translated', async () => {
   const user = userEvent.setup();
-  codeAnswer = () => HttpResponse.json({ code: 'XYZ789', expiresAt: new Date(Date.now() + 1200).toISOString(), telegramDeepLink: null }, { status: 201 });
+  codeAnswer = codeWith('XYZ789', {}, 1200);
   server.use(http.get('*/api/chat-links', () => fail(500, 'INTERNAL'), { once: true }));
   renderApp('/bot');
 
@@ -259,8 +293,11 @@ test('TC-F7-06 link card: an expired code offers a new one; no Telegram link wit
 
   await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
   expect(await screen.findByText('XYZ789')).toBeInTheDocument();
-  expect(screen.getByText('/link XYZ789')).toBeInTheDocument(); // Zalo works without the Telegram bot name
-  expect(screen.queryByRole('link', { name: 'Mở Telegram' })).not.toBeInTheDocument();
+  expect(screen.getByText('/link XYZ789')).toBeInTheDocument(); // typing the command works in any chat
+  const linkCard = screen.getByRole('region', { name: CARD });
+  expect(within(linkCard).queryByRole('link')).not.toBeInTheDocument();
+  expect(within(linkCard).queryByRole('group', { name: 'Ứng dụng chat' })).not.toBeInTheDocument();
+  expect(within(linkCard).queryByRole('img', { name: /^Mã QR/ })).not.toBeInTheDocument();
   expect(await screen.findByText('Mã đã hết hạn. Hãy tạo mã mới.', {}, { timeout: 3000 })).toBeInTheDocument();
   expect(screen.queryByText('XYZ789')).not.toBeInTheDocument();
 
@@ -324,6 +361,47 @@ test('TC-F10-06 the receipt status and error switch to English with the rest of 
   expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo bản nháp từ hoá đơn.');
 });
 
+test('TC-F7-06 one click makes one code: Generate is disabled until it arrives, and the code does not wait for the link list', async () => {
+  const user = userEvent.setup();
+  renderApp('/bot');
+  const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+  expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+
+  let answerCode = () => {};
+  const slowCode = new Promise<void>((resolve) => (answerCode = resolve)); // e.g. a cold start
+  let posts = 0;
+  codeAnswer = async () => {
+    posts++;
+    await slowCode;
+    return codeWith('ABC234', { telegram: TG('ABC234') })();
+  };
+  const list = holdNextList(); // and the list stays slow after the code has arrived
+  const generate = screen.getByRole('button', { name: 'Tạo mã liên kết' });
+  await user.click(generate);
+  await waitFor(() => expect(posts).toBe(1));
+  expect(generate).toBeDisabled();
+
+  answerCode();
+  expect(await screen.findByText('ABC234')).toBeInTheDocument();
+  await waitFor(() => expect(list.asked).toBe(true));
+  expect(screen.queryByRole('button', { name: /^Tạo mã/ })).not.toBeInTheDocument(); // nothing left to press twice
+  expect(posts).toBe(1);
+  list.release();
+});
+
+test('TC-F7-06 a failed code request is translated when shown: its message follows a language switch (BUG-031)', async () => {
+  const user = userEvent.setup();
+  codeAnswer = () => fail(500, 'INTERNAL');
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const linkCard = screen.getByRole('region', { name: CARD });
+  expect(await within(linkCard).findByText('Máy chủ gặp sự cố. Vui lòng thử lại sau.')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /Đổi ngôn ngữ sang English/ }));
+  expect(await screen.findByText('The server ran into a problem. Please try again later.')).toBeInTheDocument();
+  expect(screen.queryByText('Máy chủ gặp sự cố. Vui lòng thử lại sau.')).not.toBeInTheDocument();
+});
+
 // BUG-030: Telegram allows a 64-character first name with no spaces; it must wrap inside the card, not widen the page.
 test('TC-F7-09 a long linked-chat name with no spaces may break anywhere, so it stays inside the card', async () => {
   const name = 'Nguyễn_Thị_Phương_Thảo_Official_Shop_Mỹ_Phẩm_Chính_Hãng_Giá_Rẻ';
@@ -345,4 +423,423 @@ test('TC-F9-04 opening the inbox again shows drafts confirmed in the chat meanwh
 
   expect(await screen.findByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toBeInTheDocument();
   expect(screen.queryByRole('form', { name: 'phở' })).not.toBeInTheDocument();
+});
+
+// Zalo's QR only opens the bot (its link carries no code), so its name says just that.
+const qrPathOf = (card: HTMLElement, app: string) =>
+  within(card)
+    .getByRole('img', { name: app === 'Zalo' ? 'Mã QR mở bot Zalo' : `Mã QR mở ${app} với mã liên kết` })
+    .querySelector('path')
+    ?.getAttribute('d');
+
+test('TC-F7-12 link card: only configured apps are offered; the picker switches the button, the step and the QR', async () => {
+  const user = userEvent.setup();
+  codeAnswer = codeWith('ABC234', { telegram: TG('ABC234'), zalo: ZALO }); // no WHATSAPP_NUMBER on the server
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+
+  const linkCard = screen.getByRole('region', { name: CARD });
+  const picker = await within(linkCard).findByRole('group', { name: 'Ứng dụng chat' });
+  expect(within(picker).getAllByRole('button').map((b) => b.textContent)).toEqual(['Telegram', 'Zalo']);
+  expect(within(picker).getByRole('button', { name: 'Telegram' })).toHaveAttribute('aria-pressed', 'true'); // nothing linked: the first app
+  expect(within(linkCard).getByRole('link', { name: 'Mở Telegram' })).toHaveAttribute('href', TG('ABC234'));
+  expect(within(linkCard).getByText('Bấm nút bên dưới, rồi bấm Start (Bắt đầu) trong Telegram.')).toBeInTheDocument();
+  expect(qrPathOf(linkCard, 'Telegram')).toBe(qrSvgPath(TG('ABC234')).path); // the QR holds the same link as the button
+
+  await user.click(within(picker).getByRole('button', { name: 'Zalo' }));
+  expect(within(picker).getByRole('button', { name: 'Zalo' })).toHaveAttribute('aria-pressed', 'true');
+  expect(within(linkCard).queryByRole('link', { name: 'Mở Telegram' })).not.toBeInTheDocument();
+  expect(within(linkCard).getByRole('link', { name: 'Chép mã & mở Zalo' })).toHaveAttribute('href', ZALO);
+  expect(within(linkCard).getByRole('link', { name: 'Chép mã & mở Zalo' })).toHaveAttribute('target', '_blank');
+  expect(within(linkCard).getByText('Nút bên dưới chép /link ABC234 và mở bot Zalo: dán vào ô chat rồi gửi.')).toBeInTheDocument();
+  expect(qrPathOf(linkCard, 'Zalo')).toBe(qrSvgPath(ZALO).path);
+  expect(within(linkCard).getByText('ABC234')).toBeInTheDocument(); // the code stays on screen: the phone still needs it for Zalo
+});
+
+test('TC-F7-12 link card: with all three apps it starts on Telegram; picking WhatsApp swaps the button and QR and keeps focus on the picker', async () => {
+  const user = userEvent.setup();
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const linkCard = screen.getByRole('region', { name: CARD });
+  const picker = await within(linkCard).findByRole('group', { name: 'Ứng dụng chat' });
+  expect(within(picker).getAllByRole('button').map((b) => b.textContent)).toEqual(['Telegram', 'WhatsApp', 'Zalo']);
+  expect(within(picker).getByRole('button', { name: 'Telegram' })).toHaveAttribute('aria-pressed', 'true');
+
+  const whatsapp = within(picker).getByRole('button', { name: 'WhatsApp' });
+  await user.click(whatsapp);
+  expect(whatsapp).toHaveFocus();
+  expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toHaveAttribute('href', WA('ABC234'));
+  expect(qrPathOf(linkCard, 'WhatsApp')).toBe(qrSvgPath(WA('ABC234')).path);
+});
+
+test('TC-F7-12 link card: Telegram linked and no WhatsApp on the server: it starts on Zalo', async () => {
+  const user = userEvent.setup();
+  links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: NOW }];
+  codeAnswer = codeWith('ABC234', { telegram: TG('ABC234'), zalo: ZALO });
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const picker = await screen.findByRole('group', { name: 'Ứng dụng chat' });
+  await waitFor(() => expect(within(picker).getByRole('button', { name: 'Zalo' })).toHaveAttribute('aria-pressed', 'true'));
+  expect(screen.getByRole('link', { name: 'Chép mã & mở Zalo' })).toHaveAttribute('href', ZALO);
+});
+
+test('TC-F7-12 link card: the default app is the first one not linked yet, else the first shown', async () => {
+  const user = userEvent.setup();
+  links = [
+    { id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: NOW },
+    { id: 'l2', platform: 'zalo', displayName: 'Anh', createdAt: NOW },
+  ];
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const picker = await screen.findByRole('group', { name: 'Ứng dụng chat' });
+  await waitFor(() => expect(within(picker).getByRole('button', { name: 'WhatsApp' })).toHaveAttribute('aria-pressed', 'true'));
+  expect(screen.getByRole('link', { name: 'Mở WhatsApp' })).toHaveAttribute('href', WA('ABC234'));
+  expect(screen.getByText('Tin nhắn /link ABC234 đã được gõ sẵn: chỉ cần bấm Gửi.')).toBeInTheDocument();
+});
+
+test('TC-F7-12 link card: with every shown app linked already, it starts on the first one shown', async () => {
+  const user = userEvent.setup();
+  links = [
+    { id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: NOW },
+    { id: 'l2', platform: 'zalo', displayName: 'Anh', createdAt: NOW },
+  ];
+  codeAnswer = codeWith('DEF567', { telegram: TG('DEF567'), zalo: ZALO });
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const picker = await screen.findByRole('group', { name: 'Ứng dụng chat' });
+  expect(within(picker).getByRole('button', { name: 'Telegram' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('link', { name: 'Mở Telegram' })).toHaveAttribute('href', TG('DEF567'));
+});
+
+test('TC-F7-13 Zalo: "Copy & open Zalo" puts /link CODE on the clipboard; when copying fails the card says so and keeps the command', async () => {
+  const user = userEvent.setup(); // gives jsdom a working clipboard
+  codeAnswer = codeWith('ABC234', { zalo: ZALO });
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+
+  const linkCard = screen.getByRole('region', { name: CARD });
+  const zalo = await within(linkCard).findByRole('link', { name: 'Chép mã & mở Zalo' });
+  expect(within(linkCard).queryByRole('group', { name: 'Ứng dụng chat' })).not.toBeInTheDocument(); // one app: no picker
+  expect(zalo).toHaveAttribute('href', ZALO);
+  expect(zalo).toHaveAttribute('target', '_blank');
+  expect(qrPathOf(linkCard, 'Zalo')).toBe(qrSvgPath(ZALO).path);
+  expect(within(linkCard).getByText('ABC234')).toBeVisible();
+  await user.click(zalo);
+  expect(await navigator.clipboard.readText()).toBe('/link ABC234');
+  expect((await within(linkCard).findByText('Đã chép /link ABC234')).closest('[role="status"]')).not.toBeNull();
+
+  // Clipboard blocked (permission denied, or no clipboard on a plain-http page): never a dead end.
+  const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'));
+  await user.click(zalo);
+  expect(writeText).toHaveBeenCalledWith('/link ABC234');
+  const failure = await within(linkCard).findByText('Không chép được. Hãy tự chép tin nhắn bên dưới rồi gửi cho bot Zalo.');
+  expect(failure.closest('[role="status"]')).not.toBeNull();
+  const command = within(linkCard).getByText('/link ABC234');
+  expect(command).toBeVisible();
+  expect(getComputedStyle(command).userSelect).not.toBe('none');
+});
+
+test('TC-F7-14 the card says "Linked ✓ <app> · <name>" as soon as the 5 s check finds the new link', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    links = [{ id: 'l0', platform: 'zalo', displayName: 'Lan Zalo', createdAt: NOW }]; // linked before: not "new"
+    renderApp('/bot');
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+
+    links = [...links, { id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: at() }]; // the bot redeemed the code
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    const done = await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh Nguyen');
+    expect(done.closest('[tabindex="-1"]')).toHaveFocus(); // the spent code left; focus follows the news, not <body>
+    expect(within(linkCard).queryByText('ABC234')).not.toBeInTheDocument();
+    expect(within(linkCard).getByRole('button', { name: 'Tạo mã mới' })).toBeInTheDocument(); // to link another app
+
+    let checks = 0; // the spent code needs no more checks
+    server.use(http.get('*/api/chat-links', () => (checks++, HttpResponse.json(links))));
+    await act(() => vi.advanceTimersByTimeAsync(15_000));
+    expect(checks).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 "Linked ✓" is announced in a status region and leaves focus in the draft the user is editing', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const amount = within(await card('phở')).getByRole('textbox', { name: 'Số tiền (₫)' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    const regions = within(linkCard).getAllByRole('status'); // already there before the news, so it gets read out
+    await user.click(amount); // while the phone sends the code, the user goes on with a draft
+
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: at() }];
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    const done = await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh Nguyen');
+    expect(regions).toContain(done.closest('[role="status"]'));
+    expect(within(linkCard).queryByRole('alert')).not.toBeInTheDocument();
+    expect(amount).toHaveFocus();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 a chat linked in another tab while the page sat idle is not "Linked ✓" for the new code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Other Tab', createdAt: at(60_000) }]; // linked on another device a minute ago
+    await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    expect(await within(linkCard).findByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument(); // Telegram is linked now
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('ABC234')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 an expired, unused code is not "Linked ✓" when an unlink reloads the list with a link made elsewhere', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    links = [{ id: 'l0', platform: 'telegram', displayName: 'Old TG', createdAt: NOW }];
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234'), zalo: ZALO }, 3000);
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(await within(linkCard).findByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+
+    await act(() => vi.advanceTimersByTimeAsync(5000)); // past the few seconds a code redeemed at the very end is allowed
+    links = [...links, { id: 'l1', platform: 'zalo', displayName: 'Phone Zalo', createdAt: new Date().toISOString() }]; // linked elsewhere later
+    await user.click(within(linked).getByRole('button', { name: 'Huỷ liên kết Telegram · Old TG' })); // the unlink reloads the list
+    await user.click(within(await screen.findByRole('dialog', { name: 'Huỷ liên kết?' })).getByRole('button', { name: 'Huỷ liên kết' }));
+    expect(await within(linked).findByText(/Zalo · Phone Zalo/)).toBeInTheDocument();
+    await waitFor(() => expect(within(linked).getByRole('heading', { name: 'Tài khoản đã liên kết' })).toHaveFocus());
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 a code redeemed after the last 5 s check is "Linked ✓" once it expires, and not for the next code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234') }, 3000); // expires before the first 5 s check
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: new Date().toISOString() }]; // redeemed just before it expired
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh')).toBeInTheDocument(); // the last check at expiry
+    expect(within(linkCard).queryByText('Mã đã hết hạn. Hãy tạo mã mới.')).not.toBeInTheDocument();
+    expect(within(linked).getByText(/Telegram · Anh/)).toBeInTheDocument();
+
+    codeAnswer = codeWith('XYZ567', { telegram: TG('XYZ567') });
+    await user.click(within(linkCard).getByRole('button', { name: 'Tạo mã mới' }));
+    expect(await within(linkCard).findByText('XYZ567')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('XYZ567')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// The bot checks the expiry first and saves the link a database round trip later (redeemLinkCode).
+test('TC-F7-14 a code redeemed at the very end, its link saved just after expiresAt, is still "Linked ✓"', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let expiresAt = 0;
+    codeAnswer = () => {
+      expiresAt = Date.now() + 3000;
+      return codeWith('ABC234', { telegram: TG('ABC234') }, 3000)();
+    };
+    renderApp('/bot');
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: new Date(expiresAt + 40).toISOString() }];
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 "Linked ✓", then unlink that account: no "Linked ✓" any more, Generate is offered', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh Nguyen', createdAt: new Date().toISOString() }];
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh Nguyen')).toBeInTheDocument();
+
+    await user.click(within(linked).getByRole('button', { name: 'Huỷ liên kết Telegram · Anh Nguyen' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Huỷ liên kết?' })).getByRole('button', { name: 'Huỷ liên kết' }));
+    expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(await within(linkCard).findByRole('button', { name: 'Tạo mã liên kết' })).toBeInTheDocument(); // once the dialog has closed
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 a chat linked while an older list request is still running is not "Linked ✓" for the new code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const firstLoad = holdNextList(); // the page's first list request, read before the link below exists
+    renderApp('/bot');
+    const generate = await screen.findByRole('button', { name: 'Tạo mã liên kết' });
+    await waitFor(() => expect(firstLoad.asked).toBe(true));
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Phone TG', createdAt: at(1000) }]; // linked on the phone
+    await user.click(generate);
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+
+    firstLoad.release();
+    // A new list request follows the old one at once (not only at the next 5 s check), so the card starts on WhatsApp.
+    expect(await within(linkCard).findByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('ABC234')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 the last check at expiry is sent even when an older list request is still running', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234') }, 3000); // expires before the first 5 s check
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    expect(await within(linked).findByText('Chưa liên kết tài khoản chat nào.')).toBeInTheDocument();
+    const running = holdNextList(); // the request made right after the code: still running when it expires
+    await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    await waitFor(() => expect(running.asked).toBe(true));
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: at() }]; // redeemed after that request was read
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(within(linkCard).getByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
+
+    running.release();
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 "Create a new code" while the last check is still running: an older link is not "Linked ✓" for the new code', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    codeAnswer = codeWith('ABC234', { telegram: TG('ABC234') }, 3000);
+    renderApp('/bot');
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(1000)); // the list request made after the code is done
+    const lastCheck = holdNextList();
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    await waitFor(() => expect(lastCheck.asked).toBe(true));
+
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Phone TG', createdAt: at() }]; // after ABC234 expired
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    codeAnswer = codeWith('XYZ567', { telegram: TG('XYZ567') });
+    await user.click(within(linkCard).getByRole('button', { name: 'Tạo mã mới' }));
+    expect(await within(linkCard).findByText('XYZ567')).toBeInTheDocument();
+    lastCheck.release();
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
+    expect(within(linkCard).getByText('XYZ567')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 one failed list request after the code does not turn "Linked ✓" off; the starting app comes from the list the page has', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    links = [{ id: 'l0', platform: 'telegram', displayName: 'Anh', createdAt: NOW }];
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    expect(await within(linked).findByText('Telegram · Anh')).toBeInTheDocument();
+    let failed = 0;
+    server.use(http.get('*/api/chat-links', () => (failed++, fail(500, 'INTERNAL')), { once: true }));
+    await user.click(screen.getByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    expect(await within(linked).findByText('Không tải được danh sách tài khoản.')).toBeInTheDocument();
+    expect(failed).toBe(1);
+    expect(within(linkCard).getByRole('link', { name: 'Mở WhatsApp' })).toBeInTheDocument(); // Telegram is linked
+
+    links = [...links, { id: 'l1', platform: 'zalo', displayName: 'Lan Zalo', createdAt: at() }]; // the bot redeemed the code
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Zalo · Lan Zalo')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F7-14 the app the user opened stays picked when a late list says it was linked already', async () => {
+  const user = userEvent.setup();
+  const firstLoad = holdNextList();
+  links = [{ id: 'l0', platform: 'telegram', displayName: 'Anh', createdAt: NOW }];
+  renderApp('/bot');
+  await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+  const open = await screen.findByRole('link', { name: 'Mở Telegram' }); // no list yet: the first app
+  await user.click(open);
+  firstLoad.release();
+  const linked = screen.getByRole('region', { name: 'Tài khoản đã liên kết' });
+  expect(await within(linked).findByText('Telegram · Anh')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Mở Telegram' })).toBeInTheDocument();
+});
+
+// bug-prevention §1: Linked accounts and the link card name a chat with one shared function.
+test('TC-F7-14 a chat with an empty name is named the same in "Linked ✓" and in Linked accounts', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderApp('/bot');
+    const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'zalo', displayName: '', createdAt: at() }]; // Zalo may send no display name
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Zalo · zalo')).toBeInTheDocument();
+    expect(within(linked).getByText('Zalo · zalo')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
 });

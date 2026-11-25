@@ -134,7 +134,7 @@ Pages are lazy-loaded with the route `lazy` option (each feature's `routes.tsx`)
 | **Wallets** | Card per wallet with computed balance; add/edit dialog (type cash / bank / e-wallet / credit card, opening balance from −10¹³ to 10¹³ ₫ so a credit card can start negative, aliases for the bot); archive toggle; delete blocked with an explanation when in use. Archiving or deleting the default wallet clears it (server), and the signed-in user is updated so forms stop offering it |
 | **Categories** | Tabs Expense / Income; list with icon, colour, keyword chips; add/edit dialog with a keyword chip input (normalised to no-diacritics) |
 | **Budgets** | `MonthPicker`; progress bar per category (green < 80 %, amber 80–100 %, red > 100 %); add/edit/delete (limit at most 10¹³ ₫); "Copy from last month". *Planned (§5.10.3):* from day 5, a pace chip per budget (the daily limit from A2) |
-| **Bot inbox** | **Link card**: "Generate code" → shows the code, a countdown, the Telegram deep link and a QR code, plus Zalo instructions (`/link CODE`). **Linked accounts** with unlink. **Drafts list** (refetched every time the inbox opens, since drafts also change in the chats): source icon (Telegram/Zalo/receipt), parsed fields editable inline (amount at most 10¹³ ₫), receipt line items expandable, Confirm / Discard. Confirm sends the edits together with the confirm in one request (`POST /transactions/:id/confirm`); a 409 (already confirmed in the chat) or 404 (deleted) removes the card; a budget warning from the server shows as a warning snackbar. **Upload receipt**: resize in the browser (canvas → JPEG ≤ 1600 px) → `POST /api/receipts` with a progress spinner (~20–40 s). *Planned (§5.9.1, §5.9.3, §5.9.5):* an app picker (Telegram / WhatsApp / Zalo) with one button, instruction line and QR per app; the "New chat linked from a chat link: … Not you? [Unlink]" notice for a link made by a claim link, until dismissed; and a WhatsApp source icon |
+| **Bot inbox** | **Link card** (docs/02 §2.10.2), titled "Link Telegram / WhatsApp / Zalo": "Create link code" → shows the 6-character code and its 10-minute countdown (focus moves to it; after 5 codes in 10 minutes the 429 message shows), an app picker (Telegram \| WhatsApp \| Zalo, only the apps whose `links` entry is not `null`; it starts on the first app not linked yet, else the first shown; one app needs no picker), the picked app's instruction line, its button and a black-on-white QR code (`qrCode.ts`) of the same link, and `/link CODE` to send by hand. The links are used as the API gives them. **Open Telegram** and **Open WhatsApp** open the link in a new tab; **Copy & open Zalo** copies `/link CODE` (`navigator.clipboard.writeText`) and opens `ZALO_BOT_URL` (a real link, so no pop-up blocker stops it; its QR only opens the bot, so the large code stays on screen); a status line says "Copied" or, if copying fails, to copy the command by hand. Every 5 s while the code is live it reloads the linked accounts; a link made while the code was valid (its `createdAt` between the code's `expiresAt` minus the 10-minute lifetime and `expiresAt` plus 5 s, because the bot checks the expiry just before it saves the link; both server times, so any copy of the list can be judged and one failed request loses nothing) replaces the code with "Linked ✓ <app> · <name>" (the same name as under Linked accounts) and stops the checks. The list is also reloaded right after the code arrives, to pick the starting app; the code does not wait for it, and a list request still running is awaited first, so the new one is read after the click. A `role="status"` region announces that message, which takes focus from nothing that stays on the page; only if focus was on something in the code block it replaces does it move to the message. An expired code never claims a link made more than those 5 s after it expired; one last `GET /chat-links` runs when the code expires (after any list request still running), for a code redeemed after the last 5 s check; "Linked ✓" goes away when that account is unlinked. The Generate button stays busy until the new code is back; a failed request's message is translated when shown, so it follows a language switch. With three apps the picker wraps inside the card when the column beside the side drawer is narrow. **Linked accounts** with unlink. **Drafts list** (refetched every time the inbox opens, since drafts also change in the chats): source icon (Telegram/Zalo/receipt), parsed fields editable inline (amount at most 10¹³ ₫), receipt line items expandable, Confirm / Discard. Confirm sends the edits together with the confirm in one request (`POST /transactions/:id/confirm`); a 409 (already confirmed in the chat) or 404 (deleted) removes the card; a budget warning from the server shows as a warning snackbar. **Upload receipt**: resize in the browser (canvas → JPEG ≤ 1600 px) → `POST /api/receipts` with a progress spinner (~20–40 s). *Planned (§5.9.3, §5.9.5):* the "New chat linked from a chat link: … Not you? [Unlink]" notice for a link made by a claim link, until dismissed; and a WhatsApp source icon |
 | **Link a chat** *(planned, §2.10)* | `/link` screen opened from the bot's "tap to link" message: preview, then Confirm / Cancel (§5.9.2) |
 | **Verify email** *(planned, §2.12)* | `/verify-email` after a 202 from Register: one 6-digit code box, Resend with a 60 s countdown, "Wrong email? Change it" (§5.11.2) |
 | **Forgot password** *(planned, §2.12)* | `/forgot-password` from the Login link: email, then code + new password on the same screen; ends on `/login` (§5.11.4) |
@@ -152,32 +152,13 @@ A failed load of a page's main data (Dashboard, Transactions, Wallets, Categorie
 
 ## 5.9 One-tap linking and WhatsApp (planned, §2.10)
 
-> **Not built yet.** §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). As each part is built it moves into §5.2–§5.7 (§2.10.5). Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
+> **Partly built.** The link card (§5.9.1, card T32 #72) is built; the rest of this section is not built yet. §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). As each part is built it moves into §5.2–§5.7 (§2.10.5). Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
 
-### 5.9.1 Link card on `/bot` (planned, §2.10.2)
+<a id="591-link-card-on-bot-planned-2102"></a>
 
-Today `LinkCard.tsx` shows, once a code exists, the code and countdown, then a Telegram block (instruction, **Open Telegram**, QR of the deep link) and the Zalo `/link CODE` text, all at once. Planned (sketch in §2.10.2):
+### 5.9.1 Link card on `/bot` (built, §2.10.2)
 
-| | Today | Planned |
-|---|---|---|
-| Data | `telegramDeepLink` from `POST /api/chat-links/code` | `links: { telegram, whatsapp, zalo }`, each a URL or `null`. The client uses them as given and builds no URL itself |
-| Layout | Telegram block and Zalo text shown together | An app picker **Telegram \| WhatsApp \| Zalo** (one choice); below it only the selected app's button, instruction line and QR |
-| Default app | – | The first shown app (link not `null`), in that order, that is not linked yet (no row in `GET /api/chat-links` for this user, the list the card already polls); if every shown app is linked, the first shown app (card T32, #72). An app left out of the picker is never the default |
-| Missing settings | Telegram block hidden when `telegramDeepLink` is `null`; Zalo text always shown | Any app whose link is `null` is left out of the picker (Zalo too, when `ZALO_BOT_URL` is not set) |
-| QR | The Telegram deep link | The selected app's link. For Zalo it only opens the bot, so the large code stays on screen |
-| Feedback | The new account appears under **Linked accounts** | Also `Linked ✓ <App> · <name>` on the card, as soon as the polled list has a link it did not have when the code was made |
-
-| App | Button | On click | Instruction line |
-|---|---|---|---|
-| Telegram | **Open Telegram** (`TelegramIcon`) | Opens `links.telegram` (`https://t.me/<bot>?start=<CODE>`) in a new tab, as today | One tap, then press Start |
-| WhatsApp | **Open WhatsApp** (`WhatsAppIcon`) | Opens `links.whatsapp` (`https://wa.me/<WHATSAPP_NUMBER>?text=%2Flink%20<CODE>`) in a new tab | `/link CODE` is already typed: tap Send |
-| Zalo | **Copy & open Zalo** | `navigator.clipboard.writeText('/link CODE')`, then opens `links.zalo` (`ZALO_BOT_URL`) in a new tab | Paste and send. If copying fails (no Clipboard API, permission refused), the card says "Copy it yourself"; the `/link CODE` text, shown as today, stays visible and selectable |
-
-**Unchanged from F7:** the "Create link code" button, 6-character code, 10-minute countdown, the 429 message after 5 codes in 10 minutes, checking `GET /api/chat-links` every 5 s while the code is live (`CHECK_LINKS_MS`), focus moving to the code, and the black-on-white QR from `qrCode.ts`.
-
-**Builder notes:**
-- `qrMatrix()` throws above 106 bytes. A `wa.me` link is at most ~51 bytes and a `t.me` link at most ~58, but `ZALO_BOT_URL` is whatever the owner pastes from Zalo Bot Creator, so it has to fit too.
-- Opening the tab only after the clipboard promise settles can be stopped by a pop-up blocker. A real link (`href`, `target="_blank"`) whose click handler starts the copy always opens; see §5.9.8 for whether Zalo should open when the copy fails.
+Built by card T32 (#72): the **Bot inbox** row of §5.7 describes it, and §5.9.8 items 1–3 record the choices it made.
 
 ### 5.9.2 `/link` screen (planned, §2.10.3)
 
@@ -219,7 +200,7 @@ In `features/bot/botApi.ts`, or with the `/link` screen's files; hook names are 
 
 | Endpoint | RTK Query | Types | Tags |
 |---|---|---|---|
-| `POST /api/chat-links/code` (existing `createLinkCode`) | mutation, unchanged | Result `LinkCode = { code: string; expiresAt: string; links: { telegram: string \| null; whatsapp: string \| null; zalo: string \| null } }`; `telegramDeepLink` goes. Client and server change in the same PR (§2.10.2) | None, as today |
+| `POST /api/chat-links/code` (existing `createLinkCode`), *built (T32)* | mutation, unchanged | Result `LinkCode = { code: string; expiresAt: string; links: { telegram: string \| null; whatsapp: string \| null; zalo: string \| null } }`; `telegramDeepLink` goes. Client and server change in the same PR (§2.10.2) | None, as today |
 | `POST /api/chat-links/claim/preview` (new) | mutation, or a query with `method: 'POST'` and `body` | Arg `{ token: string }` → `{ platform: ChatLink['platform']; displayName: string }` | None |
 | `POST /api/chat-links/claim` (new) | mutation | Arg `{ token: string }` → 201 `{ id, platform, displayName, createdAt, viaClaim: true }` (a `ChatLink` without `claimNoticeDismissedAt`) | Invalidates `ChatLink`, so Linked accounts, the link card and the claim notice refetch |
 | `GET /api/chat-links` (existing `getChatLinks`) | query, unchanged | `ChatLink` gains `viaClaim: boolean` and `claimNoticeDismissedAt: string \| null` | Provides `ChatLink`, as today |
@@ -241,26 +222,28 @@ Keys and wording are left to the builder (§2.10), in vi and en. What needs text
 
 | Where | Strings |
 |---|---|
-| `bot`, link card | Card title and description naming all three apps (today "Link Telegram / Zalo"); the picker's group label; `sources.whatsapp`; **Open WhatsApp** and **Copy & open Zalo** (**Open Telegram** exists); one instruction line per app (replacing `link.telegram` and `link.zalo`); one QR label per app; "Copy it yourself"; `Linked ✓ <App> · <name>`; the page `intro`, which names Telegram and Zalo only |
+| `bot`, link card (*built, T32*, except the page `intro`: it says what the bots record, so it changes with the WhatsApp bot, T34) | Card title and description naming all three apps; the picker's group label; `sources.whatsapp`; **Open WhatsApp** and **Copy & open Zalo** (**Open Telegram** exists); one instruction line per app (replacing `link.telegram` and `link.zalo`); one QR label per app; "Copy it yourself"; `Linked ✓ <App> · <name>`; the page `intro`, which names Telegram and Zalo only |
 | `/link` screen (in `bot`, or a new namespace: `import.meta.glob` picks it up, making 13) | Page `<title>`; loading; the confirm question (app · chat name, user name, email, with bold parts); the warning (vi + en of "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account."); **Confirm**; **Cancel**; the done message (may reuse the card's); the expired-or-used text; the already-linked text; **Go to Bot inbox** |
 | `bot`, claim notice | "New chat linked from a chat link: **`<App> · <name>`**. Not you?" (with the bold part); **Unlink** (the dialog's texts exist in `accounts`); the dismiss button's label |
 | `admin` | `stats.chatLinksDetail` and `stats.transactionsDetail` with WhatsApp |
 
 ### 5.9.7 Accessibility (planned)
 
+*Built (T32): the link card's three button names, the picker, its focus and announcement rules, its QR label and the `/link CODE` text. The `/link` screen and the claim notice are planned.*
+
 - **Button names** are their visible text: "Open Telegram", "Open WhatsApp", "Copy & open Zalo", "Confirm", "Cancel", "Go to Bot inbox". App icons are decorative (MUI icons are `aria-hidden`).
 - **Picker:** one labelled single-choice group (e.g. MUI `ToggleButtonGroup exclusive` with an `aria-label`, which marks the selected app with `aria-pressed`); each option is named by its app.
 - **Focus:** after "Create link code", focus moves to the code (unchanged). Switching apps keeps focus on the picker. "Copy it yourself" and "Linked ✓ …" are announced without moving focus (`role="status"`). On `/link`, each state's heading takes focus when the state changes (a `tabIndex={-1}` heading, as in Linked accounts), so a screen reader reads the question or the error.
 - **Confirm warning:** real text between the question and the buttons, read right after the question; **Confirm** points at it with `aria-describedby`, so it is read again on the button. It is not a live region (it is there when the state's heading takes focus) and colour is not its only sign (a warning icon plus the words).
 - **Claim notice:** shown when the inbox loads, so it is page content, not a live region. Its buttons are named with the chat: "Unlink `<App> · <name>`" (as Linked accounts' `accounts.unlink`) and "Dismiss notice for `<App> · <name>`", so several notices are told apart. The buttons leave with the notice, so after Unlink or Dismiss focus moves to a heading (as Linked accounts does after its unlink), not to `<body>`.
-- **QR alt text:** the SVG keeps `role="img"`, with an `aria-label` that names the selected app and what scanning does (today one Telegram label, `link.qr`).
+- **QR alt text:** the SVG keeps `role="img"`, with an `aria-label` that names the selected app and what scanning does.
 - The `/link CODE` text stays real text, so it can be selected, copied by hand and read aloud.
 
 ### 5.9.8 Open questions
 
-1. **Zalo, copy fails:** does the tab still open? A real link always opens it and no pop-up blocker can stop it; opening only after a successful copy needs `window.open` after an `await`, which some browsers block.
-2. **Link card after "Linked ✓":** does the code stay (and polling go on) until it expires, or does the card reset? The code is single use either way.
-3. **Picker edge case:** what the card shows when all three links are `null`.
+1. **Zalo, copy fails:** does the tab still open? A real link always opens it and no pop-up blocker can stop it; opening only after a successful copy needs `window.open` after an `await`, which some browsers block. *T32: yes, the button is a real link; the card says that copying failed.*
+2. **Link card after "Linked ✓":** does the code stay (and polling go on) until it expires, or does the card reset? The code is single use either way. *T32: it resets. "Linked ✓" replaces the code, the checks stop and "Create a new code" is offered.*
+3. **Picker edge case:** what the card shows when all three links are `null`. *T32: no picker, button or QR; the code and `/link CODE` stay.*
 4. **`/link` gaps:** no token (opened bare, or `sessionStorage` empty) and network or 5xx errors on preview or claim have no state in §2.10.3. The §5.7 rule (error banner with **Retry**) is the obvious candidate for the second.
 5. **New users:** `/login` links to `/register`, and `RegisterPage` always lands on `/`, so someone who registers on the way loses the return to `/link`. Should `RegisterPage` honour `state.from` too?
 6. **Clearing the token:** after Confirm, Cancel or an error, so a spent token does not stay in `sessionStorage`.

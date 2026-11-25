@@ -196,7 +196,7 @@ const commands = {
   async code() {
     const { status, data } = await api('POST', '/chat-links/code', { token: await login() });
     if (status !== 201) fail(`POST /chat-links/code failed: ${status} ${data?.error?.code ?? ''}`);
-    console.log(JSON.stringify({ code: data.code, expiresAt: data.expiresAt, telegramDeepLink: data.telegramDeepLink }));
+    console.log(JSON.stringify({ code: data.code, expiresAt: data.expiresAt, links: data.links }));
   },
   list() {
     for (const s of steps) {

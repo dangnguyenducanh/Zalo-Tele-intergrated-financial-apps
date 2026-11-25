@@ -32,9 +32,8 @@ trust proxy 1 → helmet → express.json({ limit: '1mb' }) → cookie-parser �
 
 - no `KIE_URL` → `POST /receipts` answers 503 `FEATURE_NOT_CONFIGURED` for a valid JPEG/PNG upload (the missing-field 400 and the 415 come first; the bots say the receipt reader is not answering);
 - no webhook secret → that platform's webhook answers 401 to everything;
-- no `TELEGRAM_BOT_USERNAME` → `telegramDeepLink` is `null`;
-- *planned (§2.10):* `links.telegram` replaces `telegramDeepLink` with the same rule; no `WHATSAPP_NUMBER` → `links.whatsapp` is `null`, and no `ZALO_BOT_URL` → `links.zalo` is `null`, so the link card hides that app (§2.10.2);
-- *planned (§2.10), decided by card T34 (#74):* if any of the WhatsApp webhook settings `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing, and `links.whatsapp` is `null`, so the link card hides WhatsApp. Unlike Telegram and Zalo (401 without their secret), an unset setting is not treated as a failed check;
+- no `TELEGRAM_BOT_USERNAME`, `WHATSAPP_NUMBER` or `ZALO_BOT_URL` → that app's entry in the link code's `links` is `null`, and the web link card hides the app.
+- *planned (§2.10), decided by card T34 (#74):* if any of the WhatsApp webhook settings `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing, and `links.whatsapp` is `null` (even with `WHATSAPP_NUMBER` set), so the link card hides WhatsApp. Unlike Telegram and Zalo (401 without their secret), an unset setting is not treated as a failed check;
 - *planned (§2.11.6):* each agent variable is optional and a missing one turns its feature off, as with KIE. Without `AGENT_URL` or `AGENT_SECRET`, Express never calls the agent service: questions in chat and in the drawer get the help text with the plain commands, receipts go to KIE whatever `RECEIPT_READER` says, and a Khác/Other draft gets no suggestion. `ASSISTANT_ENABLED` and `ASSISTANT_CHANNELS` only open or close the model gate (§4.11); pipeline skills answer either way. Without `CRON_SECRET`, `sameSecret()` fails every call, so `GET /cron/daily` answers 401, as a webhook does without its secret (§2.11 names no status for this);
 - *planned (§2.12.4):* mail is on only when both `GMAIL_USER` and `GMAIL_APP_PASSWORD` are set. Without them in development and test, the code is written to the server log (`[mail] signup code for a***@gmail.com: 123456`) instead of sent. Without them in production, `POST /auth/register` answers as today (201, logged in, no code) and `POST /auth/password/forgot` answers 503 `FEATURE_NOT_CONFIGURED`. What `register/verify`, `register/resend` and `password/reset` answer then is not stated in §2.12.
 
@@ -55,12 +54,12 @@ An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required 
 | `TELEGRAM_WEBHOOK_SECRET` | 1–256 chars `[A-Za-z0-9_-]` |
 | `ZALO_BOT_TOKEN` | from Zalo Bot Platform |
 | `ZALO_WEBHOOK_SECRET` | 8–256 chars |
+| `ZALO_BOT_URL` | the Zalo bot's share link from Zalo Bot Creator (the link card's "Copy & open Zalo"): an `https://` URL of at most 106 bytes, what the card's QR code holds |
+| `WHATSAPP_NUMBER` | the WhatsApp bot's number in international format, digits only (6–15, no `+` or leading 0), for `wa.me` links |
 | `WHATSAPP_ACCESS_TOKEN` *(planned, §2.10)* | permanent (system user) access token of the Meta app; sends messages and downloads receipt photos |
 | `WHATSAPP_PHONE_NUMBER_ID` *(planned)* | the business number's ID in the Graph API messages URL |
 | `WHATSAPP_APP_SECRET` *(planned)* | key of the `X-Hub-Signature-256` HMAC on webhook `POST`s |
 | `WHATSAPP_VERIFY_TOKEN` *(planned)* | compared with `hub.verify_token` in the webhook's `GET` setup check |
-| `WHATSAPP_NUMBER` *(planned)* | the business number, international format, digits only, for `wa.me` links |
-| `ZALO_BOT_URL` *(planned)* | the bot's share link from Zalo Bot Creator (the link card's Zalo button) |
 | `AGENT_URL` *(planned, §2.11)* | `https://<tunnel-host>` of the agent service, must be a URL; its value comes from `AGENT_PUBLIC_URL` on the GPU host, like `KIE_URL` from `KIE_PUBLIC_URL` |
 | `AGENT_SECRET` *(planned)* | `openssl rand -hex 32`; sent as `Authorization: Bearer …`; the same value is in `agent/.env` (§4.11) |
 | `RECEIPT_READER` *(planned)* | `kie` \| `qwen`, default `kie` until the receipt eval passes (§4.8) |
@@ -165,7 +164,7 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 
 | Method | Path | Auth | Body | Success | Errors |
 |---|---|---|---|---|---|
-| POST | `/chat-links/code` | 🔒 | — | **201** `{code, expiresAt, telegramDeepLink}` (`null` without `TELEGRAM_BOT_USERNAME`). *Planned (§2.10.2):* **201** `{code, expiresAt, links:{telegram, whatsapp, zalo}}` (each a URL or `null`) instead of `telegramDeepLink`; the client changes in the same PR | 429 `RATE_LIMITED` (5 per user per 10 min) |
+| POST | `/chat-links/code` | 🔒 | — | **201** `{code, expiresAt, links: {telegram, whatsapp, zalo}}`: `https://t.me/<TELEGRAM_BOT_USERNAME>?start=<CODE>`, `https://wa.me/<WHATSAPP_NUMBER>?text=%2Flink%20<CODE>` and `ZALO_BOT_URL` (no code: Zalo bot links carry no data); each `null` when its setting is missing | 429 `RATE_LIMITED` (5 per user per 10 min) |
 | POST | `/chat-links/claim/preview` *(planned, §2.10.3)* | 🔒 | `{token}` | **200** `{platform, displayName}`; the token is not spent | `LINK_TOKEN_INVALID` (404: unknown, used or expired) |
 | POST | `/chat-links/claim` *(planned, §2.10.3)* | 🔒 | `{token}` | **201** `{id, platform, displayName, createdAt, viaClaim: true}` | `LINK_TOKEN_INVALID` (404); `CHAT_ALREADY_LINKED` (409: that chat was linked meanwhile; the token is still spent) |
 | GET | `/chat-links` | 🔒 | — | **200** `[{id, platform, displayName, createdAt}]`. *Planned (§2.10.5):* each item also has `viaClaim` and `claimNoticeDismissedAt` | — |
@@ -174,7 +173,7 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 
 *Planned error codes are written `CODE` (status) in this section until the build PR adds `errors.LINK_TOKEN_INVALID` and `errors.CHAT_ALREADY_LINKED` (vi + en): TC-F12-03 reads codes written as status-then-code from this file and requires a translation for each.*
 
-**Link card links** *(planned, §2.10.2)*: `links.telegram` is `https://t.me/<bot>?start=<CODE>` (as today), `links.whatsapp` is `https://wa.me/<WHATSAPP_NUMBER>?text=%2Flink%20<CODE>` (the chat opens with `/link CODE` typed), and `links.zalo` is `ZALO_BOT_URL` (a Zalo bot link carries no payload, so the card copies `/link CODE` to the clipboard before opening it). The code itself is unchanged: 6 characters, 10 minutes, single use, 5 per user per 10 minutes.
+**Link card links** (§2.10.2): `links.telegram` is `https://t.me/<bot>?start=<CODE>`, `links.whatsapp` is `https://wa.me/<WHATSAPP_NUMBER>?text=%2Flink%20<CODE>` (the chat opens with `/link CODE` typed), and `links.zalo` is `ZALO_BOT_URL` (a Zalo bot link carries no payload, so the card copies `/link CODE` to the clipboard before opening it). The code itself is unchanged: 6 characters, 10 minutes, single use, 5 per user per 10 minutes.
 
 **Linking from the chat** *(planned, §2.10.3)*: the bot hands an unlinked chat a claim link (see §4.6, step 4), and the website's `/link?t=<token>` screen spends it through the two endpoints above.
 - Tokens travel in the body, never in a URL the server logs. Both endpoints need login.

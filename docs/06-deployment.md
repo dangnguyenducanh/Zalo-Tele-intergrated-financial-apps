@@ -86,9 +86,9 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `APP_URL` | per target: `PROD_URL` or `STAGING_URL` from `server/.env` |
 | `MONGODB_DB` | per target: `finance` or `finance_staging` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | §6.4 |
-| `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET` | §6.5 |
-| `ZALO_BOT_URL` *(planned, §2.10)* | §6.5 step 5 |
-| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_NUMBER` *(planned, §2.10)* | §6.12 |
+| `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET`, `ZALO_BOT_URL` | §6.5 |
+| `WHATSAPP_NUMBER` | the WhatsApp bot's number, international format, digits only, no leading 0 (e.g. `849…`); optional: without it the link card has no WhatsApp button (§6.12) |
+| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` *(planned, §2.10)* | §6.12 |
 | `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS`, `CRON_SECRET` *(planned, §2.11)* | §6.13 (`AGENT_URL` is pushed from `AGENT_PUBLIC_URL`, like `KIE_URL`) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` *(planned, §2.12)* | §6.14 |
 | `KIE_URL` | the value of `KIE_PUBLIC_URL` (§6.6); if that is empty, a non-local `KIE_URL` is pushed as is |
@@ -143,7 +143,7 @@ node --env-file=server/.env server/src/scripts/setWebhooks.js https://<project>.
 ```
 
 4. Check it with `getWebhookInfo` (same base URL), then send the bot a text and a photo. Look at the **first real payloads** in Vercel → Logs to confirm `event_name`, `message.chat.id` and `message.photo_url` (field names come from community SDKs).
-5. *(Planned, §2.10.)* `ZALO_BOT_URL` for the link card's **Copy & open Zalo** button (§2.10.2): in **Zalo Bot Creator**, pick the bot to open its details page and copy the bot's share link (this menu path is not verified yet: the only source found documents the bot's group-invite link, so check it on a phone and correct this step). Save it with `tools/set-secret.sh ZALO_BOT_URL` (or together with the WhatsApp values, §6.12), then check on a phone that the link opens the bot's chat. Without it, Zalo is left out of the link card.
+5. `ZALO_BOT_URL` for the link card's **Copy & open Zalo** button (§2.10.2): in **Zalo Bot Creator**, pick the bot to open its details page and copy the bot's share link, an `https://` link such as `https://zalo.me/…` (this menu path is not verified yet: the only source found documents the bot's group-invite link, so check it on a phone and correct this step). Save it with `tools/set-secret.sh ZALO_BOT_URL` (or together with the WhatsApp values, §6.12), then check on a phone that the link opens the bot's chat. Optional: without it, Zalo is left out of the link card, and `/link CODE` still works when typed. The value must start with `https://` and be at most 106 bytes (it goes into the card's QR code), and `WHATSAPP_NUMBER` must be digits only with the country code first (no `+`, spaces, dashes or leading 0): the API checks both at startup and **does not start** with a bad value, so check them before you redeploy.
 
 ## 6.6 KIE service (Docker + Cloudflare Tunnel)
 
@@ -189,9 +189,9 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 - [ ] `.env` not in git (`git ls-files | grep -E '(^|/)\.env'` shows only `.env.example`)
 - [ ] Real chats after a deploy: `node tools/bot-e2e/bot-e2e.mjs` steps pass (`--target prod` by default; see [docs/testing/bot-e2e.md](testing/bot-e2e.md))
 - [ ] *(Planned, §2.10)* WhatsApp: Meta's **Configuration** panel shows the callback URL saved and `messages` subscribed; **Open WhatsApp** on the link card → Send → "Linked ✓" within 5 s; `phở 45k` → ✅ → saved
-- [ ] *(Planned, §2.10)* Zalo: **Copy & open Zalo** opens the bot with `/link CODE` on the clipboard; paste + send → "Linked ✓"
+- [ ] Zalo: **Copy & open Zalo** opens the bot with `/link CODE` on the clipboard; paste + send → "Linked ✓"
 - [ ] *(Planned, §2.10)* An unlinked chat gets a claim link on the production `APP_URL` (`…/link?t=…`); Confirm links it and the chat gets the success message
-- [ ] *(Planned, §2.10)* The link card shows only the apps whose settings were pushed
+- [ ] The link card shows only the apps whose settings were pushed
 - [ ] *(Planned, §2.10)* The `/link` confirm screen shows the warning ("Only confirm if you just messaged the bot yourself…"); after Confirm the Bot inbox shows "New chat linked from a chat link: … Not you? [Unlink]", and dismissing it keeps it gone after a reload
 - [ ] *(Planned, §2.11)* Agent service: the `tunnel` container is up and `AGENT_PUBLIC_URL` is current (the KIE lesson: a dead tunnel silently broke receipts); `https://<agent tunnel>/health` → `vllm: ok`; `nvidia-smi` shows GPU memory headroom; one receipt is read in under 10 s (§6.13)
 - [ ] *(Planned, §2.11)* With the admin runtime switch **off**, ask "tháng này ăn uống hết bao nhiêu?" in the drawer and on Telegram → the help text and the plain commands; switch it **on** (no redeploy) → an exact answer with its sources line; "tháng 10 thu bao nhiêu" in QuickAdd → nothing saved, the question chip shows
@@ -224,7 +224,7 @@ CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not d
 
 ## 6.12 WhatsApp Cloud API (Meta) setup (planned, §2.10)
 
-> **Planned (§2.10), not built yet.** Today there is no WhatsApp code: `server/src/routes/webhooks.js` has only `/telegram` and `/zalo`, `server/src/config/env.js` has no `WHATSAPP_*` variable, and `setWebhooks.js` knows only Telegram and Zalo. Do these steps when the WhatsApp adapter (§2.10.4) is merged. The bot talks to Meta's WhatsApp Cloud API directly, with no provider in between. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.
+> **Planned (§2.10), not built yet.** Today there is no WhatsApp bot: `server/src/routes/webhooks.js` has only `/telegram` and `/zalo`, `server/src/config/env.js` has only `WHATSAPP_NUMBER` (the link card's `wa.me` link, card T32), and `setWebhooks.js` knows only Telegram and Zalo. Leave `WHATSAPP_NUMBER` unset until the adapter is live, so the card does not offer a bot that cannot answer. Do these steps when the WhatsApp adapter (§2.10.4) is merged. The bot talks to Meta's WhatsApp Cloud API directly, with no provider in between. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.
 
 **On Meta's side** (once; §2.10.1 lists what the owner needs):
 
@@ -276,7 +276,7 @@ A Meta app has one callback URL, so, like the Telegram and Zalo bots, the WhatsA
 **When settings are missing** (§2.10.2, §2.10.5):
 
 - The webhook-registration script skips that platform and prints `skipped: …`, as it does for Telegram and Zalo today.
-- The link card leaves the app out of the picker: `POST /api/chat-links/code` returns `null` for its entry in `links`. WhatsApp's link is built from `WHATSAPP_NUMBER` and Zalo's is `ZALO_BOT_URL`, so without them the button is hidden (§2.10.2). WhatsApp is also hidden while any of the four webhook settings in the next point is unset (card T34, #74). Today the Telegram button already behaves this way when `TELEGRAM_BOT_USERNAME` is unset (`telegramDeepLink: null`).
+- The link card leaves the app out of the picker: `POST /api/chat-links/code` returns `null` for its entry in `links`. WhatsApp's link is built from `WHATSAPP_NUMBER` and Zalo's is `ZALO_BOT_URL`, so without them the button is hidden (§2.10.2). WhatsApp is also hidden while any of the four webhook settings in the next point is unset (card T34, #74). Telegram's button follows the same rule with `TELEGRAM_BOT_USERNAME`. The card's side of this rule is built (card T32).
 - If any of `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /api/webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing (card T34, #74; [04-backend.md §4.2](04-backend.md#42-configuration)). So staging deploys and works without the WhatsApp settings, with WhatsApp hidden and its webhook off.
 
 ## 6.13 Agent service and local model (planned, §2.11)
