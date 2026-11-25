@@ -1,0 +1,75 @@
+{
+  "fields": {
+    "merchant": "SIÊU THI MINI AN PHÚ",
+    "date": "24/11/2026",
+    "total": "50000",
+    "address": "45 Nguyn Văn C, P. Cu Kho, Q.1"
+  },
+  "line_items": [
+    {
+      "name": "Nuc sui Lavie 500ml x2",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 10000,
+      "confidence": 0.9870042204856873,
+      "line_index": 4,
+      "bbox": [
+        287.4768371582031,
+        791.4406127929688,
+        968.5231323242188,
+        823.9187622070312
+      ],
+      "raw_text": "Nuc sui Lavie 500ml x2 10.000"
+    },
+    {
+      "name": "Bánh quy Cosy",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 25000,
+      "confidence": 0.9999746680259705,
+      "line_index": 5,
+      "bbox": [
+        280.63214111328125,
+        827.3375244140625,
+        970.2343139648438,
+        868.3624877929688
+      ],
+      "raw_text": "Bánh quy Cosy 25.000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 35000,
+    "extracted_total": 50000,
+    "difference": 15000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      4
+    ]
+  },
+  "full_text": "SIÊU THI MINI AN PHÚ\n45 Nguyn Văn C, P. Cu Kho, Q.1\nHÓA DON BÁN HÀNG\nNgày: 24/11/2026 08:12\nNuc sui Lavie 500ml x2 10.000\nBánh quy Cosy 25.000\nTng tin hàng 35.000\nKhách cân trá 35.000\nKhách thanh toán 50.000\nTin thùa tr khách 15.000",
+  "lines": [
+    "SIÊU THI MINI AN PHÚ",
+    "45 Nguyn Văn C, P. Cu Kho, Q.1",
+    "HÓA DON BÁN HÀNG",
+    "Ngày: 24/11/2026 08:12",
+    "Nuc sui Lavie 500ml x2 10.000",
+    "Bánh quy Cosy 25.000",
+    "Tng tin hàng 35.000",
+    "Khách cân trá 35.000",
+    "Khách thanh toán 50.000",
+    "Tin thùa tr khách 15.000"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_hough(-2.03)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 40.32,
+    "ocr_ms": 3638.16,
+    "kie_ms": 3.69
+  }
+}

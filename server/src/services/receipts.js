@@ -85,15 +85,17 @@ export function receiptToDraft({ fields, lineItems, reconciliation, timings, ful
 }
 
 // Receipt words that read as a category keyword once accents are dropped: phím (key) is not phim (film), phố (street)
-// is not phở, bé (small) is not Be (the ride app), sạch (clean) is not sách (book). A receipt keeps its accents, so
-// these words are left out before matching.
-// ponytail: a hand-kept list; accented keywords in the category templates would make it unnecessary.
+// is not phở, bé (small) is not Be (the ride app), sạch (clean) is not sách (book). These words are left out before
+// matching. When OCR has dropped the accents, only the word next to them tells: "ban phim" is a keyboard, "rau sach"
+// clean vegetables.
+// ponytail: hand-kept lists; accented keywords in the category templates would make them unnecessary.
 const NOT_KEYWORDS = new Set(['phím', 'phố', 'bé', 'sạch']);
+const NOT_KEYWORD_PHRASES = /(?<=^| )(?:ban phim|rau sach)(?= |$)/g;
 
 // The merchant and item names as the parser's keyword text: whole words, lower case, no accents.
 function keywordText(names) {
   const words = names.join(' ').toLowerCase().normalize('NFC').split(/[^\p{L}\p{N}]+/u);
-  return normalize(words.filter((word) => !NOT_KEYWORDS.has(word)).join(' '));
+  return normalize(words.filter((word) => !NOT_KEYWORDS.has(word)).join(' ')).replace(NOT_KEYWORD_PHRASES, '');
 }
 
 // "13/08/2020" → that Vietnamese day at the current time of day (like "dd/mm/yyyy" in the text parser); else now.

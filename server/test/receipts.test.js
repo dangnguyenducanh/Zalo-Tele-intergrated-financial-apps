@@ -386,6 +386,10 @@ test('TC-F10-07 a VAT invoice gives the total payable with VAT, not the goods su
     expect(draft.receipt.estimated, name).toBeUndefined();
     expect(draft.categoryId, name).toBe('Other'); // "Bàn phím" (keyboard) is not "phim" (film)
   }
+  // OCR often drops the accents: "Ban phim" is still a keyboard.
+  const invoice = await kieAnswer('bug034-vat-invoice-A');
+  invoice.line_items = invoice.line_items.map((item) => ({ ...item, name: item.name.replace('Bàn phím', 'Ban phim') }));
+  expect((await draftFrom(invoice)).categoryId).toBe('Other');
 });
 
 test('TC-F10-08 a Phiếu thu gives "Số tiền" 2.500.000, never the year of PT-09/2023 or the account code "Nợ: 1111" (BUG-035)', async () => {
@@ -439,6 +443,65 @@ test('TC-F10-10 a sideways WinMart+ photo gives "Tiền cần thanh toán" 92.40
     expect(draft.receipt.estimated, name).toBeUndefined();
     expect(draft.categoryId, name).toBe('Shopping'); // "WinMart+"
   }
+});
+
+// Variants found in review (PR #70): KIE's answer as text lines, with KIE's total as `total`.
+const textAnswer = (lines, total = '') => ({ fields: { total }, line_items: [], reconciliation: {}, full_text: lines.join('\n'), lines });
+const withLines = (answer, lines, total = answer.fields.total) => ({ ...answer, fields: { ...answer.fields, total }, full_text: lines.join('\n'), lines });
+
+test('TC-F10-12 a torn receipt is estimated from its item lines in every layout, never from one price, a list price, a phone number or a code (BUG-036)', async () => {
+  // Live KIE, the upright WinMart+ photo cut below its 4 items: a name line, then "1 × 45.900 45.900". KIE took one price.
+  const winmart = await kieAnswer('bug036-torn-winmart');
+  const items = [6, 8, 10, 12].map((i) => ({ name: winmart.lines[i], amount: Number(winmart.lines[i + 1].split(' ').at(-1).replace('.', '')) }));
+  for (const total of ['45900', '18900', '17400']) {
+    const draft = await draftFrom({ ...winmart, fields: { ...winmart.fields, total } });
+    expect([draft.amount, draft.receipt.estimated], total).toEqual([115100, true]);
+    expect(draft.receipt.items, total).toEqual(items);
+  }
+  // Live KIE, the mcocr minimart receipt cut below its items (KIE took 10.000): 6 products, "Giá đăng ký: 6,500" is a list price.
+  const minimart = await draftFor('bug036-torn-minimart');
+  expect([minimart.amount, minimart.receipt.estimated, minimart.receipt.items.length]).toEqual([116000, true, 6]);
+
+  // A phone number or a transaction code is never an item; an item discount counts, and never makes a read total.
+  const lines = ['CỬA HÀNG TIỆN LỢI', 'ĐT: +84 912.345.678', 'Mã GD: 2.611.240', 'Số HĐ: 004830', 'Cà phê sữa 20.000', 'KM -5.000', 'Bánh mì 15.000', 'Nước cam 18.000', 'TỔNG CỘNG:'];
+  const torn = await draftFrom(textAnswer(lines, '004830'));
+  expect([torn.amount, torn.receipt.estimated]).toEqual([48000, true]);
+  expect(torn.receipt.items.map((item) => item.amount)).toEqual([20000, -5000, 15000, 18000]);
+});
+
+test('TC-F10-13 a grand-total label that mentions VAT ("Tổng cộng (đã bao gồm VAT)") is the total, not the VAT line (BUG-034)', async () => {
+  // Live KIE, a supermarket receipt with that label, values one row off their labels; KIE took the 22.700 discount.
+  const supermarket = await draftFor('bug034-total-incl-vat');
+  expect([supermarket.amount, supermarket.receipt.estimated]).toEqual([92400, undefined]);
+  // A restaurant bill, KIE took "Tạm tính".
+  const bill = ['NHÀ HÀNG SEN', 'Lẩu thái 2 x 250.000 500.000', 'Tạm tính 500.000', 'VAT 8% 40.000', 'Tổng cộng (đã gồm VAT) 540.000', 'Tiền mặt 600.000', 'Tiền thừa 60.000'];
+  expect((await draftFrom(textAnswer(bill, '500000'))).amount).toBe(540000);
+  // VAT invoice B with "(đã gồm thuế GTGT)" in its total label and no amount in words; KIE took the goods subtotal.
+  const invoice = await kieAnswer('bug034-vat-invoice-B');
+  const lines = invoice.lines.toSpliced(16, 2, invoice.lines[16].replace(':', ' (đã gồm thuế GTGT):'));
+  expect(lines[16]).toMatch(/thanh toán \(đã gồm thuế GTGT\): 7\.480\.000$/);
+  expect((await draftFrom(withLines(invoice, lines, '6800000'))).amount).toBe(7480000);
+});
+
+test('TC-F10-14 the largest labelled value is not always the total: "Khách cần trả" beats the cash handed over, the total after discounts the one before (BUG-034)', async () => {
+  const shop = await draftFor('bug034-tendered-cash'); // live KIE took "Khách thanh toán 50.000"
+  expect([shop.amount, shop.receipt.estimated]).toEqual([35000, undefined]);
+  const minimart = ['MINIMART', 'Sữa 124.000', 'Tổng thanh toán 124.000', 'Số tiền nhận 200.000', 'Trả lại 76.000'];
+  expect((await draftFrom(textAnswer(minimart, '124000'))).amount).toBe(124000);
+  const discounted = ['SHOP', 'Áo thun 115.100', 'Tổng cộng 115.100', 'Chiết khấu -22.700', 'Thanh toán 92.400'];
+  expect((await draftFrom(textAnswer(discounted, '115100'))).amount).toBe(92400);
+});
+
+test('TC-F10-15 a total printed without thousands separators, or with decimals, is still read', async () => {
+  // The recorded mcocr receipt (KIE took 116.000 and its items add up), as OCR reads it without separators.
+  const noSeparators = (separator) => (line) => line.replace(/(\d),(\d{3})/g, `$1${separator}$2`);
+  const totalsBlock = (change) => recorded.lines.map((line, i) => (i >= 19 ? change(line) : line));
+  const variants = [totalsBlock(noSeparators('')), totalsBlock(noSeparators(' ')), recorded.lines.map(noSeparators(''))];
+  for (const lines of variants) {
+    const draft = await draftFrom(withLines(recorded, lines));
+    expect([draft.amount, draft.receipt.estimated], lines[20]).toEqual([116000, undefined]);
+  }
+  expect((await draftFrom(textAnswer(['SHOP', 'Áo thun 92,400.00', 'Tổng cộng: 92,400.00'], '92400.00'))).amount).toBe(92400);
 });
 
 test('TC-F8-24 a receipt whose total is torn off: the bot says the amount is an estimate from the item lines (BUG-036)', async () => {

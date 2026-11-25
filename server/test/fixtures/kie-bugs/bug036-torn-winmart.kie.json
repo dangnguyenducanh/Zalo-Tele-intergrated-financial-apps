@@ -1,0 +1,139 @@
+{
+  "fields": {
+    "merchant": "WinMart+",
+    "date": "24/11/2026",
+    "total": "45900",
+    "address": "WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1"
+  },
+  "line_items": [
+    {
+      "name": "Hotline: 024 7106 6866",
+      "quantity": null,
+      "unit_price": 7106,
+      "amount": 6866,
+      "confidence": 0.9994093179702759,
+      "line_index": 2,
+      "bbox": [
+        461.6666564941406,
+        463.3333435058594,
+        718.3333129882812,
+        491.6666564941406
+      ],
+      "raw_text": "Hotline: 024 7106 6866"
+    },
+    {
+      "name": "Ngày: 24/11/2026 19:05",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 30451,
+      "confidence": 0.9808502197265625,
+      "line_index": 5,
+      "bbox": [
+        286.6666564941406,
+        563.3333129882812,
+        903.3333129882812,
+        601.6666870117188
+      ],
+      "raw_text": "Ngày: 24/11/2026 19:05 NV: 30451"
+    },
+    {
+      "name": "1 × 18.900",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 18900,
+      "confidence": 0.9598433375358582,
+      "line_index": 7,
+      "bbox": [
+        311.6666564941406,
+        656.6666870117188,
+        906.6666870117188,
+        698.3333129882812
+      ],
+      "raw_text": "1 × 18.900 18.900"
+    },
+    {
+      "name": "1 × 45.900",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 45900,
+      "confidence": 0.9796096086502075,
+      "line_index": 9,
+      "bbox": [
+        313.3333435058594,
+        725,
+        910,
+        766.6666870117188
+      ],
+      "raw_text": "1 × 45.900 45.900"
+    },
+    {
+      "name": "1 × 32.900",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 32900,
+      "confidence": 0.9206631779670715,
+      "line_index": 11,
+      "bbox": [
+        311.6666564941406,
+        795,
+        911.6666870117188,
+        835
+      ],
+      "raw_text": "1 × 32.900 32.900"
+    },
+    {
+      "name": "1 × 17.400",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 17400,
+      "confidence": 0.9793866872787476,
+      "line_index": 13,
+      "bbox": [
+        311.6666564941406,
+        861.6666870117188,
+        913.3333129882812,
+        903.3333129882812
+      ],
+      "raw_text": "1 × 17.400 17.400"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 152417,
+    "extracted_total": 45900,
+    "difference": 106517,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      11
+    ]
+  },
+  "full_text": "WinMart+\nWM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1\nHotline: 024 7106 6866\nHÓA DON BÁN HÀNG\nSô'CT: 2611240045789\nNgày: 24/11/2026 19:05 NV: 30451\nRau muôńg VietGAP 500g\n1 × 18.900 18.900\nThit heo xay 300g\n1 × 45.900 45.900\nSǔa tuoi tiêt trùng 1L\n1 × 32.900 32.900\nNuc tuong 500ml\n1 × 17.400 17.400",
+  "lines": [
+    "WinMart+",
+    "WM+ HCM 45 Nguyêñ Vǎn Cùr, P. Câù Kho, Q.1",
+    "Hotline: 024 7106 6866",
+    "HÓA DON BÁN HÀNG",
+    "Sô'CT: 2611240045789",
+    "Ngày: 24/11/2026 19:05 NV: 30451",
+    "Rau muôńg VietGAP 500g",
+    "1 × 18.900 18.900",
+    "Thit heo xay 300g",
+    "1 × 45.900 45.900",
+    "Sǔa tuoi tiêt trùng 1L",
+    "1 × 32.900 32.900",
+    "Nuc tuong 500ml",
+    "1 × 17.400 17.400"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 39.62,
+    "ocr_ms": 4332.78,
+    "kie_ms": 5.53
+  }
+}

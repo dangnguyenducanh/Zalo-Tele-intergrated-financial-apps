@@ -1,0 +1,111 @@
+{
+  "fields": {
+    "merchant": "SIÊU THI MINI AN PHÚ",
+    "date": "24/11/2026",
+    "total": "22700",
+    "address": "45 Nguyn Văn C, P. Cu Kho, Q.1"
+  },
+  "line_items": [
+    {
+      "name": "Rau muőng VietGAP 500g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 18900,
+      "confidence": 0.9775083661079407,
+      "line_index": 5,
+      "bbox": [
+        253.3333282470703,
+        698.3333129882812,
+        940,
+        760
+      ],
+      "raw_text": "Rau muőng VietGAP 500g 18.900"
+    },
+    {
+      "name": "Thit heo xay 300g",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 32900,
+      "confidence": 0.9964519739151001,
+      "line_index": 7,
+      "bbox": [
+        253.3333282470703,
+        756.6666870117188,
+        941.6666870117188,
+        811.6666870117188
+      ],
+      "raw_text": "Thit heo xay 300g 32.900"
+    },
+    {
+      "name": "Sa tuơi tit trùng 1L",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 17400,
+      "confidence": 0.9799152612686157,
+      "line_index": 8,
+      "bbox": [
+        255,
+        795,
+        946.6666870117188,
+        853.3333129882812
+      ],
+      "raw_text": "Sa tuơi tit trùng 1L 17.400"
+    },
+    {
+      "name": "Nuc tuơng 500ml",
+      "quantity": null,
+      "unit_price": null,
+      "amount": 115100,
+      "confidence": 0.9254261255264282,
+      "line_index": 10,
+      "bbox": [
+        255,
+        833.3333129882812,
+        950,
+        921.6666870117188
+      ],
+      "raw_text": "Nuc tuơng 500ml 115.100"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 184300,
+    "extracted_total": 22700,
+    "difference": 161600,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      10
+    ]
+  },
+  "full_text": "SIÊU THI MINI AN PHÚ\n45 Nguyn Văn C, P. Cu Kho, Q.1\nHÓA DON BÁN HÀNG\n19:05\nNgày: 24/11/2026\nRau muőng VietGAP 500g 18.900\n45.900\nThit heo xay 300g 32.900\nSa tuơi tit trùng 1L 17.400\nNuc tuơng 500ml\n115.100\nTng tin hàng -22.700\nChit kháu 92.400\nTng cng (đã bao gôm VAT) 100.000\nTién khách đua 7.600\nTién thi li",
+  "lines": [
+    "SIÊU THI MINI AN PHÚ",
+    "45 Nguyn Văn C, P. Cu Kho, Q.1",
+    "HÓA DON BÁN HÀNG",
+    "19:05",
+    "Ngày: 24/11/2026",
+    "Rau muőng VietGAP 500g 18.900",
+    "45.900",
+    "Thit heo xay 300g 32.900",
+    "Sa tuơi tit trùng 1L 17.400",
+    "Nuc tuơng 500ml",
+    "115.100",
+    "Tng tin hàng -22.700",
+    "Chit kháu 92.400",
+    "Tng cng (đã bao gôm VAT) 100.000",
+    "Tién khách đua 7.600",
+    "Tién thi li"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "none",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 36.11,
+    "ocr_ms": 4806.83,
+    "kie_ms": 5.05
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "fields": {
+    "merchant": "HÓA ĐON BÁN HANG",
+    "date": "",
+    "total": "10000",
+    "address": "Tên hàng SL DVT Đon giá Thành tin 8936136161334 mì omachi 102 bò nu dua ch N0"
+  },
+  "line_items": [
+    {
+      "name": "mì omachi 102 bò nu dua ch N0",
+      "quantity": 1,
+      "unit_price": 10000,
+      "amount": 10000,
+      "confidence": 0.9863330721855164,
+      "line_index": 6,
+      "bbox": [
+        306.6372375488281,
+        411.98333740234375,
+        814.0811157226562,
+        474.3229064941406
+      ],
+      "raw_text": "8936136161334 mì omachi 102 bò nu dua ch N0 1 GOI 10,000 10,000"
+    },
+    {
+      "name": "mì omachi bò hm nãu gói 10 N0",
+      "quantity": 1,
+      "unit_price": 10000,
+      "amount": 10000,
+      "confidence": 0.9707708358764648,
+      "line_index": 8,
+      "bbox": [
+        305.2804260253906,
+        479.7437438964844,
+        822.2219848632812,
+        542.0833129882812
+      ],
+      "raw_text": "8936136161440 mì omachi bò hm nãu gói 10 N0 1 GOI 10,000 10,000"
+    },
+    {
+      "name": "bánh mì bò kd NT",
+      "quantity": 2,
+      "unit_price": 8000,
+      "amount": 16000,
+      "confidence": 0.9847627878189087,
+      "line_index": 10,
+      "bbox": [
+        301.21002197265625,
+        548.859375,
+        830.36279296875,
+        609.84375
+      ],
+      "raw_text": "8934680045681 bánh mì bò kd NT 2 GOI 8,000 16,000"
+    },
+    {
+      "name": "Mi omachi bò 82g NT",
+      "quantity": 5,
+      "unit_price": 6000,
+      "amount": 30000,
+      "confidence": 0.9923398494720459,
+      "line_index": 12,
+      "bbox": [
+        297.1396179199219,
+        617.9749755859375,
+        834.4331665039062,
+        680.3145751953125
+      ],
+      "raw_text": "291005570000 Mi omachi bò 82g NT 5 GOI 6,000 30,000"
+    },
+    {
+      "name": "Giá án",
+      "quantity": null,
+      "unit_price": 6250,
+      "amount": 25000,
+      "confidence": 0.9930893182754517,
+      "line_index": 15,
+      "bbox": [
+        283.57159423828125,
+        760.2718505859375,
+        841.2171630859375,
+        798.2177124023438
+      ],
+      "raw_text": "Giá án: HOP 6,250 25,000"
+    },
+    {
+      "name": "Sa kun cam, dåu 180ml NT",
+      "quantity": 4,
+      "unit_price": 6250,
+      "amount": 25000,
+      "confidence": 0.9974374771118164,
+      "line_index": 18,
+      "bbox": [
+        283.57159423828125,
+        804.9937744140625,
+        845.28759765625,
+        914.765625
+      ],
+      "raw_text": "291016570000 Sa kun cam, dåu 180ml NT Giá bán: 4 CAI 6,250 25,000"
+    }
+  ],
+  "reconciliation": {
+    "calculated_total": 116000,
+    "extracted_total": 10000,
+    "difference": 106000,
+    "tolerance": 1000,
+    "is_math_consistent": false,
+    "suspected_line_indices": [
+      8
+    ]
+  },
+  "full_text": "MINIMART ANAN\nChq Súi Phú Thi Gia Làm\nTel:\nHÓA ĐON BÁN HANG\nTên hàng SL DVT Đon giá Thành tin\n8936136161334 mì omachi 102 bò nu dua ch N0\n1 GOI 10,000 10,000\n8936136161440 mì omachi bò hm nãu gói 10 N0\n1 GOI 10,000 10,000\n8934680045681 bánh mì bò kd NT\n2 GOI 8,000 16,000\n291005570000 Mi omachi bò 82g NT\n5 GOI 6,000 30,000\n291014560000 Sa kun socola, duàng 180ml NT\nGiá đǎng ký: 6,500\nGiá án: HOP 6,250 25,000\n291016570000 Sa kun cam, dåu 180ml NT\nGiá đăng ký: 6,500\nGiá bán: 4 CAI 6,250 25,000\nTR",
+  "lines": [
+    "MINIMART ANAN",
+    "Chq Súi Phú Thi Gia Làm",
+    "Tel:",
+    "HÓA ĐON BÁN HANG",
+    "Tên hàng SL DVT Đon giá Thành tin",
+    "8936136161334 mì omachi 102 bò nu dua ch N0",
+    "1 GOI 10,000 10,000",
+    "8936136161440 mì omachi bò hm nãu gói 10 N0",
+    "1 GOI 10,000 10,000",
+    "8934680045681 bánh mì bò kd NT",
+    "2 GOI 8,000 16,000",
+    "291005570000 Mi omachi bò 82g NT",
+    "5 GOI 6,000 30,000",
+    "291014560000 Sa kun socola, duàng 180ml NT",
+    "Giá đǎng ký: 6,500",
+    "Giá án: HOP 6,250 25,000",
+    "291016570000 Sa kun cam, dåu 180ml NT",
+    "Giá đăng ký: 6,500",
+    "Giá bán: 4 CAI 6,250 25,000",
+    "TR"
+  ],
+  "preprocessing": {
+    "steps": {
+      "shadow_removal": true,
+      "deskew": "rotate_hough(10.73)",
+      "clahe": true
+    }
+  },
+  "timings_ms": {
+    "preprocessing_ms": 25.18,
+    "ocr_ms": 6457.3,
+    "kie_ms": 10.45
+  }
+}
