@@ -19,7 +19,7 @@ erDiagram
     USER ||--o{ TRANSACTION : records
     USER ||--o{ BUDGET : plans
     USER ||--o{ CHAT_LINK : "links chats"
-    USER ||--o{ LINK_CODE : "requests codes"
+    USER |o--o{ LINK_CODE : "requests codes"
     WALLET ||--o{ TRANSACTION : "paid from"
     CATEGORY ||--o{ TRANSACTION : classifies
     CATEGORY ||--o{ BUDGET : "limited by"
@@ -29,7 +29,7 @@ erDiagram
 
 8 collections. The slides require at least 3 with relations.
 
-*Planned (§2.10, see §3.6):* no new collection. A claim link in `linkCodes` has no `userId`, so a `LINK_CODE` will belong to one user or to none (`USER |o--o{ LINK_CODE`).
+A `linkCodes` row belongs to one user (a code made on the website) or to none (a claim link made by the bot for a chat that is not linked yet).
 
 *Planned (§2.11, see §3.7):* ten new collections. `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`, `pendingActions` and `notices` belong to a user (`USER ||--o{ AGENT_TURN`, `USER ||--o{ AGENT_MEMORY`, `USER ||--o{ AGENT_CATEGORY_VECTOR`, `USER ||--o{ RECEIPT_READ`, `USER ||--o{ PENDING_ACTION`, `USER ||--o{ NOTICE`), and each category has at most one vector (`CATEGORY ||--o| AGENT_CATEGORY_VECTOR`). An `agentSkills` row belongs to one user or, for a system skill, to none (`USER |o--o{ AGENT_SKILL`). `agentTools`, `channelUsage` and `appSettings` belong to no user. `chatLinks.lastConfirmedId` adds `CHAT_LINK |o--o| TRANSACTION : "last confirmed"`.
 
@@ -157,25 +157,45 @@ A budget whose category was deleted is hidden from the list and skipped by "copy
 | `chatId` | String | where to send replies |
 | `displayName` | String | shown on the Bot inbox |
 | `pendingTransactionId` | ObjectId → Transaction \| null | the draft a typed `ok`/`huy` (Telegram and Zalo) or a Zalo amount-only correction acts on; set by text and receipt drafts. If it is no longer a waiting draft, the newest waiting draft from that chat is used. |
+| `viaClaim` | Boolean | default `false`; `true` for a link made by a claim link (§2.10.5). Older rows read as `false` through the default, so no migration |
+| `claimNoticeDismissedAt` | Date \| null | when the user dismissed the "Not you? [Unlink]" notice; the Bot inbox shows it while `viaClaim && !claimNoticeDismissedAt` |
 
-Indexes: `{ platform: 1, platformUserId: 1 }` **unique** (one web account per chat account); `{ userId: 1 }`.
+Indexes: `{ platform: 1, platformUserId: 1 }` **unique** (one web account per chat account, and the backstop when a chat was linked between its claim link and Confirm); `{ userId: 1 }`.
 
-*Planned (§2.10, see §3.6):* `platform` gains `whatsapp`; for WhatsApp, `platformUserId` and `chatId` are the user's business-scoped user ID (BSUID), never the phone number. Two fields are added for the claim-link notice: `viaClaim` and `claimNoticeDismissedAt`.
+Rows are created two ways: by `/start CODE` / `/link CODE` in the chat (from the message plus the code's `userId`) and by `POST /api/chat-links/claim` (from the claim link's `chat` plus the logged-in user, with `viaClaim: true`).
+
+*Planned (§2.10, see §3.6):* `platform` gains `whatsapp`; for WhatsApp, `platformUserId` and `chatId` are the user's business-scoped user ID (BSUID), never the phone number.
 
 *Planned (§2.11, see §3.7):* one field, `lastConfirmedId`, for fixing or undoing from chat.
 
 ### `linkCodes`
 
+A one-time secret that links a chat to a web account. Two kinds of row:
+
 | Field | Type | Notes |
 |---|---|---|
-| `userId` | ObjectId → User | required |
-| `codeHash` | String | SHA-256 of the 6-char code (A–Z, 2–9, no look-alikes) |
+| `userId` | ObjectId → User | set only on a **code**, made on the website |
+| `chat` | `{ platform, platformUserId, chatId, displayName }` | set only on a **claim link**, made by the bot; the four fields mean the same as in `chatLinks` (whose model checks the platform) |
+| `codeHash` | String | SHA-256 of the 6-char code (A–Z, 2–9, no look-alikes), or of the claim link's token |
 | `expiresAt` | Date | now + 10 minutes |
 | `usedAt` | Date \| null | one-time use |
 
-Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`.
+| | Code (F7) | Claim link (§2.10.3) |
+|---|---|---|
+| Created by | `POST /api/chat-links/code` on the website | the bot, when a chat that is not linked sends anything except a valid `/start CODE` or `/link CODE` (a wrong or expired code counts as anything) |
+| Secret | 6 characters | 24 random bytes as a 32-character base64url token |
+| Used by | the chat: `/start CODE` (Telegram deep link) or `/link CODE` | the website: `POST /api/chat-links/claim { token }`, after `/link?t=<token>` and Confirm |
+| Matches only rows with | `userId` | `chat` |
+| How many | at most 5 new codes per user per 10 minutes (rate limit) | at most one live claim link per chat |
 
-*Planned (§2.10, see §3.6):* `userId` becomes optional and a `chat` sub-document is added, so a row is either a code (made on the website) or a claim link (made by the bot).
+- **Exactly one of `userId` and `chat` is set**, checked by a model validator.
+- **Neither kind works in the other's place.** Each lookup is one atomic update (`codeHash`, `usedAt: null`, `expiresAt` in the future → set `usedAt`) that also requires `userId` (redeeming in the chat) or `chat` (claiming on the website). `POST /api/chat-links/claim/preview` matches the same way and changes nothing, so Cancel leaves the token to expire. No match (unknown, used, expired, or the other kind) → 404 `LINK_TOKEN_INVALID` on the website.
+- **Hashing.** Both kinds are stored as a SHA-256 (hex). A code is trimmed and upper-cased before hashing; base64url is case-sensitive, so a token is hashed exactly as received.
+- **One claim link per chat.** The bot writes it with one atomic upsert on (`chat.platform`, `chat.platformUserId`), which replaces the chat's older row, so the older link stops working.
+
+Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`; `{ 'chat.platform': 1, 'chat.platformUserId': 1 }` **unique, partial** (only rows with `chat.platformUserId`), which keeps "one claim link per chat" true when two messages of a chat are handled at the same moment (MongoDB retries the losing upsert).
+
+**Privacy.** The only thing stored for a chat that is not linked is its one claim-link row (the chat's ids and display name; no message text), which the TTL index removes. MongoDB's TTL sweep runs about once a minute, so a row can outlive `expiresAt` briefly; every lookup checks `expiresAt` itself. Only the SHA-256 of a token is stored. The token travels in the bot's reply, in `/link?t=…` (which the page removes from the address bar) and in request bodies.
 
 ## 3.4 Key aggregations
 
@@ -215,33 +235,7 @@ Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`.
 
 ## 3.6 One-tap linking and WhatsApp (planned, §2.10)
 
-None of this is built yet. It lists what docs/02 §2.10 changes against §3.3; as each part is built, its change moves into §3.3 and is removed here. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. §2.10 adds no collection and no index.
-
-### `linkCodes`: codes and claim links (planned)
-
-| Field | Today | Planned |
-|---|---|---|
-| `userId` | ObjectId → User, required | ObjectId → User, **optional**: set only on a code made on the website |
-| `chat` | — | **new** `{ platform, platformUserId, chatId, displayName }`: set only on a claim link made by the bot. The four fields mean the same as in `chatLinks` |
-| `codeHash` | SHA-256 of the 6-char code | unchanged for codes; for a claim link, the SHA-256 of its token (§2.10 adds no second hash field) |
-| `expiresAt`, `usedAt` | now + 10 minutes; one-time use | unchanged, for both kinds |
-
-| | Code (F7, as today) | Claim link (new, §2.10.3) |
-|---|---|---|
-| Created by | `POST /api/chat-links/code` on the website | the bot, when a chat that is not linked sends anything except `/start CODE` or `/link CODE` (a wrong or expired code counts as anything) |
-| Field set | `userId` (the user who asked) | `chat` (the chat that asked) |
-| Secret | 6 characters, A–Z and 2–9 without look-alikes | random 24 bytes, sent as a 32-character base64url token |
-| Stored | SHA-256 only, in `codeHash` | SHA-256 only, in `codeHash` |
-| Lifetime | 10 minutes, single use | 10 minutes, single use |
-| Used by | the chat: `/start CODE` (Telegram deep link) or `/link CODE` | the website: `POST /api/chat-links/claim { token }`, after `/link?t=<token>` and Confirm |
-| Matches only rows with | `userId` | `chat` |
-| How many | at most 5 new codes per user per 10 minutes (rate limit, F7) | at most one live claim link per chat |
-
-- **Exactly one of `userId` and `chat` is set.** `userId` loses `required`. §2.10 states the rule but not where it is checked (model validator or the code that writes rows): left to the builder. Every existing row has `userId` and no `chat`, so it is already a valid code; no migration.
-- **Neither kind works in the other's place.** Redeeming in the chat keeps today's single atomic update (`codeHash`, `usedAt: null`, `expiresAt` in the future → set `usedAt`) and adds "`userId` is set". `POST /api/chat-links/claim` is the same single atomic update with "`chat` is set" instead, then creates the `chatLinks` row from `chat` plus the logged-in user's `userId`. `POST /api/chat-links/claim/preview` matches the same way and changes nothing, so Cancel leaves the token to expire. No match (unknown, used, expired, or a code) → 404 `LINK_TOKEN_INVALID`.
-- **Hashing.** The same SHA-256 (hex) as today, so both kinds share the unique `{ codeHash: 1 }` index. A code is trimmed and upper-cased before hashing; base64url is case-sensitive, so a token is hashed exactly as received.
-- **One live claim link per chat.** Before creating one, the bot deletes any older live (unused, unexpired) claim link for the same chat, so a second message gives a new link and the first stops working (§2.10.6). §2.10 does not name the key for "the same chat"; `chat.platform` + `chat.platformUserId`, the pair `chatLinks` is unique on, is the natural one. Delete-then-create is two writes, not one atomic step, and §2.10 asks for no index to enforce it.
-- **Indexes unchanged.** `{ codeHash: 1 }` unique serves both kinds, and the TTL index `{ expiresAt: 1 }, expireAfterSeconds: 0` removes both. No index covers the delete-by-`chat` query; the collection only holds rows from about the last 10 minutes, and §2.10 leaves adding one to the builder.
+Not built yet (linking from the chat is, and is described in §3.3). It lists what docs/02 §2.10 still changes against §3.3; as each part is built, its change moves into §3.3 and is removed here. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. These parts add no collection and no index.
 
 ### `chatLinks` (planned)
 
@@ -251,12 +245,9 @@ None of this is built yet. It lists what docs/02 §2.10 changes against §3.3; a
 | `platformUserId` | Telegram / Zalo `from.id` | WhatsApp: the user's business-scoped user ID (BSUID): `from_user_id` on the message, `user_id` on the contact. Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key |
 | `chatId` | where to send replies | WhatsApp: the same BSUID; replies are sent with `recipient_type: "individual"` and `recipient: <BSUID>`, never `to` (§2.10.4) |
 | `displayName` | shown on the Bot inbox | WhatsApp: `value.contacts[0].profile.name` |
-| `viaClaim` | — | **new** Boolean, default `false`; `true` for a link made by a claim link (§2.10.5) |
-| `claimNoticeDismissedAt` | — | **new** Date \| null, default `null`; when the user dismissed the "Not you? [Unlink]" notice for this link |
 
-- Rows are created two ways: by `/start CODE` / `/link CODE` in the chat (from the message plus the code's `userId`, as today, now from WhatsApp too; `viaClaim` keeps its default `false`) and by `POST /api/chat-links/claim` (from the claim link's `chat` plus the logged-in user, with `viaClaim: true`).
-- `GET /api/chat-links` also returns `viaClaim` and `claimNoticeDismissedAt`. The Bot inbox shows the notice for every link with `viaClaim && !claimNoticeDismissedAt`; `PATCH /api/chat-links/:id/claim-notice` (own links only) sets `claimNoticeDismissedAt` to now. Existing rows read as `viaClaim: false` through the schema default, so no migration.
-- Indexes unchanged. `{ platform: 1, platformUserId: 1 }` unique now also means one web account per WhatsApp user (BSUID), and it is the backstop when a chat was linked between the claim link and Confirm: 409 `CHAT_ALREADY_LINKED`, and the token stays spent (§2.10.3).
+- WhatsApp rows are created the same two ways as today's (§3.3).
+- Indexes unchanged. `{ platform: 1, platformUserId: 1 }` unique then also means one web account per WhatsApp user (BSUID).
 
 ### `transactions` (planned)
 
@@ -272,8 +263,6 @@ None of this is built yet. It lists what docs/02 §2.10 changes against §3.3; a
 
 ### Privacy (planned)
 
-- **Unlinked chats.** Today the bot stores nothing for a chat that is not linked. With claim links it stores one `linkCodes` row per unlinked chat that writes in (its `chat` ids and display name) until the TTL index removes it. MongoDB's TTL sweep runs about once a minute, so a row can outlive `expiresAt` briefly; the claim query checks `expiresAt` itself, as redeeming a code does today.
-- **Tokens.** Only the SHA-256 of a claim token is stored, like codes and refresh tokens. The token travels in the bot's reply, in `/link?t=…` (which the page removes from the address bar) and in request bodies, never in a URL the server logs (§2.10.3).
 - **WhatsApp: no phone number is stored.** The key is the BSUID (§2.10.4), so `chatLinks`, `linkCodes.chat` and `transactions.chatRef` hold the BSUID, never a phone number. The web shows `displayName` (the WhatsApp profile name), and admin stats count chats per platform without identifiers. Transaction responses still carry `chatRef` as today (the model's `toJSON` keeps it), so a WhatsApp draft's response carries the BSUID, not a phone number.
 
 ## 3.7 Assistant and agent features (planned, §2.11)
