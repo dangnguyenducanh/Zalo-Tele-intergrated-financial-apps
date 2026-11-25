@@ -156,7 +156,7 @@ Today `LinkCard.tsx` shows, once a code exists, the code and countdown, then a T
 |---|---|---|
 | Data | `telegramDeepLink` from `POST /api/chat-links/code` | `links: { telegram, whatsapp, zalo }`, each a URL or `null`. The client uses them as given and builds no URL itself |
 | Layout | Telegram block and Zalo text shown together | An app picker **Telegram \| WhatsApp \| Zalo** (one choice); below it only the selected app's button, instruction line and QR |
-| Default app | – | The first app, in that order, with no row in `GET /api/chat-links` for this user (the list the card already polls) |
+| Default app | – | The first shown app (link not `null`), in that order, that is not linked yet: no row in `GET /api/chat-links` for this user (the list the card already polls). An app left out of the picker is never the default |
 | Missing settings | Telegram block hidden when `telegramDeepLink` is `null`; Zalo text always shown | Any app whose link is `null` is left out of the picker (Zalo too, when `ZALO_BOT_URL` is not set) |
 | QR | The Telegram deep link | The selected app's link. For Zalo it only opens the bot, so the large code stays on screen |
 | Feedback | The new account appears under **Linked accounts** | Also `Linked ✓ <App> · <name>` on the card, as soon as the polled list has a link it did not have when the code was made |

@@ -102,13 +102,15 @@ The bot variables are the same in both projects. A bot has one webhook, and both
 node --env-file=server/.env server/src/scripts/setWebhooks.js https://<project>.vercel.app
 ```
 
-   By hand, for Telegram only:
+   By hand, for Telegram only. `set-secret.sh` writes the values only to `server/.env` and Vercel, so **load them from `server/.env` first**: in a subshell `( … )`, so they don't stay in your shell, and only the keys the command needs (sourcing the whole file can break on values such as a `MONGODB_URI` with `&`). The token and secret then reach curl **through stdin** (`-K -` reads curl options from it), not as arguments: `printf` is a shell builtin and starts no process, while curl's arguments are visible to every user of the machine in `ps` for as long as curl runs.
 
 ```bash
-curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -d "url=https://<project>.vercel.app/api/webhooks/telegram" -d "secret_token=$TELEGRAM_WEBHOOK_SECRET" -d 'allowed_updates=["message","callback_query"]'
+( . <(grep -E '^(TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET)=' server/.env)
+  printf 'url = https://api.telegram.org/bot%s/setWebhook\ndata = secret_token=%s\n' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_WEBHOOK_SECRET" |
+    curl -s -K - -d "url=https://<project>.vercel.app/api/webhooks/telegram" -d 'allowed_updates=["message","callback_query"]' )
 ```
 
-4. Check it: `curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo"` should show the URL and no `last_error_message`.
+4. Check it the same way: `( . <(grep '^TELEGRAM_BOT_TOKEN=' server/.env); printf 'url = https://api.telegram.org/bot%s/getWebhookInfo\n' "$TELEGRAM_BOT_TOKEN" | curl -s -K - )` should show the URL and no `last_error_message`.
 
 ## 6.5 Zalo bot
 
@@ -118,10 +120,12 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -d "url=htt
    3. Name it with the required **"Bot" prefix**, e.g. **"Bot Sổ Chi Tiêu"**, fill in the rest, and tap **Tạo Bot**.
    4. Zalo sends the bot info and the **Bot Token** to your Zalo account as a message. Save it with `tools/set-secret.sh ZALO_BOT_TOKEN` (§6.3), which writes `server/.env` and pushes it to both Vercel projects.
 2. Generate a secret (8–256 chars): `openssl rand -hex 24`.
-3. Register the webhook (polling via `getUpdates` stops working once a webhook is set). `setWebhooks.js` (§6.4) does it together with Telegram; by hand:
+3. Register the webhook (polling via `getUpdates` stops working once a webhook is set). `setWebhooks.js` (§6.4) does it together with Telegram; by hand, loading the two keys from `server/.env` and passing them through stdin as in §6.4 (keep the JSON free of spaces: curl reads an unquoted option value up to the first space):
 
 ```bash
-curl -s "https://bot-api.zaloplatforms.com/bot$ZALO_BOT_TOKEN/setWebhook" -H 'Content-Type: application/json' -d "{\"url\":\"https://<project>.vercel.app/api/webhooks/zalo\",\"secret_token\":\"$ZALO_WEBHOOK_SECRET\"}"
+( . <(grep -E '^(ZALO_BOT_TOKEN|ZALO_WEBHOOK_SECRET)=' server/.env)
+  printf 'url = https://bot-api.zaloplatforms.com/bot%s/setWebhook\ndata = {"url":"https://<project>.vercel.app/api/webhooks/zalo","secret_token":"%s"}\n' "$ZALO_BOT_TOKEN" "$ZALO_WEBHOOK_SECRET" |
+    curl -s -K - -H 'Content-Type: application/json' )
 ```
 
 4. Check it with `getWebhookInfo` (same base URL), then send the bot a text and a photo. Look at the **first real payloads** in Vercel → Logs to confirm `event_name`, `message.chat.id` and `message.photo_url` (field names come from community SDKs).
@@ -226,13 +230,15 @@ It saves them in `server/.env` and pushes them to **both** Vercel projects. The 
 
 **Register the number and the webhook** (after that deploy; production URL, as in §6.4):
 
-1. Register the number for the Cloud API, once, with a 6-digit two-step verification PIN you choose (keep it: Meta asks for it to change or remove the number). `<version>` is the Graph API version pinned in the adapter (§2.10.4, chosen at build time):
+1. Register the number for the Cloud API, once, with a 6-digit two-step verification PIN you choose (keep it: Meta asks for it to change or remove the number). `<version>` is the Graph API version pinned in the adapter (§2.10.4, chosen at build time). Load the two keys from `server/.env` first, and pass the token through stdin as in §6.4: `-H @-` reads the `Authorization` header from stdin, so the token never appears in curl's arguments (visible in `ps`):
 
 ```bash
-curl -s "https://graph.facebook.com/<version>/$WHATSAPP_PHONE_NUMBER_ID/register" -H "Authorization: Bearer $WHATSAPP_ACCESS_TOKEN" -H 'Content-Type: application/json' -d '{"messaging_product":"whatsapp","pin":"<6 digits>"}'
+( . <(grep -E '^(WHATSAPP_ACCESS_TOKEN|WHATSAPP_PHONE_NUMBER_ID)=' server/.env)
+  printf 'Authorization: Bearer %s\n' "$WHATSAPP_ACCESS_TOKEN" |
+    curl -s "https://graph.facebook.com/<version>/$WHATSAPP_PHONE_NUMBER_ID/register" -H @- -H 'Content-Type: application/json' -d '{"messaging_product":"whatsapp","pin":"<6 digits>"}' )
 ```
 
-   Check it: `GET https://graph.facebook.com/<version>/$WHATSAPP_PHONE_NUMBER_ID?fields=status,name_status` (same header) shows `status: CONNECTED`, and `name_status` tells whether the display name is approved. If the display name is changed later, register again once Meta approves the new name.
+   Check it: `GET https://graph.facebook.com/<version>/$WHATSAPP_PHONE_NUMBER_ID?fields=status,name_status` (same subshell, header through stdin) shows `status: CONNECTED`, and `name_status` tells whether the display name is approved. If the display name is changed later, register again once Meta approves the new name.
 2. **Use cases → Customize → Configuration** (older apps: **WhatsApp → Configuration**): **Callback URL** `https://sochitieu-btl.vercel.app/api/webhooks/whatsapp`, **Verify token** = the `WHATSAPP_VERIFY_TOKEN` value → **Verify and save**. Meta sends the `GET` setup check (§2.10.4) and saves only if the route answers 200 with `hub.challenge`.
 3. Under **Webhook fields**, **Subscribe** to `messages` only. It carries incoming messages and the sent/delivered/read statuses, which the route ignores.
 4. Check it: send `phở 45k` to the business number from a phone; the draft comes back with ✅ / ❌ / ✏️ buttons and the `POST` shows in Vercel → Logs. If Meta's dashboard test reaches the route but real messages never do, the app may not be subscribed to the WhatsApp Business account: `GET https://graph.facebook.com/<version>/<WABA_ID>/subscribed_apps` should list it, and a `POST` to the same URL with the access token subscribes it.
