@@ -11,6 +11,9 @@ import { qrSvgPath } from './qrCode';
 
 const CHECK_LINKS_MS = 5000; // while a code is live, look for the new chat link every 5 s
 const CODE_LIFETIME_MS = 10 * 60 * 1000; // a code was made this long before its expiresAt (CODE_TTL_MS in server/src/services/chatLinks.js)
+// The bot checks the expiry first and saves the link a database round trip later (redeemLinkCode), so a code redeemed
+// at the very end makes a link dated just after expiresAt.
+const LATE_LINK_MS = 5000;
 const APPS: ChatApp[] = ['telegram', 'whatsapp', 'zalo'];
 const BUTTON = {
   telegram: { label: 'link.openTelegram', icon: <TelegramIcon /> },
@@ -26,13 +29,13 @@ function firstApp(code: LinkCode, linked: ChatLink[]): ChatApp | null {
 }
 
 // The chat linked while this code was valid, which is how the card knows the bot redeemed it. Both times are the
-// server's, so any copy of the list can be judged, however old: a link made before the code or after it expired
-// did not come from it.
+// server's, so any copy of the list can be judged, however old: a link made before the code, or more than
+// LATE_LINK_MS after it expired, did not come from it.
 function redeemedLink(code: LinkCode, links: ChatLink[]) {
   const expires = Date.parse(code.expiresAt);
   return links.find((link) => {
     const made = Date.parse(link.createdAt);
-    return made >= expires - CODE_LIFETIME_MS && made <= expires;
+    return made >= expires - CODE_LIFETIME_MS && made <= expires + LATE_LINK_MS;
   });
 }
 

@@ -625,6 +625,7 @@ test('TC-F7-14 an expired, unused code is not "Linked ✓" when an unlink reload
     await act(() => vi.advanceTimersByTimeAsync(4000));
     expect(await within(linkCard).findByText('Mã đã hết hạn. Hãy tạo mã mới.')).toBeInTheDocument();
 
+    await act(() => vi.advanceTimersByTimeAsync(5000)); // past the few seconds a code redeemed at the very end is allowed
     links = [...links, { id: 'l1', platform: 'zalo', displayName: 'Phone Zalo', createdAt: new Date().toISOString() }]; // linked elsewhere later
     await user.click(within(linked).getByRole('button', { name: 'Huỷ liên kết Telegram · Old TG' })); // the unlink reloads the list
     await user.click(within(await screen.findByRole('dialog', { name: 'Huỷ liên kết?' })).getByRole('button', { name: 'Huỷ liên kết' }));
@@ -659,6 +660,28 @@ test('TC-F7-14 a code redeemed after the last 5 s check is "Linked ✓" once it 
     await act(() => vi.advanceTimersByTimeAsync(5000));
     expect(within(linkCard).queryByText(/Đã liên kết ✓/)).not.toBeInTheDocument();
     expect(within(linkCard).getByText('XYZ567')).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// The bot checks the expiry first and saves the link a database round trip later (redeemLinkCode).
+test('TC-F7-14 a code redeemed at the very end, its link saved just after expiresAt, is still "Linked ✓"', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let expiresAt = 0;
+    codeAnswer = () => {
+      expiresAt = Date.now() + 3000;
+      return codeWith('ABC234', { telegram: TG('ABC234') }, 3000)();
+    };
+    renderApp('/bot');
+    await user.click(await screen.findByRole('button', { name: 'Tạo mã liên kết' }));
+    const linkCard = screen.getByRole('region', { name: CARD });
+    expect(await within(linkCard).findByText('ABC234')).toBeInTheDocument();
+    links = [{ id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: new Date(expiresAt + 40).toISOString() }];
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    expect(await within(linkCard).findByText('Đã liên kết ✓ Telegram · Anh')).toBeInTheDocument();
   } finally {
     vi.useRealTimers();
   }
