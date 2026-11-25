@@ -33,6 +33,19 @@ function parseVnd(text: string): number | null {
   return /^-?\d+$/.test(digits) ? Number(digits) : null;
 }
 
+type BalanceError = 'initialBalance' | 'initialBalanceMax' | 'initialBalanceCreditOnly';
+
+// The message key of what is wrong with the opening balance: not a whole number, beyond ±MAX_MONEY, or below
+// zero on a wallet that is not a credit card (BUG-038, the server refuses it too). Like the server, a wallet
+// saved below zero before that rule passes while its type and opening balance stay as they are.
+function balanceError(amount: number | null, type: WalletType, wallet?: Wallet): BalanceError | undefined {
+  if (amount === null) return 'initialBalance';
+  if (Math.abs(amount) > MAX_MONEY) return 'initialBalanceMax';
+  const unchanged = wallet?.type === type && wallet.initialBalance === amount;
+  if (amount < 0 && type !== 'credit' && !unchanged) return 'initialBalanceCreditOnly';
+  return undefined;
+}
+
 type Props = { wallet?: Wallet; onClose: () => void }; // no wallet = add a new one
 
 // Add/edit dialog for one wallet: name, type, opening balance and the aliases the bot understands (docs/05 §5.7).
@@ -48,16 +61,14 @@ export default function WalletDialog({ wallet, onClose }: Props) {
   const [type, setType] = useState<WalletType>(wallet?.type ?? 'cash');
   const [initialBalance, setInitialBalance] = useState(String(wallet?.initialBalance ?? ''));
   const [aliases, setAliases] = useState(wallet?.aliases ?? []);
-  // initialBalance holds the message key of what is wrong with it: not a whole number, or beyond ±MAX_MONEY.
-  const [errors, setErrors] = useState<{ name?: boolean; initialBalance?: 'initialBalance' | 'initialBalanceMax' }>({});
+  const [errors, setErrors] = useState<{ name?: boolean; initialBalance?: BalanceError }>({});
   const [serverError, setServerError] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = name.trim();
     const amount = parseVnd(initialBalance);
-    const overMax = amount !== null && Math.abs(amount) > MAX_MONEY;
-    const found = { name: trimmed.length < 1 || trimmed.length > 40, initialBalance: amount === null ? 'initialBalance' : overMax ? 'initialBalanceMax' : undefined } as const;
+    const found = { name: trimmed.length < 1 || trimmed.length > 40, initialBalance: balanceError(amount, type, wallet) };
     setErrors(found);
     if (found.name || found.initialBalance || amount === null) {
       // Focus the first wrong field so keyboard and screen reader users land on the problem.
