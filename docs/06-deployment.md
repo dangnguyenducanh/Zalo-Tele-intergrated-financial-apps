@@ -1,6 +1,6 @@
 # 6. Deployment (Vercel + MongoDB Atlas free)
 
-Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free cluster, the KIE service in Docker on our own machine behind a Cloudflare Tunnel.
+Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free cluster, the KIE service in Docker on our own machine behind a Cloudflare Tunnel. The planned agent service and its local model (§2.11) also run on our own hardware, the team's GPU host, behind a tunnel of their own, so they add no bill either (§6.13).
 
 ## 6.1 Free tier facts (checked 2026-11-20)
 
@@ -8,10 +8,13 @@ Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free clus
 |---|---|---|
 | **Vercel Hobby** | Static hosting + Vercel Functions (Fluid compute) | Function max duration **300 s** (default 300 s); request/response body **4.5 MB**; function bundle 250 MB; an Express app becomes **one** function; `express.static` is ignored (static files are served from build output); Hobby is for **non-commercial** use (a class project qualifies) |
 | **MongoDB Atlas Free cluster** (formerly M0) | Shared cluster | **512 MB** storage; one free cluster per project; capped data transfer per rolling 7 days; no backups; can upgrade later |
-| **Cloudflare quick tunnel** (`cloudflared tunnel --url …`) | Public HTTPS URL to a local port, no account | Random `*.trycloudflare.com` URL that **changes on every restart**; meant for testing and demos. A named tunnel (free Cloudflare account + own domain) gives a stable URL |
+| **Cloudflare quick tunnel** (`cloudflared tunnel --url …`) | Public HTTPS URL to a local port, no account | Random `*.trycloudflare.com` URL that **changes on every restart**; meant for testing and demos. A named tunnel (free Cloudflare account + own domain) gives a stable URL. Used for KIE today and, planned, for the agent service (§6.13) |
 | **Telegram Bot API** | Free | Webhook needs HTTPS; bot file downloads ≤ 20 MB |
 | **Zalo Bot Platform** (Basic plan) | Free | Up to **3 bots**, each bot talks to at most **50 users**, **3,000 messages/month**; webhook needs HTTPS; messages ≤ 2000 chars; no buttons |
 | **WhatsApp Cloud API** (Meta), *planned, §2.10* | Messages from users; the bot's replies up to **1,000 a month** per business number (figures from §2.10.1) | Replies past that are billed per message, so a payment method is needed by then; the bot may reply only within **24 h** of the user's last message; up to 3 reply buttons; long replies split at 4096 chars (§2.10.4); webhook needs HTTPS |
+| **Vercel Cron Jobs** (Hobby), *planned, §2.11* | Scheduled `GET` calls to our own function | Once a day at most, fired at any time within the scheduled hour, on **production deployments only**, no retry (§2.11.2) |
+| **GPU host** (our own machine), *planned, §2.11* | vLLM serving Qwen3.5-2B (Apache-2.0) and the agent service with bge-m3; weights downloaded once from Hugging Face | One RTX 5880 Ada (48 GB) shared with other services that already use about 30 GB: vLLM gets `--gpu-memory-utilization 0.25` (≈ 12 GB: 4.5 GB of weights + KV cache), bge-m3 ≈ 2.3 GB. At most **8** requests in the model at once and **16** queued; beyond that `AGENT_BUSY` (§6.13) |
+| **Gmail SMTP**, *planned, §2.12* | A Google account with an app password | About **500 mails a day**; too many bounces or mails to fake addresses make Google stop the account sending for up to 24 h (§2.12.1). Vercel blocks only port 25, so port 465 works |
 
 **Why not host KIE on Hugging Face Spaces?** Its docs still list a free CPU Basic tier (2 vCPU, 16 GB, sleeps after 48 h idle), but 2026 forum threads report free Docker Spaces being restricted. It is not reliable enough for demo day. Our own machine plus a tunnel is fully under our control.
 
@@ -59,7 +62,16 @@ export default app;
   ]
 }
 ```
-Static files from `client/dist` are served first. `/api/*` goes to the Express function, which still sees the original path such as `/api/wallets`. Every other path falls back to the SPA. The planned `/link` screen (§2.10.3) is one of those paths, so `vercel.json` does not change for it.
+Static files from `client/dist` are served first. `/api/*` goes to the Express function, which still sees the original path such as `/api/wallets`. Every other path falls back to the SPA. The planned `/link` screen (§2.10.3) is one of those paths, so `vercel.json` does not change for it. The same holds for the planned `/verify-email` and `/forgot-password` screens (§2.12).
+
+*(Planned, §2.11.2.)* The daily cron adds one key to `vercel.json`, next to `rewrites`:
+
+```json
+  "crons": [
+    { "path": "/api/cron/daily", "schedule": "0 13 * * *" }
+  ]
+```
+`0 13 * * *` is 13:00 UTC, so 20:00–20:59 Vietnam time. See §6.13.
 ⚠️ Verify both rewrites in build step 1 (`GET /api/health` and a deep link like `/budgets` on refresh) before building features.
 
 **Projects:** two Vercel projects, **`sochitieu-btl`** (production, DB `finance`) and **`sochitieu-btl-staging`** (staging, DB `finance_staging`). Neither is Git-connected: deploys go through the CLI (below). Build settings live in `vercel.json` (no framework preset, `npm ci`, `npm run build -w client`, output `client/dist`); Node 22.x comes from `engines` in `package.json`. The scripts find the projects through `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_PROD` and `VERCEL_PROJECT_ID_STAGING` in `server/.env`, so no `vercel link` is needed.
@@ -77,10 +89,12 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET` | §6.5 |
 | `ZALO_BOT_URL` *(planned, §2.10)* | §6.5 step 5 |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_NUMBER` *(planned, §2.10)* | §6.12 |
+| `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS`, `CRON_SECRET` *(planned, §2.11)* | §6.13 (`AGENT_URL` is pushed from `AGENT_PUBLIC_URL`, like `KIE_URL`) |
+| `GMAIL_USER`, `GMAIL_APP_PASSWORD` *(planned, §2.12)* | §6.14 |
 | `KIE_URL` | the value of `KIE_PUBLIC_URL` (§6.6); if that is empty, a non-local `KIE_URL` is pushed as is |
 | `KIE_API_KEY` | §6.6 |
 
-Kept local and never pushed: `VERCEL_*`, `SEED_*`, `TEST_USER_*`, `PROD_URL`, `STAGING_URL`, `PORT`, `VITE_PORT`, `WT_SLOT`, the local `APP_URL`, `MONGODB_DB` (replaced by the per-target values above) and `KIE_URL`, `KIE_PUBLIC_URL` (`KIE_PUBLIC_URL` is pushed as `KIE_URL`). Empty values and `.env.example` placeholders are skipped. Seeding runs locally (§6.7).
+Kept local and never pushed: `VERCEL_*`, `SEED_*`, `TEST_USER_*`, `PROD_URL`, `STAGING_URL`, `PORT`, `VITE_PORT`, `WT_SLOT`, the local `APP_URL`, `MONGODB_DB` (replaced by the per-target values above) and `KIE_URL`, `KIE_PUBLIC_URL` (`KIE_PUBLIC_URL` is pushed as `KIE_URL`). Planned (§2.11): `AGENT_URL` and `AGENT_PUBLIC_URL` the same way (`AGENT_PUBLIC_URL` is pushed as `AGENT_URL`). Empty values and `.env.example` placeholders are skipped. Seeding runs locally (§6.7).
 
 The bot variables are the same in both projects. A bot has one webhook, and both point at production (§6.4). The planned WhatsApp bot works the same way: its callback URL is set once per Meta app (§6.12).
 
@@ -145,6 +159,8 @@ On the dev server (or any machine with Docker and about 4 GB of free RAM):
 
 KIE handles **one image at a time** (~20 s each in its own benchmark). That's fine for a demo; tell the audience to send one photo at a time.
 
+*(Planned, §2.11.)* KIE is **retired after the receipt eval**: once Qwen3.5-2B in the agent service reads at least as many true payable totals as KIE on the eval set (and p95 ≤ 15 s), `RECEIPT_READER` flips to `qwen` (§6.13). Keep KIE running until then: with `RECEIPT_READER=kie`, or when the agent service is down, photos still go to KIE. After the flip, stop the KIE container and its tunnel and remove `KIE_URL`, `KIE_PUBLIC_URL` and `KIE_API_KEY` in the PR that removes the KIE client.
+
 ## 6.7 Seed the database
 
 From your machine, with the Atlas URI in `server/.env`. `MONGODB_DB` picks the database, and a value in the shell wins over `server/.env` (check it if you ran `tools/wt-env.sh` in this shell):
@@ -177,6 +193,13 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 - [ ] *(Planned, §2.10)* An unlinked chat gets a claim link on the production `APP_URL` (`…/link?t=…`); Confirm links it and the chat gets the success message
 - [ ] *(Planned, §2.10)* The link card shows only the apps whose settings were pushed
 - [ ] *(Planned, §2.10)* The `/link` confirm screen shows the warning ("Only confirm if you just messaged the bot yourself…"); after Confirm the Bot inbox shows "New chat linked from a chat link: … Not you? [Unlink]", and dismissing it keeps it gone after a reload
+- [ ] *(Planned, §2.11)* Agent service: the `tunnel` container is up and `AGENT_PUBLIC_URL` is current (the KIE lesson: a dead tunnel silently broke receipts); `https://<agent tunnel>/health` → `vllm: ok`; `nvidia-smi` shows GPU memory headroom; one receipt is read in under 10 s (§6.13)
+- [ ] *(Planned, §2.11)* With the admin runtime switch **off**, ask "tháng này ăn uống hết bao nhiêu?" in the drawer and on Telegram → the help text and the plain commands; switch it **on** (no redeploy) → an exact answer with its sources line; "tháng 10 thu bao nhiêu" in QuickAdd → nothing saved, the question chip shows
+- [ ] *(Planned, §2.11)* A note no keyword matches (e.g. `quà sinh nhật 200k`) lands in Khác/Other → a category suggestion follows the draft within 3 s
+- [ ] *(Planned, §2.11)* **Chạy ngay** on the admin page sends the digest to an opted-in Telegram test user; pressing it again sends nothing new
+- [ ] *(Planned, §2.11)* Vercel → the production project → **Cron Jobs** lists `/api/cron/daily`
+- [ ] *(Planned, §2.11)* Stop the agent service (`docker compose -p sochitieu-agent stop agent`) → a question gets the help text, a photo still becomes a draft through KIE (or the bot asks for the amount); start it again
+- [ ] *(Planned, §2.12)* Register a new address → the code arrives within about 15 s (check spam) → entering it lands on the Dashboard; **Forgot password?** → code → new password → the old one fails
 - [ ] *(Planned, §2.10)* WhatsApp: the linked chat shows the profile name, and the test phone's number appears nowhere in the app (Bot inbox, Transactions, Admin) or in the API responses in DevTools
 
 ## 6.10 CI
@@ -193,6 +216,9 @@ CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not d
 - Zalo: [Zalo Bot Platform docs (mirror)](https://context7.com/websites/bot_zaloplatforms/llms.txt?tokens=10000); payload fields cross-checked in [chat-adapter-zalo](https://github.com/buiducnhat/chat-adapter-zalo) (`src/types.ts`, `src/adapter.ts`) and [Zalo-Bot-Node-SDK](https://github.com/inti25/Zalo-Bot-Node-SDK)
 - WhatsApp Cloud API (Meta, checked 2026-11-25, for §6.12): [Get started](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started) (use case, API Setup, system-user token), [Access tokens](https://developers.facebook.com/documentation/business-messaging/whatsapp/access-tokens), [Register a business phone number](https://developers.facebook.com/docs/whatsapp/cloud-api/reference/registration), [Display names](https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names), [Create a webhook endpoint](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint) (verify token, Configuration panel), [Webhooks overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/overview) (permissions, fields), [Managing webhooks](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/manage-webhooks) (`subscribed_apps`)
 - Zalo bot link: [Using a Zalo Bot in group chats](https://bot.zapps.me/en/docs/build-bot-interaction-with-group) (the bot's details page in Zalo Bot Creator; it documents the group-invite link, not a 1:1 share link)
+- Agent service and local model (for §6.13): [Qwen/Qwen3.5-2B model card](https://huggingface.co/Qwen/Qwen3.5-2B) (non-thinking mode, sampling settings), [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3), [vLLM docs](https://docs.vllm.ai/) (OpenAI-compatible server, structured outputs, Docker image `vllm/vllm-openai`), [LangGraph](https://langchain-ai.github.io/langgraph/), [Atlas custom database roles](https://www.mongodb.com/docs/atlas/security-add-mongodb-roles/) (also on free clusters, checked 2026-11-25), [Cloudflare quick tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
+- Vercel Cron Jobs (for §6.13): [Cron jobs](https://vercel.com/docs/cron-jobs), [Managing cron jobs](https://vercel.com/docs/cron-jobs/manage-cron-jobs) (`CRON_SECRET`, Hobby limits)
+- Gmail (for §6.14): [Sign in with app passwords](https://support.google.com/accounts/answer/185833), [Nodemailer with Gmail](https://nodemailer.com/usage/using-gmail/)
 - KIE: [Document-Intelligence-KIE](https://github.com/NguyenVanVuongDev/Document-Intelligence-KIE) (`README.md`, `src/api/main.py`, `Dockerfile`)
 - Hugging Face: [Spaces overview](https://huggingface.co/docs/hub/en/spaces-overview), [2026 community thread on free CPU Spaces](https://discuss.huggingface.co/t/official-community-complaint-revert-free-cpu-basic-spaces-and-remove-anti-developer-sdk-restrictions/177703)
 
@@ -252,3 +278,216 @@ A Meta app has one callback URL, so, like the Telegram and Zalo bots, the WhatsA
 - The webhook-registration script skips that platform and prints `skipped: …`, as it does for Telegram and Zalo today.
 - The link card leaves the app out of the picker: `POST /api/chat-links/code` returns `null` for its entry in `links`. WhatsApp's link is built from `WHATSAPP_NUMBER` and Zalo's is `ZALO_BOT_URL`, so without them the button is hidden (§2.10.2). WhatsApp is also hidden while any of the four webhook settings in the next point is unset (card T34, #74). Today the Telegram button already behaves this way when `TELEGRAM_BOT_USERNAME` is unset (`telegramDeepLink: null`).
 - If any of `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /api/webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing (card T34, #74; [04-backend.md §4.2](04-backend.md#42-configuration)). So staging deploys and works without the WhatsApp settings, with WhatsApp hidden and its webhook off.
+
+## 6.13 Agent service and local model (planned, §2.11)
+
+> **Planned (§2.11), not built yet.** Today there is no agent code: `server/src/config/env.js` has none of these variables, there is no `agent/` folder, `vercel.json` has no `crons`, and there is no `/api/cron/daily` route. Do these steps when the agent service and `services/agent.js` are merged. The design is in [01-architecture.md §1.9](01-architecture.md#19-agent-service-and-local-model-planned-211) and [§2.11.4](02-features.md#2114-local-model-layer-qwen35-2b-on-vllm). Choices marked ⚑ are recommendations.
+
+**What runs where.** Express on Vercel stays the only public API. On the GPU host, one `docker compose` project, `sochitieu-agent`, runs three services:
+
+| Service | Image | Listens on | Job |
+|---|---|---|---|
+| `vllm` | `vllm/vllm-openai:v0.31.0` (pinned) | `127.0.0.1:8300` only | Serves `Qwen/Qwen3.5-2B` as `qwen3.5-2b` (OpenAI-compatible API) |
+| `agent` | built from `agent/` (Python 3.12) | `127.0.0.1:8310` only | FastAPI + LangGraph, with the bge-m3 embedder in the same process |
+| `tunnel` | `cloudflare/cloudflared` (tag pinned at setup) | — | Quick tunnel to the agent only. vLLM is never exposed |
+
+### GPU host requirements
+
+- An NVIDIA GPU with **≥ 12 GB free** for vLLM plus about 2.3 GB for bge-m3. The team's host has an RTX 5880 Ada (48 GB), of which other services already use about 30 GB, so vLLM is held to `--gpu-memory-utilization 0.25`.
+- Docker with Compose v2 and the NVIDIA Container Toolkit (`docker run --rm --gpus all <any CUDA image> nvidia-smi` works).
+- About **10 GB of disk** for the model cache (`HF_HOME`): Qwen3.5-2B ≈ 4.5 GB and bge-m3 ≈ 2.3 GB, downloaded once.
+- Outbound HTTPS to Hugging Face (first start), Cloudflare (the tunnel) and Atlas (port 27017). Nothing inbound: the tunnel dials out.
+
+### The vLLM command and model pinning
+
+The command the `vllm` service runs (the same command works by hand for a test):
+
+```bash
+vllm serve Qwen/Qwen3.5-2B --served-model-name qwen3.5-2b --host 127.0.0.1 --port 8300 \
+  --max-model-len 16384 --gpu-memory-utilization 0.25 --max-num-seqs 8 \
+  --enable-auto-tool-choice --tool-call-parser qwen3_coder \
+  --limit-mm-per-prompt '{"image": 1}'
+```
+
+- Non-thinking mode only (the model card warns the 2B model loops in thinking mode). The agent sends structured requests through `response_format: {type: json_schema}` (guided JSON) for `decide`, `read_receipt` and `llm_choose`.
+- **Pinning.** At setup, record the Hugging Face commit hash of `Qwen/Qwen3.5-2B` and of `BAAI/bge-m3` in `agent/models.lock` (committed). The compose file passes the Qwen hash to vLLM as `--revision`, and the agent loads bge-m3 at its hash. The vLLM image tag and the Python packages are pinned too (versions in [01-architecture.md §1.4](01-architecture.md#14-tech-stack)). Change a pin only together with a run of the skill and receipt evals ([07-testing.md](07-testing.md)).
+
+### The compose project (`agent/docker-compose.yml`)
+
+All three services use host networking, so `127.0.0.1` means the host's loopback and no port is published to the network. A sketch for the builder (file layout is theirs):
+
+```yaml
+name: sochitieu-agent
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.31.0
+    <<: *gpu
+    network_mode: host
+    ipc: host
+    entrypoint: ["vllm", "serve"]
+    command: ["Qwen/Qwen3.5-2B", "--revision", "<Qwen hash from models.lock>",
+      "--served-model-name", "qwen3.5-2b", "--host", "127.0.0.1", "--port", "8300",
+      "--max-model-len", "16384", "--gpu-memory-utilization", "0.25", "--max-num-seqs", "8",
+      "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder",
+      "--limit-mm-per-prompt", "{\"image\": 1}"]
+    environment: { HF_HOME: "${HF_HOME}" }
+    volumes: ["${HF_HOME}:${HF_HOME}"]
+    restart: unless-stopped
+  agent:
+    build: .
+    <<: *gpu
+    network_mode: host
+    env_file: .env            # the only service that gets the secrets
+    volumes: ["${HF_HOME}:${HF_HOME}"]
+    depends_on: [vllm]
+    restart: unless-stopped
+  tunnel:
+    image: cloudflare/cloudflared:<pinned tag>
+    network_mode: host
+    command: ["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:8310"]
+    restart: unless-stopped
+```
+
+Compose reads `HF_HOME` from `agent/.env` for the volume paths. The `agent` image starts uvicorn on `127.0.0.1:8310`.
+
+### Atlas: a custom role and the user `sochitieu_agent`
+
+The agent service never uses the app's `finance_app` user. In Atlas → the project → **Database & Network Access**:
+
+1. **Custom Roles → Add New Custom Role**, name `sochitieuAgent`, with these **Collection Actions** on database `finance`:
+
+| Actions | Collections |
+|---|---|
+| `find` | `users`, `categories`, `wallets`, `transactions`, `budgets` |
+| `find`, `insert`, `update` | `pendingActions` |
+| `find`, `insert`, `update`, `remove` | `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads` |
+
+   No database or global actions. Free clusters support custom roles; a change can take up to 30 s to apply.
+2. ⚑ **Collections and indexes** (the TTL and unique indexes of [03-database.md](03-database.md)) are created once with the app user, by the agent's setup command run with `MONGODB_URI`, so `sochitieu_agent` needs no index or drop rights. The command's name is left to the builder.
+3. **Database Users → Add New Database User**: `sochitieu_agent`, **Autogenerate Secure Password**, role: only the custom role `sochitieuAgent`. The network access list already allows `0.0.0.0/0` (§6.2).
+4. Its URI, with the database name: `mongodb+srv://sochitieu_agent:<password>@<cluster>.mongodb.net/finance?retryWrites=true&w=majority&appName=sochitieu-agent`. It goes only into `agent/.env` (next step).
+
+### Agent host `agent/.env`
+
+Git-ignored, on the GPU host only, never on Vercel. Create it empty with mode 600 (`install -m 600 /dev/null agent/.env`) and fill it in an editor, so no secret is typed on a command line:
+
+| Variable | Value |
+|---|---|
+| `AGENT_SECRET` | `openssl rand -hex 32`. The same value goes to Vercel (setup step 6) |
+| `MONGODB_URI_AGENT` | the `sochitieu_agent` URI above |
+| `VLLM_BASE_URL` | `http://127.0.0.1:8300/v1` |
+| `LLM_MODEL` | `qwen3.5-2b` |
+| `EMBED_MODEL` | `BAAI/bge-m3` |
+| `HF_HOME` | the model cache directory on the host, e.g. `/srv/hf-cache` |
+
+⚑ The agent service refuses to start without `AGENT_SECRET` or `MONGODB_URI_AGENT`, so it never runs open.
+
+### Vercel variables (Express)
+
+All optional; a missing one turns its feature off (§2.11.6):
+
+| Variable | Purpose | Value | When unset |
+|---|---|---|---|
+| `AGENT_URL` | The agent service's base URL | Vercel: pushed from `AGENT_PUBLIC_URL` (the tunnel URL). `server/.env`: the local address, e.g. `http://127.0.0.1:8310`, when you develop on the GPU host | No call to the agent service: a question gets the help text and the plain commands, a photo goes to KIE (or the bot asks for the amount), a fallback draft stays Khác/Other with the A7 buttons, and the cron sends only B3 drafts |
+| `AGENT_SECRET` | `Authorization: Bearer …` on every call to the agent service | the same value as in `agent/.env` | The agent client is off, as with `AGENT_URL` unset |
+| `RECEIPT_READER` | Which reader gets photos: `kie` or `qwen` | `kie` until the receipt eval passes, then `qwen` | `kie` |
+| `ASSISTANT_ENABLED` | Hard on/off for questions to the agent service. The admin runtime switch works only below it; changing this one needs a redeploy | `true` or `false` | `false`: a question gets the help text and the plain commands |
+| `ASSISTANT_CHANNELS` | Where agent answers may go | `web,telegram,zalo,whatsapp` | all four; the per-channel daily caps (30 web, 20 Telegram, 10 Zalo, 5 WhatsApp) still apply |
+| `CRON_SECRET` | Vercel sends it as `Authorization: Bearer …` on every cron call; the route checks it with `sameSecret()` | `openssl rand -hex 32` | `sameSecret()` refuses an unset secret, so the scheduled call gets 401 and no proactive message goes out on a schedule |
+
+`AGENT_PUBLIC_URL` stays local (like `KIE_PUBLIC_URL`) and is pushed as `AGENT_URL`. The PR that adds `AGENT_URL` also adds `AGENT_URL` and `AGENT_PUBLIC_URL` to the local-only list and the `KIE_PUBLIC_URL` mapping in `tools/vercel-env-push.sh`, and the names, without values, to `.env.example`.
+
+### Setup order
+
+1. **GPU check:** `nvidia-smi` on the GPU host shows **≥ 12 GB free**.
+2. **Atlas:** the custom role and the user `sochitieu_agent` (above), then the agent's setup command for collections and indexes.
+3. **`agent/.env`** (above), and the two hashes in `agent/models.lock`.
+4. **Start:** `docker compose -p sochitieu-agent up -d --build` in `agent/`. The first start downloads the models (several minutes). Then `curl -s http://127.0.0.1:8310/health` → `{"vllm":"ok","embedder":"ok",…}`.
+5. **Tunnel URL:** `docker compose -p sochitieu-agent logs tunnel | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1`.
+6. **Save and push** on the machine with `server/.env` (values are asked hidden; paste the URL from step 5 and the `AGENT_SECRET` from `agent/.env`; type `-` to skip one):
+
+```bash
+tools/set-secret.sh AGENT_PUBLIC_URL AGENT_SECRET RECEIPT_READER ASSISTANT_ENABLED CRON_SECRET
+```
+
+   This saves them in `server/.env` and pushes them to **both** Vercel projects, `AGENT_PUBLIC_URL` as `AGENT_URL`. Leave `RECEIPT_READER` at `kie` (or skip it) until the receipt eval passes, and set `ASSISTANT_ENABLED=true` only when Stage AI is ready. If a push fails, repeat it with `tools/vercel-env-push.sh production AGENT_URL …` (and `staging`).
+7. **Redeploy** both projects (`tools/deploy.sh staging`, then `production`).
+8. **Smoke test:**
+   - `curl -s https://<agent tunnel>/health` from any machine → `vllm: ok`.
+   - One question: ask "hôm nay tiêu bao nhiêu?" in the web drawer → an answer with its sources line. By hand on the GPU host, with the secret read from `agent/.env` and passed through stdin (as in §6.4: `-H @-` reads the header from stdin, so the secret never appears in `ps`):
+
+```bash
+( . <(grep '^AGENT_SECRET=' agent/.env)
+  printf 'Authorization: Bearer %s\n' "$AGENT_SECRET" |
+    curl -s http://127.0.0.1:8310/v1/turn -H @- -H 'Content-Type: application/json' \
+      -d '{"trigger":"chat","userId":"<a test user id>","channel":"web","threadKey":"smoke","requestId":"smoke-1","text":"hôm nay tiêu bao nhiêu?","language":"vi","today":"2026-11-25"}' )
+```
+
+   - One receipt: `POST /v1/receipt` the same way with one photo from `server/test/fixtures/receipts/` (base64 in `image`) → a `total` in under 10 s.
+
+### When something is missing or down
+
+- **A Vercel variable unset:** see the "When unset" column above. Typed capture, drafts, `ok`/`huy`, buttons and the plain commands never depend on the agent service.
+- **The agent service down, slow or busy:** questions get the help text and the plain commands (web: 503 `AGENT_UNAVAILABLE`, or `AGENT_BUSY` past 8 running + 16 queued); photos fall back to KIE when `KIE_URL` is set, else "type the amount"; categories stay Khác/Other; the cron skips that night's agent messages.
+- **vLLM down but the agent up:** `/health` shows `vllm: down`. Pipeline skills still answer (they need no LLM); agent-mode questions, receipts and ties in the categorizer fall back as above.
+
+### The tunnel URL changes
+
+A quick-tunnel URL changes every time the `tunnel` container restarts (a reboot, `docker compose restart`, an image update). Then: step 5 for the new URL, `tools/set-secret.sh AGENT_PUBLIC_URL`, redeploy both projects. Until then every agent call fails and the fallbacks above apply. For a stable URL, use a free Cloudflare account and a **named tunnel** on your own domain, as for KIE (§6.6).
+
+### Demo-day checks
+
+The KIE lesson: a dead tunnel silently broke receipts. So before a demo (also in §6.9):
+
+- `docker compose -p sochitieu-agent ps`: all three services up.
+- `curl -s https://<agent tunnel>/health` → `vllm: ok`, and the URL equals the pushed `AGENT_PUBLIC_URL`.
+- `nvidia-smi`: GPU memory headroom (nothing else has grabbed the 12 GB).
+- One receipt read in under 10 s.
+
+### Staging
+
+⚑ Leave `AGENT_URL` unset on staging: questions there get the help text, photos go to KIE. The agent service reads one database (the one in `MONGODB_URI_AGENT`, `finance`), so pointing staging at it would find none of the staging users' data in `finance_staging` and would write their `agentTurns` into `finance`. If staging needs the agent, run a second `agent` service in the same compose project with its own port, its own `MONGODB_URI_AGENT` (database `finance_staging`, the role granted on that database too) and its own tunnel; it can share the one `vllm`.
+
+### Daily cron
+
+`CRON_SECRET` is in the table above: generate it with `openssl rand -hex 32` and paste it at the step 6 prompt. You never type it anywhere else: Vercel adds the header itself. After the deploy that carries the `crons` entry (§6.3), Vercel → the project → **Settings → Cron Jobs** lists `/api/cron/daily`, with a **Run** button for a manual test. Crons don't fire locally; use the admin **Chạy ngay** button (`POST /api/admin/cron/daily`) there and for the demo.
+
+**Both projects run the cron.** §2.11.2 says production only, but every deploy of ours is a production deploy (§6.3), so Vercel runs the `crons` entry in the staging project too, against `finance_staging` and with the same bot tokens. Whether staging should send proactive messages is **left to you**. To stop it, remove `CRON_SECRET` from the staging project after the push (Vercel → `sochitieu-btl-staging` → Settings → Environment Variables) and redeploy staging: its cron calls then get 401. With `AGENT_URL` unset on staging (above), its cron sends only B3 drafts anyway.
+
+## 6.14 Gmail SMTP for email codes (planned, §2.12)
+
+> **Planned (§2.12), not built yet.** Today `server/src/config/env.js` has no `GMAIL_*` variable and there is no mailer; register logs the user in at once. Do these steps when `services/mail.js` is merged.
+
+**What each variable does** (both optional; both must be set for mail to be on, §2.12.4):
+
+| Variable | Purpose | When unset |
+|---|---|---|
+| `GMAIL_USER` | The sending Gmail address; mails come from `"Sổ chi tiêu" <GMAIL_USER>` | see below |
+| `GMAIL_APP_PASSWORD` | The 16-character Google app password for that address (not the account password) | see below |
+
+With either one unset:
+- **Development and test:** the API boots, and the code is written to the server log instead of sent (`[mail] signup code for a***@gmail.com: 123456`), so the whole flow works without Gmail.
+- **Production:** register works as today (201, logged in, no code), so sign-ups never stop; `POST /api/auth/password/forgot` answers 503 `FEATURE_NOT_CONFIGURED`.
+
+**One-time setup** on the Google account that will send the mail:
+
+1. Turn on **2-Step Verification**: Google account → **Security** → **2-Step Verification**. App passwords exist only with it on.
+2. Make an **app password**: Google account → Security → 2-Step Verification → **App passwords**; name it, e.g. `sochitieu`. Google shows the 16 characters once, in groups of four: paste them without the spaces straight into `tools/set-secret.sh` (below).
+3. Changing the Google account's password revokes every app password. Then make a new one and push it again.
+
+**Save and push:**
+
+```bash
+tools/set-secret.sh GMAIL_USER GMAIL_APP_PASSWORD
+```
+
+It saves both in `server/.env` and pushes them to **both** Vercel projects (§2.12.5); never commit them. Then **redeploy** both projects. Check it: register a new address on staging, and the code should arrive within about 15 s (look in spam too).
+
+**The escape hatch** (§2.12.4): if Google stops the account sending (bounces, or the 500-a-day limit), remove the two values and redeploy. Sign-up then works without codes until the account recovers. §2.12.4 says to do this with `tools/set-secret.sh`, but today the script can't remove a key (an empty paste is asked again, `-` skips), so either the PR that builds the mailer gives it a remove option, or remove them by hand: delete the two lines from `server/.env` and the two variables in Vercel → each project → **Settings → Environment Variables**.
+
+**Logs** never contain the code or the password in production; addresses are masked (`a***@gmail.com`, §2.12.5).

@@ -7,13 +7,15 @@ How we prove that every feature in [02-features.md](02-features.md) works, find 
 | Level | Tool | Covers | Runs | What a pass proves |
 |---|---|---|---|---|
 | **Static** | `tsc --noEmit` (client), ESLint | Whole codebase | Every commit, every Vercel build | Types match between components, store and API responses; no obvious mistakes |
-| **Unit** | Vitest | Text parser, money/date helpers (VN time zone), i18n key completeness | Every commit (< 5 s) | Business rules behave exactly as specified, row by row |
+| **Unit** | Vitest | Text parser, money/date helpers (VN time zone), i18n key completeness (planned: `classify`, `pace`, split, `services/agent.js` and the code email, §7.9.4, §7.10.2; the agent service's Python units, §7.9.2) | Every commit (< 5 s) | Business rules behave exactly as specified, row by row |
 | **API integration** | Vitest + Supertest + mongodb-memory-server (a real MongoDB in memory) | Every REST endpoint: methods, status codes, validation, auth, ownership, DB constraints | Every commit (~30 s) | The backend contract in [04-backend.md](04-backend.md) holds against a real database |
-| **Webhook contract** | Vitest + Supertest, recorded Telegram/Zalo payloads, outbound `fetch` mocked with MSW | Secret checks, linking, parse → draft → confirm, idempotency, KIE errors (WhatsApp planned: signed payloads and a stubbed Graph API, §7.8.4) | Every commit | The bots work without a phone, and the exact JSON both platforms send is handled |
+| **Webhook contract** | Vitest + Supertest, recorded Telegram/Zalo payloads, outbound `fetch` mocked with MSW | Secret checks, linking, parse → draft → confirm, idempotency, KIE errors (WhatsApp planned: signed payloads and a stubbed Graph API, §7.8.4; assistant replies through a stubbed agent API and the daily cron planned, §7.9.4) | Every commit | The bots work without a phone, and the exact JSON both platforms send is handled |
 | **Component** | Vitest + React Testing Library + jsdom + MSW | Forms, QuickAdd, theme/language switch, error states | Every commit | Screens render loading/empty/error/data states and validate input |
-| **KIE contract** | Vitest, real KIE container, sample receipts from the KIE repo (`data/test_degraded/*.jpg`) | `/analyze` response → draft mapping | Before demo, after KIE changes | Our mapping works on real OCR output, not just mocks |
+| **KIE contract** | Vitest, real KIE container, sample receipts from the KIE repo (`data/test_degraded/*.jpg`) | `/analyze` response → draft mapping | Before demo, after KIE changes (until KIE is retired: the receipt eval, §7.9.6, decides when `RECEIPT_READER` flips to `qwen`) | Our mapping works on real OCR output, not just mocks |
 | **End-to-end (E2E)** | Playwright (TypeScript), Chromium; **video + trace on** | Full user journeys in a real browser against local stack and the Vercel deployment | Before each deploy, run locally (CI runs only the Vitest suites, see [06-deployment.md](06-deployment.md)) | Frontend + API + DB work together the way a customer uses them |
-| **Manual exploratory** | Claude in Chrome on your browser (recorded GIF, console + network capture), Vercel runtime logs, Atlas Data Explorer, real phones for Telegram/Zalo | Charters MT-01…MT-08 (§7.4) | Before demo, after big changes | Real-world use: real chat apps, real receipts, real devices |
+| **Manual exploratory** | Claude in Chrome on your browser (recorded GIF, console + network capture), Vercel runtime logs, Atlas Data Explorer, real phones for Telegram/Zalo | Charters MT-01…MT-08 (§7.4); planned charters in §7.8.5, §7.9.9 and §7.10.6 | Before demo, after big changes | Real-world use: real chat apps, real receipts, real devices |
+| **Agent service** *(planned, §2.11)* | pytest with a fake chat model and a fake embedder (no GPU), the compiled LangGraph graph, FastAPI `TestClient`, a throwaway local `mongod` | The Python agent service: date rules, skill ranking, the guard, `check_total`, the typed query, caps, every graph path, the agent API (§7.9.2, §7.9.3) | Every commit once built | The agent's rules and paths work without a model or a GPU |
+| **Agent evals and load** *(planned, §2.11)* | `python -m agent.eval skills \| receipts \| categories \| load` on the GPU host, real Qwen3.5-2B on vLLM and bge-m3 | The skill set (`agent/eval/skill_cases.yaml`), Qwen vs KIE on real receipts, the categorizer, 8 concurrent questions (§7.9.6, §7.9.7) | By hand before each agent deploy and before changing the model, a prompt or a skill | Skills are found, every number is exact, the guard leaks nothing, Qwen reads receipts at least as well as KIE, and the GPU copes |
 | **Non-functional** | Playwright viewports, axe/Lighthouse, security probes | Responsive, dark mode, accessibility, injection, secrets, deploy smoke | Before demo | Slide requirements on responsiveness, security and deployment |
 
 Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, @testing-library/user-event 14.6.13, @testing-library/jest-dom 8.0.0, jsdom 31.0.1, msw 3.0.7, supertest 7.3.2, mongodb-memory-server 11.3.0, @playwright/test 1.65.1.
@@ -55,6 +57,8 @@ The full list (**159 cases**: 151 automated or semi-automated + 8 manual charter
 
 **Planned for §2.10 (not in the counts above):** the one-tap linking and WhatsApp cases of §7.8. They have no IDs yet: each build PR takes the next free ID in `test-cases.json` at merge time.
 
+**Planned for §2.11 and §2.12 (not in the counts above):** the assistant cases of §7.9 and the email-code cases of §7.10, named the same way and given IDs the same way.
+
 ## 7.4 Manual testing in the browser (recorded)
 
 Run by Claude in your Chrome (or by you). Each charter is one recorded session.
@@ -92,7 +96,7 @@ Playwright E2E runs also record automatically (`video: 'on'`, `trace: 'retain-on
 | MT-07 | Security probing as userB: open userA's transaction URL, replay an old refresh cookie, send a webhook without the secret | 404 / 401 / 401; nothing changed in DB | Ownership isolation, token reuse detection, webhook auth |
 | MT-08 | Demo rehearsal on Vercel: the full demo script, timed | under 10 min; zero errors in Vercel logs | Ready for the defense |
 
-**Real-chat bot e2e.** MT-02 to MT-04 can also be run in the student's real Telegram and Zalo (Telegram Web / Zalo Web through Claude in Chrome, or a phone). [`tools/bot-e2e/bot-e2e.mjs`](../tools/bot-e2e/bot-e2e.mjs) then checks the expected bot replies, the buttons and the server state after each step, and sends the five real MC-OCR receipts through both chats to KIE. See the runbook [testing/bot-e2e.md](testing/bot-e2e.md) (TC-F7-08, TC-F8-16…18). WhatsApp (planned): the WhatsApp charter and the bot-e2e WhatsApp steps, §7.8.5.
+**Real-chat bot e2e.** MT-02 to MT-04 can also be run in the student's real Telegram and Zalo (Telegram Web / Zalo Web through Claude in Chrome, or a phone). [`tools/bot-e2e/bot-e2e.mjs`](../tools/bot-e2e/bot-e2e.mjs) then checks the expected bot replies, the buttons and the server state after each step, and sends the five real MC-OCR receipts through both chats to KIE. See the runbook [testing/bot-e2e.md](testing/bot-e2e.md) (TC-F7-08, TC-F8-16…18). WhatsApp (planned): the WhatsApp charter and the bot-e2e WhatsApp steps, §7.8.5. Assistant in Telegram, receipts read by Qwen and the evening digest (planned): §7.9.9. Sign-up and password reset with a real inbox (planned): §7.10.6.
 
 ## 7.5 Bugs: find → fix → retest (the refine loop)
 
@@ -272,3 +276,341 @@ IDs go next to the names in the same PR that writes them into §7.8.2 and §7.8.
 - **Logs:** the request log prints `req.originalUrl`, and Meta's setup `GET` carries `hub.verify_token` in the query, so `WHATSAPP_VERIFY_TOKEN` would reach the Vercel logs; §2.10 does not say whether that is acceptable.
 - **Redirect (*claim E2E*):** behind `ProtectedRoute` the redirect to `/login` runs before the page's code and keeps `pathname + search`, so `t` would ride through the login page. `/link` therefore sits outside `ProtectedRoute` and removes `t` itself before sending the user to log in ([05-frontend.md §5.9.2](05-frontend.md#592-link-screen-planned-2103)); *claim E2E* checks that no later URL carries the token.
 - **E2E reply text (*claim E2E*):** the stub must hand the test the claim URL from the bot's reply; how is up to the builder.
+
+## 7.9 Assistant and agent features (planned, §2.11)
+
+> **Planned, not built.** Nothing in this section runs yet. It turns every acceptance check in [02-features.md §2.11.8](02-features.md#2118-acceptance-checks) into test cases, so each PR that builds part of §2.11 knows what it must prove. As in §7.8, the cases have **no IDs yet**: open PRs take IDs from the same append-only catalogue, and a number reserved here can clash. Each case is named by a short *name*, the build step of §2.11.7 that brings it (R1…R5 for Stage R, which needs no model; AI for Stage AI, which needs vLLM) and its §2.11.8 check, by short name (§7.9.10). No cards exist yet for §2.11, so the build PR of each step takes the next free ID in `test-cases.json` at merge time (TC-F13 for *parse question* and *QuickAdd chip*; a new feature row, F14 Assistant, for the rest; the next MT for the charters), writes it into these tables and §7.9.10, and adds the case to the catalogue and the Excel report. Until then the cases are not counted in §7.3. Quoted texts are §2.11's Vietnamese; the tests match whatever wording and i18n keys the builder settles (vi + en).
+
+**Two code bases, two test stacks.** Express keeps `classify`, capture, commands, writes, auth and the cron entry point; it is tested with the levels of §7.1. The **agent service** (`agent/`, Python 3.12, FastAPI + LangGraph, Qwen3.5-2B on vLLM, bge-m3 embeddings; §2.11.4) gets its own:
+
+| Level | Tool | Runs | GPU |
+|---|---|---|---|
+| **Py unit** | pytest, fake chat model and fake embedder | Every commit (CI) | No |
+| **Graph** | pytest on the compiled `StateGraph` with a fake chat model returning fixed JSON, against a throwaway local `mongod` | Every commit (CI) | No |
+| **Agent API** | pytest + FastAPI `TestClient`, same fakes | Every commit (CI) | No |
+| **Eval** | `python -m agent.eval skills \| receipts \| categories` with the real vLLM and bge-m3, against a seeded throwaway MongoDB | By hand on the GPU host, before each agent deploy and before changing the model, a prompt or a skill | Yes |
+| **Load** | `python -m agent.eval load` ⚑ (an asyncio script) against the running service | By hand on the GPU host, before the demo | Yes |
+
+⚑ The throwaway `mongod` is the binary mongodb-memory-server already downloads, started by a pytest fixture on a free port, so Python and Vitest test against the same MongoDB version. Every test that crosses a time boundary sets the clock (fake timers, an injected `now`, or `today` in the request body) in Asia/Ho_Chi_Minh.
+
+### 7.9.1 What changes in today's cases
+
+| Case today | What it checks now | When §2.11 lands |
+|---|---|---|
+| TC-F13-01 | Parse preview saves nothing | Unchanged for a capture. A question now answers `question: true` with empty drafts (*parse question*) |
+| TC-F8-01, TC-F8-02 | The parser table and its edge cases | `classify` runs first (§2.11.1), so every capture row must still be read as a capture (*classify table*); the parser gains `chia N` (*split*) |
+| TC-F8-20 | A Zalo amount-only reply corrects the waiting draft | Still true, except a bare `1`–`3` within 24 h of an expired ask-back, which gets "Câu hỏi đã hết hạn, hãy hỏi lại" (*ask-back*) |
+| TC-F8-08, TC-F10-01 | A photo → KIE → draft; real KIE output maps to the right amount | Unchanged while `RECEIPT_READER=kie`. With `qwen` the same draft mapping is checked against the agent stub (*receipt reader switch*); KIE stays the fallback until it is retired |
+| TC-F8-11, TC-F8-22, TC-F5-03 | `/today`, `/month`, the budget warning | Budget lines may gain A2's pace; it must equal the Budgets chip and the agent's `get_budget_pace` (*pace everywhere*) |
+| TC-NF-14 | The weekly comparison and the dashboard sentence | The sentence compares the same days, "cùng kỳ tháng trước"; the weekly columns are unchanged (*compare same days*) |
+| TC-F1-11, TC-F1-18 | Profile and preferences | `PATCH /users/me` also takes `assistantOn` and `notify` (*Settings switch*) |
+| TC-F12-03 | Translation completeness | Covers the new `assistant` namespace and the new keys with no change to the test |
+| TC-NF-11 | The E2E server stubs the bot APIs and blocks every other host | The E2E server also stubs the agent API (`AGENT_URL` points at the stub); any other call out is still a bug |
+
+### 7.9.2 Python unit tests (agent service, no GPU)
+
+pytest in `agent/tests/`. The chat model is a fake that returns fixed JSON and counts calls; the embedder is a fake that maps a text to a fixed 1024-float vector (as the reference repo's tests pass a fake embedder). No test loads a model or downloads weights.
+
+| Case | Step | Level | Pri | Steps, then **Expect** | Proves |
+|---|---|---|---|---|---|
+| *period rules* | R3 | Py unit | P0 | `period.py` on hôm nay, hôm qua, tuần này/trước, tháng này/trước, tháng 10, năm 2025, 20/11, 7 ngày qua, cuối tuần, with `today` = Wed 25/11/2026; then rows dated Sun 22/11 23:59 +07, Mon 23/11 00:00 +07 and 30/11 23:30 +07. **Expect:** a week is Monday–Sunday; the Sunday row is in last week and the Monday row in this week; the 30/11 row is in November; the phrase's words are consumed | Vietnam-time boundaries |
+| *lexicon linking* | R3 | Py unit | P0 | `rewrite_question`'s rule part on "an uong thang nay", "momo con bao nhieu", "cà phê", a category and a wallet with the same name, and a word no category owns. **Expect:** accent-folded words link to the user's own category and wallet ids; a tie is reported, not guessed; an unknown word links nothing; `method: rule` (no model call) | Questions are read without the model when the rules can |
+| *skill ranking* | R3 | Py unit | P0 | `find_skills` with the fake embedder on: an exact trigger ("/dubao"); a clear lexical winner; two skills within a 0.15 score gap; a text no skill fits; a disabled skill's trigger. **Expect:** RRF (k = 60) fuses the lexical and vector lists; `retrieval: direct` for the trigger and the clear winner, `choose` with the top 3 for the close pair, `none` for the unknown text; a disabled skill is never a candidate | Retrieval picks the right skill, or says it is unsure |
+| *guard* | AI | Py unit | P0 | `guard_output` on model text with: a digit; "hai triệu"; "gấp đôi"; "vượt", "tăng", "giảm", "over", "more"; a URL; an @handle; an email; an ObjectId; a JSON fragment; an unknown `[[id]]`; "đã đặt ngân sách" with no done action; and a clean text with `[[f1]]` and `[[f2]]`. **Expect:** every bad one fails; the clean one passes and each `[[id]]` becomes `label: display` from the facts | No number in an answer comes from the model |
+| *check_total* | AI | Py unit | P0 | `check_total` on reader output whose total is: on a TỔNG CỘNG line; on a THANH TOÁN line after VAT; missing, with the largest money value after VAT; a year (2026); a date; a phone number; a number with a leading zero; an invoice number; nothing money-shaped. **Expect:** the payable total in the first three; `NO_TOTAL` for the rest, never a guessed amount | §2.6's "payable total only" holds for the new reader |
+| *typed query* | R3 | Py unit | P1 | The IR compiler with another user's category id, `start > end`, `end` after today, a 401-day span, `min > max`, an unknown field; then a valid IR. **Expect:** each bad IR is refused; the pipeline always starts with `{userId}` from the context and `status: 'confirmed'`, excludes soft-deleted rows, sets `maxTimeMS(5000)` and puts `$limit` after totals and shares; the model never writes MongoDB | Query skills read only the user's own confirmed data |
+| *forbidden args* | R3 | Py unit | P0 | The tool registry with LLM args that set `userId`, `token` or `query`; a preset that the LLM args try to override; a tool's pydantic model given an extra field and a `limit` of 50. **Expect:** FORBIDDEN_ARGS are dropped and logged as a guard event; presets win over LLM args; the extra field is refused; `limit` is clamped to 20; every handler receives `userId` only from the request context | The model can never choose whose data it reads |
+| *to model* | AI | Py unit | P0 | The serializer that builds the model's input, on tool results with a 75-character note, a note holding a 10-digit run and an email, and a user with name, email, phone and chat ids. **Expect:** every number, date, period and verdict is a fact `{ id, label, display }`; the note is cut to 60 characters; the digit run and the email become `•••`; no name, email, phone, chat name, BSUID or chat id is in the prompt | The model sees only what it needs (§2.11.4, privacy rule) |
+| *caps* | AI | Py unit | P0 | The cap counter with today's `agentTurns` at 29/30 on the web, 19/20 Telegram, 9/10 Zalo, 4/5 WhatsApp, and today's `receiptReads` at 29/30; rows from yesterday (Vietnam time) and rows with `clearedAt`. **Expect:** one more is allowed, the next is `capped` (the cap line plus the plain commands); yesterday's rows don't count; cleared rows still count ("Xoá" never resets the cap) | Caps and concurrency |
+| *same days* | R3 | Py unit | P0 | `compare_periods`' range rule on Mon 23–Wed 25/11, 01–25/11, 01–31/10, 01–31/03 and 01–30/03 in a leap and a normal year, read from `shared/fixtures/compare-range.json` ⚑. **Expect:** 16–18/11; 01–25/10; 01–30/09; the shorter month's last day caps the range. The client's MonthCompare test reads the same file (*compare same days*) | One comparison rule |
+| *pace* | R2 | Py unit + Unit | P0 | `get_budget_pace` (Python) and `pace()` in `services/budgets.js` (Vitest) on one shared fixture: §2.11.2's A2 example; day 4 and day 5; spent over the limit; the last day; spent 0. **Expect:** both give "còn 900.000 ₫ cho 6 ngày → tối đa 150.000 ₫/ngày", a month-end of about 8.520.000 ₫ and an over-budget date of about 29/11; nothing before day 5; over the limit gives no daily allowance and no negative number | One pace number everywhere (*pace everywhere*) |
+| *suggested budgets* | R5 | Py unit | P2 | `suggest_budgets` on 3 months of spending per category, one category with only 2 months. **Expect:** the median of the last 3 months, rounded up to 50.000 ₫; the rule for a short history is the one §2.11.2 states | B4's suggestions are right |
+| *re-embedding* | R3 | Py unit | P2 | Start the sync twice with the same skills; then change one skill's examples and one category's keywords. **Expect:** the second start embeds nothing; afterwards only the changed rows are re-embedded (`embedHash` = SHA-256 of the text) | Embeddings stay current without re-work |
+| *categorizer choice* | AI | Py unit | P0 | `categorize_graph` with fake vectors where: one category is clearly nearest; the top two are within 0.05; the model answers an id that is not the user's. **Expect:** `method: embedding` with no model call; `method: llm` with one call whose guided-JSON enum lists only the user's category ids; an id outside the enum is refused and the embedding winner is returned | The model only picks among the user's own categories |
+
+### 7.9.3 Graph tests (agent service, no GPU)
+
+One test per trigger path through the compiled graph. The fake chat model returns fixed JSON per node; each test asserts the run's `steps` equal the expected node list and counts model calls.
+
+| Case | Step | Level | Pri | Steps, then **Expect** | Proves |
+|---|---|---|---|---|---|
+| *pipeline path* | R3 | Graph | P0 | `trigger: chat`, "tháng này ăn uống hết bao nhiêu?" for the seed user; then the first example of each of the 8 v1 skills (`thu_chi_ky`, `tong_ket_tuan`, `tong_ket_thang`, `chi_theo_danh_muc`, `so_sanh_ky`, `top_khoan_chi`, `so_du_vi`, `ngan_sach_con_lai`), with the fake model set to fail the test on any call (vLLM stopped). **Expect:** steps `ingress, load_context, rewrite_question, recall_memory, find_skills, decide, act, generate_answer, guard_output, suggest_followups, save_turn`; 0 model calls; `route: rules`; every number equals `expected-stats.json` and the matching `/api/stats` or `/api/wallets` figure; each reply names its period and filter; `facts`, `sources` and 2–3 `followups` from the skill; one `agentTurns` row with tool calls and timings | Rules answer on their own |
+| *choose path* | AI | Graph | P0 | A question whose top two skills are close; the fake model picks the second. **Expect:** `decide` makes one guided-JSON call whose enums hold only the top 3 skills and the user's ids; the chosen skill runs | `choose` lets the model pick only from what retrieval offered |
+| *agent path* | AI | Graph | P1 | `hoi_tu_do` with a fake model that asks for 5 tool rounds. **Expect:** at most 4 rounds of `decide ⇄ act` (`max_steps`); then the template answer from the facts gathered | Agent mode is bounded |
+| *guard fallback* | AI | Graph | P0 | Agent mode where the fake model's wording has a raw digit, "hai triệu", "vượt", a URL or an unknown `[[id]]`; then raises, times out (25 s chat budget, fake clock) or returns invalid JSON. **Expect:** each time the template answer built from this turn's facts, `route: fallback`, `guard: fail` in `agentTurns`; never the model's text | The guard, end to end |
+| *follow-up* | AI | Graph | P1 | "tháng này ăn uống hết bao nhiêu?" then "còn tháng trước?" in the same thread; again in another thread. **Expect:** the second is rewritten to a standalone question about last month (one model call in `rewrite_question`) and answered; in another thread nothing is carried | Short-term memory is per thread |
+| *ingress gate* | AI | Graph | P0 | A question that needs the model (a `choose` pair, and one no skill fits), with in turn: `ASSISTANT_ENABLED` false; the runtime switch off; `assistantOn` false; the channel not in `ASSISTANT_CHANNELS`; vLLM down (`/health` `vllm: down`); then a pipeline question with the cap reached; a 501-character text; control characters. **Expect:** with the gate closed, 0 model calls: the `choose` pair asks back with numbered options, the other gets the help text, and a pipeline question is still answered (`route: rules`); with the cap reached, the cap line plus the plain commands and 0 tool calls; 400 for the length; control characters stripped. With every condition true, the model is called | The model gate |
+| *two users* | R3 | Graph | P0 | A second user with the same category and wallet names and transactions on the same days, other amounts. Run *pipeline path* and *agent path* as the first user; then the second user sends a follow-up and a `confirm` naming the first user's `pendingActions` id. **Expect:** no number of the second user's appears; the follow-up carries nothing from the first user; the confirm finds nothing (404 to Express) | No data leaks between users |
+| *C3 proposal* | AI | Graph | P0 | `de_xuat_thao_tac` for "đặt ngân sách đi lại 600k" and "xoá khoản phở hôm qua", with the fake model calling `propose_action`; then the fake model calling a write it has no tool for. **Expect:** the only write is one `pendingActions` row per proposal, returned as `action`; no app collection changes; the unknown tool is refused | The model proposes, it never writes |
+| *confirm path* | AI | Graph | P0 | `trigger: confirm` with the action id after Express ran the write; then a declined and an expired action. **Expect:** steps `ingress, load_context, act, generate_answer, guard_output, suggest_followups, save_turn` for the confirm; `load_context → generate_answer` for declined and expired; 0 model calls | The confirm reply is a template |
+| *schedule path* | R4 | Graph | P0 | `trigger: schedule`, `skill: ban_tin_toi`, for a user with spending today, 2 waiting drafts, a budget on day 12 and a 5-day streak; `tong_ket_tuan` on a Sunday; `tong_ket_thang` on day 1. **Expect:** steps skip `rewrite_question`, `recall_memory` and `find_skills`; the digest has today's total, the 2 drafts, A2's daily limit and the streak; the reports match the chat commands' text | B1 and B4 say the right things |
+| *receipt path* | AI | Graph | P0 | `receipt_graph` with the fake VLM returning: a clean receipt; a total that is a year; no total; items that don't add up. **Expect:** steps `ingress, read_receipt, check_total, reconcile, save_turn`; the first gives `{total, merchant, date, items, reconciliation}`; the second and third `NO_TOTAL`; the fourth keeps the total and flags the reconciliation; one `receiptReads` row each, never the image | The new reader keeps §2.6's rules |
+| *memory write* | R5 | Graph | P2 | An A7 tap confirmed in Express, then `remember`; 201 memory rows for one user. **Expect:** one `agentMemory` row "cafe → Ăn uống"; `recall_memory` finds it by cosine ≥ 0.6; the oldest unused row is dropped at 200 | Long-term memory stays small and comes only from the user's own taps |
+
+**Agent API** (pytest + `TestClient`, P0): every `POST` without `Authorization: Bearer ${AGENT_SECRET}`, or with a wrong one, → 401; a body missing `userId`, `channel`, `requestId` or `today` → 422; `GET /health` needs no auth and returns only `{vllm, embedder, model, gpuFreeMb}`; the same `requestId` twice for one user → one `agentTurns` row (unique index), and the second request gets the first answer or 409 (docs/04 decides); with 16 requests waiting on a fake slow model, the 17th → 503 `AGENT_BUSY` at once. **DB role** (P1): the test `mongod` runs with auth and the `sochitieu_agent` custom role of docs/03; an `insert` into `transactions`, `budgets` or `categories` as that user → unauthorized; `find` on them and writes to `agent*` and `pendingActions` succeed.
+
+### 7.9.4 Express tests: unit, API and webhook (Vitest, agent API stubbed)
+
+`services/agent.js` and every route that uses it are tested against an **MSW stub of the agent API** on a dummy `AGENT_URL`: `/v1/turn`, `/v1/receipt` and `/v1/categorize` answer canned JSON per test, record the calls, and can answer 503 `AGENT_BUSY`, 500, or nothing (timeout).
+
+| Case | Step | Level | Pri | Steps, then **Expect** | Proves |
+|---|---|---|---|---|---|
+| *classify table* | R1 | Unit | P0 | `classify(text, { followUp })` on one row per rule of §2.11.1, in order. Questions: "tháng 10 thu bao nhiêu", "tháng 3 năm 2025 tiêu bao nhiêu", "7 ngày qua tiêu bao nhiêu", "?phở 45k", "45k là nhiều chưa", "momo còn bao nhiêu", "tìm phở", "tổng kết tuần trước", "sao tháng này tiêu nhiều vậy", a no-amount text with `followUp: true`. Captures: "phở 45k", "phở 45", "cà phê không đường 25", "sửa xe 150k", "tim heo 50", "crop top 120", two lines that each look like a question, "may 50" without diacritics. **Expect:** each row gets its rule's answer; a year or a day count is never an amount; the function touches no database and no network | Questions never become money data, and capture is unchanged |
+| *split* | R5 | Unit | P1 | The split rule on "cơm 1tr2 chia 4", "100k chia 3", `chia 1`, `chia 2`, `chia 50`, `chia 51`. **Expect:** 300.000 ₫ with the note "(1.200.000 ₫ ÷ 4)"; 34.000 ₫ (ceil to 1.000); N = 2 and 50 split; N = 1 and 51 do not | Split the bill |
+| *recurring detection* | R5 | Unit | P2 | `detectRecurring()` on 180 days with "tiền nhà" monthly, a merchant seen twice, one seen 3 times within 5 days, and a noisy monthly one. **Expect:** groups by the note's first 2 words, ≥ 3 times, ≥ 6 days apart; confidence = 0.2 + 0.4·min(n/10, 1) + 0.4·clamp(1 − CV); only ≥ 0.7 (≥ 0.85 on Zalo) is due | B3 finds bills, not coincidences |
+| *draft hints* | R5 | Unit | P2 | `draftHints()` with an amount 5× the category's 90-day median and 5 samples; the same with 4 samples; a guessed amount 3× the median; the same amount and category drafted 5 minutes earlier. **Expect:** the first, third and fourth get a hint line, at most 2 per draft; the second gets none | A6 warns without noise |
+| *agent client* | R3 | Unit | P0 | `services/agent.js` against the stub: a turn from the web and from Telegram; then the stub answers 503 `AGENT_BUSY`, 500, a refused connection, and nothing (fake timers: 25 s chat, 40 s web, 60 s receipts). **Expect:** `Authorization: Bearer <AGENT_SECRET>`; the body has `userId`, `channel`, `threadKey`, `language`, `requestId` and `today` as the Vietnam date (23:30 +07 on 25/11 sends `2026-11-25`); `AGENT_BUSY` passes through; 500, refused and timeout map to `AGENT_UNAVAILABLE`; the timeouts fire at their budgets | Express talks to the agent the one agreed way |
+| *parse question* | R1 | API | P0 | `POST /api/transactions/parse` with the three question texts, then "phở 45k". **Expect:** the questions answer 200 `{ question: true, drafts: [], noAmountLines: [], truncated: false }`; "phở 45k" answers as today; no call to the agent stub; the transaction count never changes | The web never drafts a question |
+| *questions in chat* | R1, R3 | Webhook | P0 | In Telegram and Zalo, a linked chat sends the three question texts, `/hoi tháng này ăn uống hết bao nhiêu`, then the capture texts, a photo, and `ok` with a draft waiting. **Expect:** each question makes one `/v1/turn` call and gets the stub's text, no draft; each capture gets a draft as today and no `/v1/turn` call; the photo goes to the reader `RECEIPT_READER` names; `ok` still confirms | The router puts questions and captures in the right place |
+| *assistant endpoints* | R3 | API | P0 | No login; a 0- and a 501-character message; `month: "2026-13"`; one `requestId` sent twice (and twice at the same moment); `GET` and `DELETE /api/assistant/thread` as two users; "phở 45k" as a message; then the stub down, then busy. **Expect:** 401; 400 `VALIDATION_ERROR`; 400; one 200 and one 409 `DUPLICATE`, one `/v1/turn` call; each user sees and clears only their own thread, and the cap is not reset by the clear; "phở 45k" answers with `capture`, saves nothing and never calls the stub; 503 `AGENT_UNAVAILABLE`; 503 `AGENT_BUSY`. The 200 carries `route`, `text`, `facts`, `sources`, `followups` and `remainingToday` | The drawer's API contract |
+| *webhook idempotency* | R3 | Webhook | P0 | The same Telegram update and the same Zalo event delivered twice in a row and twice at once. **Expect:** one reply each time; one `/v1/turn` call (counted by MSW) | Redelivered webhooks answer once |
+| *ask-back* | R3 | Webhook | P1 | The stub answers a question with a numbered ask-back (`choose` with the model gate closed): on Telegram, then on Zalo; on Zalo reply `2` within 10 minutes; ask again and reply `2` after 11 minutes; then reply `2` after 25 hours. **Expect:** numbered options (buttons on Telegram, callback data ≤ 64 bytes); `2` in time sends option 2 to `/v1/turn`; `2` after 11 minutes gets "Câu hỏi đã hết hạn, hãy hỏi lại", no draft and no amount correction; after 25 hours `2` is handled as today | Ask-backs never turn into money data |
+| *agent down in chat* | R3 | Webhook | P0 | The stub refuses connections; Telegram and Zalo send a question, a capture, a photo (with and without `KIE_URL`) and a Khác/Other capture. **Expect:** the question gets the help text plus the plain commands (`/today`, `/month`); the capture gets its draft as today; the photo falls back to KIE when `KIE_URL` is set, else "hãy gõ số tiền"; the Khác draft stays Khác with no suggestion; nothing throws | The bots work with the agent service down |
+| *receipt reader switch* | AI | Webhook + API | P0 | A photo on Telegram and `POST /api/receipts` on the web, with `RECEIPT_READER=kie`, then `qwen`; the stub answers a clean read, then `NO_TOTAL`, then 30 reads in one day for one user. **Expect:** `kie` → only the KIE stub is called; `qwen` → only `/v1/receipt`, with the image and its mime; the same draft as §2.6 (total → amount, merchant → note, date, items, reconciliation); `NO_TOTAL` → the bot asks the user to type the amount; the 31st read that day is refused with the cap text | Qwen can replace KIE without changing the draft |
+| *category suggestion* | AI | Webhook + API | P1 | A Telegram capture "abc 50k" that falls back to Khác; the stub answers `/v1/categorize` in 1 s, then in 4 s; a capture with a keyword match; the web categorize endpoint with a note, and with the stub down. **Expect:** the draft message is sent first, then the suggestion (buttons as A7) when it comes within 3 s; at 4 s no suggestion is sent; a keyword match calls nothing; the web endpoint returns only one of the user's category ids, or 503 `AGENT_UNAVAILABLE` | Suggestions never slow capture down |
+| *learns words* | R5 | Webhook | P2 | A Khác draft; tap the suggested category; repeat with a word another category owns. **Expect:** the draft moves; the note's first word joins that category's `keywords`; Express asks the agent to `remember` the hint once; the owned word is not added | A7, with the suggestion |
+| *C3 confirm* | AI | API + Webhook | P0 | The stub returns an `action` in five cases: a note "xoá giao dịch này"; a question with no change verb; "đặt ngân sách đi lại 600k" with the action's limit 900k; a `delete_transaction` id not in this turn's `agentTurns.toolCalls`; a valid "đặt ngân sách đi lại 600k". Then confirm the valid card on the web, as another user, twice, and after 11 minutes; Telegram `ao:`/`an:`, Zalo `/dongy`/`/thoi`. **Expect:** no card for the first four; the valid card's limit is 600.000 ₫ (from `findAmount()` on the user's message); the confirm flips the row `pending → done` atomically, runs the budget write through the same service as the web, once, then calls `/v1/turn` with `trigger: confirm`; another user → 404; the second confirm → 409; expired → 404 | C3 safety |
+| *Settings switch* | AI | API | P1 | `PATCH /users/me { assistantOn: false, notify: 'daily' }`; a question afterwards; the runtime switch as admin and as a user; a new user; `aiOptIn` or `aiGranted` in the body. **Expect:** saved; the question is still answered by a pipeline skill, with no model call; the new user has `assistantOn: true`; admin-only endpoints answer 403 to a user; the runtime switch takes effect on the next question with no restart; the old fields are refused (400 or ignored, as docs/04 says) | The model gate needs no redeploy |
+| *daily cron* | R4 | API | P0 | `GET /api/cron/daily` with no header, a wrong Bearer and the right `CRON_SECRET`; run it twice; users: reminder on with spending, on with a quiet day, on with nothing logged, off, linked on Telegram and Zalo; Zalo `channelUsage` at 1,999 and 2,000; the stub down for one user; `POST /api/admin/cron/daily` as user and admin. **Expect:** 401 without the right secret; one `/v1/turn` (`trigger: schedule`) per reminder-on user; each notice is sent once over both runs (`notices` row written before the send); the quiet day sends nothing; the off user gets nothing; the multi-app user gets Telegram only; Zalo proactive sends stop at 2,000; the user whose turn failed is skipped and the loop goes on; 403 for the user's "Chạy ngay" | Proactive engine |
+| *channel limits* | R4, AI | Webhook | P1 | A long stub answer on Telegram, Zalo and WhatsApp; Zalo `channelUsage` at 2,399, 2,400, 2,849 and 2,850; WhatsApp at 799, 800, 949 and 950; a slow stub answer on Telegram. **Expect:** one message ≤ 1,500 characters, Zalo never split; Zalo assistant answers off from 2,400, only capture replies from 2,850; WhatsApp assistant off from 800, no replies from 950 but the capture still lands in the Bot inbox; Telegram "typing" every 4 s | The free chat quotas are never blown |
+| *recurring drafts* | R5 | API | P0 | 3 monthly "tiền nhà" rows; run the cron the day before the next one is due, then again. **Expect:** one draft in one chat, never a confirmed transaction; its `chatRef.messageId` is `rec:<date>:<key>`; the rerun creates no second draft | Recurring drafts stay drafts |
+| *split in chat* | R5 | Webhook | P1 | "cơm 1tr2 chia 4"; a waiting receipt draft, then `chia 3`. **Expect:** a 300.000 ₫ draft with "(1.200.000 ₫ ÷ 4)"; the receipt draft divided by 3, rounded up to 1.000 | Split the bill |
+| *undo in chat* | R5 | Webhook | P1 | Confirm a draft, then `hoàn tác`, then `khôi phục`; `/sua 50k` with a draft waiting, then with none and one confirmed 10 minutes ago, then 20 minutes ago; "sửa xe 150k". **Expect:** `hoàn tác` deletes the last confirmed (soft), `khôi phục` restores it; `/sua` edits the waiting draft, else the one confirmed within 15 minutes, else says there is nothing to fix; "sửa xe 150k" is a capture | Undo, and `/sua` never catches a real expense |
+| *private logs* | R3, AI | API + Py unit | P1 | Capture the Express log during *assistant endpoints* and *C3 confirm*, and the agent log during *guard fallback*; read the `agentTurns` and `receiptReads` indexes. **Expect:** log lines carry only the request id, the node or stage, timings and the error class: no question text, note, figure or tool argument; `agentTurns` has a 30-day TTL, `receiptReads` 90 days and no image field | Questions and money stay out of the logs |
+
+### 7.9.5 Component and E2E tests
+
+| Case | Step | Level | Pri | Steps, then **Expect** | Proves |
+|---|---|---|---|---|---|
+| *QuickAdd chip* | R1 | Component | P0 | QuickAdd with MSW answering `question: true`; type, press Enter, press Save, press the chip. **Expect:** the chip "Đây là câu hỏi · Hỏi Sổ chi tiêu ›" instead of preview chips; no `POST /api/transactions`; the chip opens the drawer and sends the text | Enter never saves a question |
+| *drawer* | R3 | Component | P1 | The drawer with MSW: open it empty; press a starter chip; answer with `route: 'rules'`, then `'agent'`, each with facts, sources and 2 follow-ups; press a follow-up chip; a slow answer, then **Dừng**; **Xoá**; a `capture` answer, then save; close. **Expect:** 4 chips when empty; badges "Theo mẫu" and "AI"; the facts list and the sources line; follow-up chips only under the newest answer, and pressing one sends its text; Dừng aborts the request; Xoá calls `DELETE /api/assistant/thread`; the capture card saves only when pressed; focus goes to the input on open and back to the opener on close; the list is `role="log"`, the finished answer is announced once ([05-frontend.md §5.10.8](05-frontend.md#5108-accessibility-planned-2115)) | The drawer's states and accessibility rules |
+| *drawer errors* | R3 | Component | P1 | MSW answers 503 `AGENT_UNAVAILABLE`, then 503 `AGENT_BUSY`, then a network error; press **Thử lại** each time; then `ai.on` false (`assistantOn` off), then `remainingToday: 0`. **Expect:** the texts of [05-frontend.md §5.10.1](05-frontend.md#5101-the-hỏi-sổ-chi-tiêu-drawer-planned-2115) for each state, announced once; the question stays in the input after an error; Thử lại resends the same `requestId`; with the switch off a question is still sent and its "Theo mẫu" answer shown; at the cap a capture still gets its card | The drawer fails politely |
+| *action card* | AI | Component | P1 | An answer with `action`; press Đồng ý (200), then a card whose confirm answers 404, then 409; a delete card, then Thôi. **Expect:** Đồng ý refetches budgets, stats, transactions, drafts and wallets; a delete shows the undo snackbar; 404 and 409 show their texts; every outcome removes the buttons; button names say the action in full | The web confirm card |
+| *category chip* | AI | Component | P1 | QuickAdd "abc 50k" whose preview falls back to Khác; MSW answers the categorize endpoint with Ăn uống; tap the chip, press Enter. Then a Khác draft in Transactions; then the endpoint answers 503, and then after 4 s. **Expect:** "Gợi ý: Ăn uống ›" appears only on the Khác line; the tap changes the preview's category and saves nothing; Enter saves with Ăn uống; the draft's change goes with its edit request; no chip on 503 or after 3 s, and saving still works | The suggestion helps and never blocks |
+| *compare same days* | R3 | Component | P1 | MonthCompare on `shared/fixtures/compare-range.json`, for the current month on the 25th and for a past month. **Expect:** the sentence's difference equals the Python *same days* result on the same file and says "cùng kỳ tháng trước"; the weekly columns are unchanged | One comparison rule on screen and in chat |
+| *pace chip* | R2 | Component | P2 | Budgets with MSW budgets carrying a pace, on day 4 and day 5. **Expect:** no chip on day 4; on day 5 the chip shows the server's daily limit (*pace everywhere*) | One pace number everywhere |
+| *Settings and admin switches* | AI | Component | P2 | Settings: toggle "Trợ lý" (on for a new user), pick a reminder; Admin · Users: flip the runtime switch, press "Chạy ngay". **Expect:** the line is read with the switch (`aria-describedby`); each sends the right request; there is no per-user AI toggle | The switches send what docs/04 expects |
+| *drawer E2E* | R3 | E2E | P0 | The E2E server with `AGENT_URL` on its agent stub (canned answers for the questions used). userA; Dashboard at 1280 and 375 px; type "tháng 10 thu bao nhiêu" in QuickAdd and press Enter; press the chip; then type "phở 45k" in the drawer and save; run axe with the drawer open; switch the stub to 503 and ask again; close. **Expect:** nothing saved by Enter (transaction count through the API); the drawer opens (420 px, then full width) with the stub's answer, badge and sources; "phở 45k" saves only after the button; the unavailable bubble on 503; no axe violations; focus back on the opener | The web assistant works in a real browser |
+
+The E2E stub answers fixed text, so *drawer E2E* proves the screens, not the numbers. The numbers are proven by the skill eval (§7.9.6) and *pipeline path*.
+
+### 7.9.6 Evals (on the GPU host, real model)
+
+The evals are the only tests that use the real Qwen3.5-2B and bge-m3. They run by hand on the GPU host, against a seeded throwaway MongoDB, before each agent deploy and before changing the model, a prompt, a skill or a threshold. Each writes a Markdown and a JSON report into the git-ignored `agent/eval/out/<VN date>/`; the build PR attaches the numbers to its description.
+
+**Skill eval** (`python -m agent.eval skills`, cases in `agent/eval/skill_cases.yaml`, after the reference repo's `copilot_skill_cases.yaml`).
+- **Fixture:** a seeded demo user with a known month: the rows of `server/test/fixtures/expected-stats.json` plus about 150 fixed rows from 01/09 to 25/11/2026 in three wallets (Tiền mặt, MoMo, Vietcombank), a few drafts and November budgets; `today: 2026-11-25`. A second user "other" with the same names is used for isolation. Expected numbers come from a plain oracle in the runner (a filter and a sum over the fixture), never from the tools, so the check is not circular.
+- **Runner:** sends each case through `POST /v1/turn`, reads the turn's `agentTurns` row (skill search, tool calls, steps and timings), fills each case's `actual:` block and writes `skill-results.{md,json}`.
+- **Fields** of a case: `turns` (earlier turns in the same thread, asked first, not scored); `expect.rewrite` (the standalone question's linked categories, wallets and dates, and `method: rule|llm`); `expect.retrieval` (`skill`, `rank_max` = the RRF rank it must reach, `decision: direct|choose|none`, `absent` = skills that must not be candidates); `expect.tools` (calls in order with their key `args` compared exactly, and `forbid`); `expect.answer` (`numbers` exact in ₫, `must` phrases, `lang`); `budget_ms` (3500 for a pipeline skill, 8000 for agent mode).
+
+```yaml
+defaults: {user: demo, lang: vi, budget_ms: 3500}
+cases:
+  - id: S01
+    question: Tháng này ăn uống hết bao nhiêu?
+    expect:
+      rewrite: {method: rule, categories: [an_uong], start: 2026-11-01, end: 2026-11-25}
+      retrieval: {skill: chi_theo_danh_muc, rank_max: 1, decision: direct}
+      tools:
+        calls: [{name: get_category_totals, args: {start: 2026-11-01, end: 2026-11-25, type: expense}}]
+      answer:
+        numbers: [{oracle: category_total, args: {category: an_uong, month: 2026-11}}]
+        must: [[Ăn uống], [tháng 11, 11/2026]]
+    actual: {skill: null, decision: null, candidates: [], tools: [], answer: null, latency_ms: null, pass: null}
+  - id: S02
+    turns: [Tháng này ăn uống hết bao nhiêu?]
+    question: còn tháng trước?
+    expect:
+      rewrite: {method: llm, categories: [an_uong], start: 2026-10-01, end: 2026-10-31}
+      retrieval: {skill: chi_theo_danh_muc, rank_max: 1}
+      answer: {numbers: [{oracle: category_total, args: {category: an_uong, month: 2026-10}}]}
+    actual: {skill: null, decision: null, candidates: [], tools: [], answer: null, latency_ms: null, pass: null}
+```
+
+- **Rows:** at least two questions per skill of §2.11.3 (one with diacritics, one without), follow-ups, the starter chips, questions no skill fits (`hoi_tu_do`, ≤ 4 steps), C3 requests (`de_xuat_thao_tac`: a card, never a write), captures sent to `/v1/turn` by mistake (no draft, no write), the second user's questions (no first-user number), and English questions.
+- **Gates (one miss blocks the deploy):** skill accuracy ≥ 90 % (hit@1); every number exact (100 %); 0 guard leaks (no model-written digit reaches an answer); write safety 100 % (no app collection changes; C3 only makes `pendingActions` rows). **Reported:** hit@3, MRR, rewrite accuracy, argument accuracy, follow-up accuracy, p50/p95 latency against `budget_ms`, model calls per question.
+- Grow the set from real `agentTurns` rows: a misrouted question becomes a new case, with its numbers worked out by the oracle.
+
+**Receipt eval** (`python -m agent.eval receipts`).
+- **Set:** the 5 MC-OCR receipts in `server/test/fixtures/receipts/` plus at least 25 more real receipts collected for the eval (`agent/eval/receipts/`, git-ignored if they show personal data), each with its true payable total, merchant and date in a labels file.
+- **Run:** every receipt through Qwen (`/v1/receipt`) and through KIE (`/analyze`), side by side.
+- **Report:** total exact-match rate, merchant and date match, `NO_TOTAL` rate, wrong-total rate (a total given but wrong is worse than `NO_TOTAL`), ms p50/p95, per reader.
+- **Gate to flip `RECEIPT_READER=qwen`:** Qwen's total accuracy ≥ KIE's on the same set, and p95 ≤ 15 s. Until it passes, the default stays `kie`. After the flip, the KIE contract row of §7.1 and TC-F10-01 move to Qwen, and KIE is retired.
+
+**Categorizer eval** (`python -m agent.eval categories`).
+- **Set:** 100 labelled notes for the default categories: Vietnamese with and without diacritics, slang and brand names ("trà sữa", "grab về nhà", "tiền điện t11", "shopee"), each with the right category.
+- **Report:** top-1 accuracy of the keyword rules alone, of the suggestion alone, and on the notes where the rules fall back to Khác/Other; share answered by embedding vs by the model; p95 ms.
+- **Gate:** on the Khác/Other fallbacks the suggestion is right more often than leaving Khác, and it never returns an id outside the user's categories.
+
+### 7.9.7 Load test (on the GPU host)
+
+`python -m agent.eval load` ⚑ against the running agent service, with the seeded demo user:
+- **8 concurrent questions** (vLLM's `--max-num-seqs 8`), half pipeline, half agent mode, for 2 minutes. **Expect:** no error; p95 within the budgets (3.5 s pipeline, 8 s agent); `/health` stays `ok`.
+- **A burst of 24** while 8 are running. **Expect:** up to 16 wait in the queue and are answered; every request beyond that gets 503 `AGENT_BUSY` at once, not a timeout; the service recovers with no restart.
+- **Receipts:** 4 receipt reads during the 8-question run. **Expect:** each under 15 s; questions still within budget.
+- The report records GPU memory before and after (`nvidia-smi`), so the 0.25 share of §2.11.4 is checked against the other services on the host.
+
+### 7.9.8 Hermetic rules (no real GPU or model in CI)
+
+- **Python.** CI runs pytest with the fake chat model and fake embedder only. `HF_HUB_OFFLINE=1` and no `VLLM_BASE_URL`: a test that tries to download weights or reach vLLM fails. The evals and the load test are not part of CI.
+- **Express (Vitest).** The agent API is always the MSW stub on a dummy `AGENT_URL`; tests assert the exact number of calls. In *parse question* and the capture cases, the handler fails the test if it is called at all. `AGENT_SECRET` in tests is a dummy.
+- **E2E server.** `AGENT_URL` points at an agent stub inside the E2E server (next to `bot-api-stub.js`), which answers canned turns and can be switched to 503. Every other host stays blocked (TC-NF-11). `CRON_SECRET` has a test value, and E2E drives the cron through "Chạy ngay".
+- **No third party.** No test, eval or charter calls a hosted model API. The only model is ours.
+- **Clock.** Fake timers, an injected `now`, or `today` in the request body for every 10-minute, 15-minute, 24-hour, daily-cap, weekly and monthly window and for the cron's evening.
+
+### 7.9.9 Manual charters (recorded)
+
+Run like MT-01…MT-08 (§7.4), and recorded. The chat and digest charters show chat text, so their recordings go to the git-ignored `charter-runs/<VN date>/` folder, like the bot-e2e evidence ([testing/bot-e2e.md](testing/bot-e2e.md)); the Excel *Evidence* column gets that local path. The bots' webhook and the cron run in production only (Hobby crons fire once a day), so those charters run on production, with the agent service up on the GPU host and its tunnel live.
+
+| ID | Charter | Checkpoints | Proves |
+|---|---|---|---|
+| *Assistant on the web* (planned; next free MT ID) | Staging or production, userA: QuickAdd "tháng 10 thu bao nhiêu" + Enter → chip → drawer; the 4 starter chips; a follow-up chip; a question no skill fits; an action card → Đồng ý; "phở 45k" in the drawer → save; then the admin flips the runtime switch off, asks the same questions, and flips it on again | No transaction from a question; each number equals the Dashboard's; badges "Theo mẫu" and "AI"; facts, sources and follow-ups shown; "Còn N câu hỏi hôm nay" goes down; with the switch off the pipeline questions give the same numbers ("Theo mẫu") and the free question gets the help text, with no redeploy; no console errors; Vercel and agent logs hold no question text | The web assistant works for a real user |
+| *Assistant in Telegram* (planned; next free MT ID) | Production, the student's real Telegram: the three questions of §2.11.8; `/hoi`, `/dubao`, `/visao`, `/tuan`; a follow-up; "cơm 1tr2 chia 4" → ✅; `hoàn tác` → `khôi phục`; a free question; a C3 card → ✅ Đồng ý | No draft from a question; replies ≤ 1,500 characters; the C3 change appears on the web; numbers match the Dashboard | The bot assistant works in the real chat app |
+| *Receipt read by Qwen* (planned, after the receipt eval passes; next free MT ID) | Production with `RECEIPT_READER=qwen`: a real receipt photo on Telegram and on Zalo; the web upload; then stop the agent service and send one more | The draft's total matches the paper receipt; the time to the draft is logged; with the agent stopped the photo falls back to KIE (if it still runs) or asks for the amount | Qwen reads real receipts in the real chats |
+| *Category suggestion* (planned; next free MT ID) | Production: in Telegram a capture with no keyword ("trà sữa 45k" with no matching keyword); on the web the same in QuickAdd | The draft comes first, the suggestion within 3 s; the tap moves the draft; the next "trà sữa" goes straight to that category | The suggestion and A7 work together |
+| *Evening digest* (planned; next free MT ID) | Production: `/nhac toi` in Telegram; log a few expenses and leave one draft; the admin presses "Chạy ngay", then again; the next evening, wait for the real cron (20:00–20:59) | One digest per run day, not two; the waiting draft comes with working buttons; one `notices` row per send in Atlas; the real cron fires in its window | The proactive engine works on schedule |
+| *Agent service stopped* (planned; next free MT ID) | Production: `docker compose -p sochitieu-agent stop agent`; ask in the drawer and in Telegram; send a capture and a photo; start it again and ask again | The drawer shows the unavailable bubble; Telegram answers with the help text and the plain commands; the capture still drafts; nothing hangs; after the start, answers come back with no redeploy | The app degrades politely when the GPU host is down |
+
+### 7.9.10 Acceptance checks → cases
+
+Each check of [02-features.md §2.11.8](02-features.md#2118-acceptance-checks) is named by its *Proves* text, in the table's order (18 rows). The names are used instead of row numbers so that a row added later does not shift the mapping.
+
+| §2.11.8 check | Cases |
+|---|---|
+| Questions never become money data | *classify table*, *parse question*, *questions in chat*, *ask-back*, *QuickAdd chip*, *drawer E2E*, skill eval write-safety gate; *Assistant on the web*, *Assistant in Telegram* |
+| Capture is unchanged | *classify table*, *questions in chat*, today's TC-F8-01/02 and TC-F13-02 |
+| Rules answer on their own | *pipeline path* (the 8 v1 skills with vLLM stopped), skill eval number gate; *Assistant on the web* |
+| One comparison rule | *same days*, *compare same days* |
+| No data leaks between users | *two users*, *typed query*, *forbidden args*, *categorizer choice* (enum), skill eval isolation rows |
+| Vietnam-time boundaries | *period rules*, *agent client* (the `today` field) |
+| Idempotency | *assistant endpoints*, *webhook idempotency*, the Agent API `requestId` test |
+| The model gate | *ingress gate*, *Settings switch*, *Settings and admin switches* |
+| The guard | *guard*, *to model*, *guard fallback*, skill eval guard-leak gate |
+| Caps and concurrency | *caps*, *assistant endpoints* (Xoá keeps the count), the Agent API `AGENT_BUSY` test, the load test (§7.9.7) |
+| Receipt gate before `RECEIPT_READER=qwen` | *check_total*, *receipt path*, *receipt reader switch*, the receipt eval gate; *Receipt read by Qwen* |
+| Categorizer suggestion | *categorizer choice*, *category suggestion*, *category chip*, *learns words*, the categorizer eval gate; *Category suggestion* |
+| Agent-down fallbacks | *agent client*, *agent down in chat*, *drawer errors*; *Agent service stopped* |
+| C3 safety | *C3 proposal*, *C3 confirm*, *action card* |
+| Proactive engine | *daily cron*, *schedule path*, *channel limits*; *Evening digest* |
+| Recurring drafts stay drafts | *recurring detection*, *recurring drafts* |
+| Split the bill | *split*, *split in chat* |
+| Undo | *undo in chat* |
+
+Not a row of §2.11.8, but the rule at the top of §2.11 ("nothing goes to a third-party model"): §7.9.8's hermetic rules, *private logs* and the DB role test.
+
+### 7.9.11 Open points for the builder
+
+§2.11 and the design brief leave these open, or state them in a way a test can't fully check:
+
+- **Word lists end in "…".** The guard's number and verdict words and `classify`'s cue words are given as examples. The tests check the listed words; each word added should get a row.
+- **Who counts the cap for `remainingToday`.** The agent's `ingress` counts `agentTurns`; Express needs the same number for the drawer. *caps* and *assistant endpoints* must use one rule.
+- **`requestId` twice at the agent.** Return the stored answer or 409: docs/04 decides, and the Agent API test follows it.
+- **The eval set is small.** 30 receipts and 100 notes prove a trend, not a rate; the gates compare Qwen with KIE and with the rules on the same set, never with a fixed target.
+- **Evals are not in CI.** They need the GPU. A missed run before a deploy is caught only by the PR checklist.
+- **Some skill examples are not questions to `classify`.** "5 khoản chi lớn nhất tuần trước" and "đã mua gì ở Circle K tháng này" have no `?`, no `bao nhiêu` and no strong marker, so in chat they fall to capture (no amount → help text). They work in the drawer or with `?` or `/hoi`. Either the cue list grows or the examples change.
+- **`CRON_SECRET` unset:** §2.11 doesn't say whether the cron route then answers 401, 503 or is off. *daily cron* needs one answer.
+- **The real cron** can't run locally or in CI. "Chạy ngay" proves the code path; only the *Evening digest* charter proves the schedule.
+- **The web proactive banner** (§2.11.6) has no endpoint or design, so no case covers it yet.
+- **Delivery-dependent rules** (Zalo "rides on the next reply", WhatsApp's 24-hour window) are checked with stubs only; WhatsApp waits for §2.10.
+- **The tunnel URL changes on restart.** No automated test can catch a stale `AGENT_URL` on Vercel; the demo-day checks of docs/06 and the *Agent service stopped* charter cover it.
+
+## 7.10 Email codes: verified sign-up and password reset (planned, §2.12)
+
+> **Planned, not built.** Nothing in this section runs yet. It turns every acceptance check in [02-features.md §2.12.6](02-features.md#2126-acceptance-checks) into test cases. As in §7.8, the cases have **no IDs yet**: each is named by a short *name*, the part of §2.12 it tests and its §2.12.6 row, counted from the top of that table (1–11). The build PR takes the next free TC-F1 ID (F1 Auth) in `test-cases.json` at merge time, and the next MT for the charters, writes them into these tables and §7.10.7, and adds the cases to the catalogue and the Excel report. Until then they are not counted in §7.3. Quoted texts are §2.12's English; the tests match whatever wording and i18n keys the builder settles (vi + en).
+
+Levels and tools as in §7.9. **No test ever sends real mail** (§7.10.5).
+
+### 7.10.1 What changes in today's cases
+
+Under test, `GMAIL_*` is unset, so register answers **202** and logs the code instead of sending it (§2.12.4). Today's tests expect 201.
+
+| Case today | What it checks now | When §2.12 lands |
+|---|---|---|
+| Helpers | `registerUser()` in `server/test/helpers/auth.js` and in `client/e2e/helpers.ts` expect 201 | They register, read the code from the mail mock (Vitest) or the mail stub (E2E), call `/register/verify`, and return the same `{ accessToken, user, cookie }` as today. Every suite that registers through them needs no other change |
+| TC-F1-01 | Register stores a bcrypt hash and opens a session | Register answers 202 with no cookie; the hash and the session come with the verify (*sign-up with code*) |
+| TC-F1-02 | Duplicate email → 409 | Also: no mail is sent (*taken email*) |
+| TC-F3-01, TC-F11-04 | Defaults are seeded on register | Seeded on verify (`onUserRegistered()`), through the helper |
+| TC-F1-08 | E2E register, reload, logout | Passes through `/verify-email` with the stub's code |
+| TC-F1-16, TC-F1-24 | The Register form's checks and errors | Also a 202 → `/verify-email`, and 503 `EMAIL_SEND_FAILED` shown on the form (*register 201 or 202*) |
+| TC-F1-14 | Seeding users is idempotent | Unchanged: the seed writes users directly, and existing accounts are left as they are |
+| TC-NF-11 | The E2E server stubs outbound HTTP | It also loads the mail stub. SMTP is not HTTP, so the host block can't catch a real send (*mail is hermetic*) |
+| MT-01, MT-06 | Register on the deployment | With mail on there, the register step needs the code from the inbox; *Sign-up with a real code* covers it |
+
+### 7.10.2 Unit tests
+
+| Case | Part | Level | Pri | Steps, then **Expect** | Proves | §2.12.6 row |
+|---|---|---|---|---|---|---|
+| *code helpers* | §2.12.1 | Unit | P0 | Make 1,000 codes with `crypto.randomInt` stubbed to return 4,215 once; hash a code; compare a right and a wrong code; mask `an.nguyen@gmail.com`. **Expect:** always 6 digits, "004215" keeps its zeros; only the SHA-256 is kept; the comparison uses `timingSafeEqual`; the mask is `a***@gmail.com` | Codes are well formed and stored safely | 3, 9 |
+| *code email* | §2.12.1 | Unit | P1 | `sendCode({ to, purpose, code, language })` through nodemailer's built-in `jsonTransport` (it builds the message and sends nothing), for sign-up and reset, vi and en. **Expect:** from `"Sổ chi tiêu" <GMAIL_USER>`; subject "Mã xác nhận Sổ chi tiêu: 123456" / "Your Sổ chi tiêu code: 123456"; a text and an HTML part; the body names the purpose, says 10 minutes and "If you didn't ask for this, ignore this email"; no `http`, no `<a`, no `<img` | The mail says what it should and carries no link to scan | 1 |
+
+### 7.10.3 API tests
+
+Vitest + Supertest + mongodb-memory-server. `services/mail.js` is replaced with `vi.mock`; each test reads the code from the mock's records. Time windows are moved with fake timers or by moving `codeExpiresAt` and `sends` in the database.
+
+| Case | Part | Level | Pri | Steps, then **Expect** | Proves | §2.12.6 row |
+|---|---|---|---|---|---|---|
+| *sign-up with code* | §2.12.2 | API | P0 | `POST /api/auth/register`; read `users`, `emailCodes` and the mock; `POST /api/auth/register/verify` with the code. **Expect:** 202 `{ email: "a***@gmail.com", resendAfter: 60 }`, no cookie, no user; one `emailCodes` row (`purpose: 'signup'`, `codeHash`, `signup.passwordHash` a bcrypt hash); one mail with a 6-digit code. Verify → 201 `{ accessToken, user }` + the `rt` cookie; the row is gone; the Cash wallet and the default categories exist | Verified sign-up works end to end | 1 |
+| *taken email* | §2.12.2 | API | P0 | Register with userA's email; then register a new address, create that user directly, and verify. **Expect:** 409 `EMAIL_TAKEN` and no mail; the verify answers 409 `EMAIL_TAKEN` and no second user exists | Existing accounts are safe | 2 |
+| *wrong tries and expiry* | §2.12.2 | API | P0 | 5 wrong codes, then the right one; a fresh code tried after 10 minutes. **Expect:** 400 `CODE_INVALID` with `details.attemptsLeft` 4, 3, 2, 1, 0; then 400 `CODE_EXPIRED` even for the right code; after 10 minutes `CODE_EXPIRED` | Codes can't be guessed or used late | 3 |
+| *verify race* | §2.12.2 | API | P0 | The right code sent twice at once (`Promise.all`). **Expect:** one 201 and one 400 `CODE_EXPIRED`; exactly one user, one wallet set | Single use under a race | 4 |
+| *resend limits* | §2.12.2 | API | P0 | Resend at once; at 61 s; register again with the same address; send until the 6th in an hour; verify with the code before the last resend; resend for an address with no pending sign-up. **Expect:** 429 `RATE_LIMITED` with `details.retryAfter`; 202 `{ resendAfter: 60 }` and a new code; registering again counts as a send; the 6th send → 429; the old code → `CODE_INVALID`; the unknown address → the same 202 body | Resend limits, replaced codes, no list of pending sign-ups | 5 |
+| *mail rate limit* | §2.12.1 | API | P0 | From one IP, 10 code emails across register, resend and forgot (all successful); an 11th; the same from a second IP; the first IP after 15 minutes. **Expect:** the 11th → 429 and no mail; the second IP is not limited; after 15 minutes it works again. `mailRateLimit` is reset between tests, like `authRateLimit` | The Gmail account is protected from abuse | 6 |
+| *forgot without enumeration* | §2.12.3 | API | P0 | `POST /api/auth/password/forgot` for an unknown, a locked and an active email; the mock delays its send by 2 s. **Expect:** the same status and body (202 `{ resendAfter: 60 }`) for all three; only the active one gets a mail; every answer returns before the 2 s send ends (the send runs in `waitUntil()`) | No account enumeration | 7 |
+| *password reset* | §2.12.3 | API | P0 | userA logged in on two devices; forgot → reset with the right code and a new password; refresh both devices; log in with the old and the new password; a sign-up code used for reset and a reset code used for sign-up; a new password of 7 characters and of 73 bytes. **Expect:** 204; both refreshes → 401; old password → 401, new → 200; the cross-purpose codes → `CODE_EXPIRED` or `CODE_INVALID`, never a success; 400 for both bad passwords | Password reset, every session revoked | 8 |
+| *locked during reset* | §2.12.3 | API | P1 | Forgot for userB, then an admin locks userB, then reset with the right code; again with the right code. **Expect:** 403 `ACCOUNT_LOCKED`; the code is spent (the second try fails) | A locked account can't be taken back by email | 8 |
+| *send failure* | §2.12.2 | API | P1 | The mock throws on send; register. **Expect:** 503 `EMAIL_SEND_FAILED`; no `emailCodes` row is left | A failed send leaves nothing behind | 1 |
+| *storage and logs* | §2.12.5 | API | P0 | After *sign-up with code* and *password reset*, dump `emailCodes` and `users`; run a sign-up with `NODE_ENV=production` and mail on (transport stubbed) and capture the log. **Expect:** neither the code nor the password appears in any document; the production log has no code and only the masked email | Storage and logging rules | 9 |
+| *no mail configured* | §2.12.4 | API | P0 | With the real `services/mail.js` and `GMAIL_*` unset: a development/test sign-up, reading the code from the log line; then `NODE_ENV=production`: register, then forgot. **Expect:** the log line `[mail] signup code for a***@gmail.com: <code>` and the flow completes; in production register → 201 + cookie (logged in, no code) and forgot → 503 `FEATURE_NOT_CONFIGURED` | Works without mail; the escape hatch | 10 |
+| *nothing else changes* | §2.12 | API | P0 | The whole existing suite: F1 login, refresh, sessions and lock cases, the webhook suites, and logins of seeded users. **Expect:** all pass with no change other than the register helpers of §7.10.1 | Option B touches nothing else | 11 |
+| *indexes* | §2.12.5 | API | P2 | Read the `emailCodes` indexes. **Expect:** unique `(purpose, email)` and a TTL index on `expiresAt` | Old rows clean themselves up | — |
+
+### 7.10.4 Component and E2E tests
+
+| Case | Part | Level | Pri | Steps, then **Expect** | Proves | §2.12.6 row |
+|---|---|---|---|---|---|---|
+| *register 201 or 202* | §2.12.2, §2.12.4 | Component | P0 | Register with MSW answering 201, then 202, then 503 `EMAIL_SEND_FAILED`. **Expect:** 201 → `/` logged in, as today; 202 → `/verify-email`, the email in `sessionStorage` and the password nowhere in storage; 503 → the message on the form | The Register page handles both answers ([05-frontend.md §5.11.1](05-frontend.md#5111-register-page-planned-2122-2124)) | 1, 10 |
+| *verify screen* | §2.12.2 | Component | P0 | `/verify-email` with MSW: type 6 digits; paste 6 digits; a 400 `CODE_INVALID` with `attemptsLeft: 3`; a `CODE_EXPIRED`; Resend before and after the countdown; a 429 with `retryAfter: 30`; "Change it"; open the page with no `sessionStorage` entry. **Expect:** the input has `inputmode="numeric"`, `autocomplete="one-time-code"` and `maxLength` 6; it submits on the 6th digit; the tries left show and focus returns to the box; Resend is off for 60 s, then sends; the countdown restarts from 30; "Change it" goes to `/register` filled in; with no entry → `/register` | Every state of the verify screen | 1, 3, 5 |
+| *forgot screen* | §2.12.3 | Component | P1 | Login shows the link; `/forgot-password` with MSW: step 1 → 202; step 2 with a short password, then a valid one → 204; again with step 1 → 503. **Expect:** the link is under the password field; step 1's text doesn't say whether the account exists; the password checks match Register's; 204 → `/login` with "Password changed, please log in"; 503 → "Password reset by email isn't set up; ask the admin" | The reset screens | 8, 10 |
+| *sign-up E2E* | §2.12.2 | E2E | P0 | Register a new address in Chromium; read the code from the E2E mail stub; type one wrong code, then the right one. **Expect:** `/verify-email` shows the masked address; the wrong code shows the tries left; the right one lands on the Dashboard with the Cash wallet; reload keeps the session | Verified sign-up in a real browser | 1, 3 |
+| *forgot E2E* | §2.12.3 | E2E | P1 | userA logged in in a second browser context; in the first, Forgot password → code from the stub → new password. **Expect:** `/login` with the message; the new password logs in; the second context is sent to `/login` on its next refresh | Reset logs out every device | 8 |
+
+### 7.10.5 Hermetic mail (never real Gmail in tests)
+
+- **SMTP is not HTTP.** `nodemailer` opens a TLS socket to `smtp.gmail.com:465`. MSW and `bot-api-stub.js` see only HTTP, so their "block every other host" rule can't stop a real send. The mail module itself must be replaced in every test run.
+- **Vitest.** `services/mail.js` is replaced with `vi.mock`, which records `{ to, purpose, code, language }` and sends nothing. The test setup also deletes `GMAIL_USER` and `GMAIL_APP_PASSWORD`, so a real `server/.env` can never turn mail on in a test, and *no mail configured* runs the real module in its log-only mode. Only *code email* builds a real message, through nodemailer's `jsonTransport`, which has no network.
+- **E2E server.** A test-only mail stub, like `bot-api-stub.js`, that never loads in production (§2.12.4). It records each code so the Playwright test can read it. How the test reads it (a test-only route on the E2E server, a file, or the server log) is the builder's choice, as with the claim URL in §7.8.7.
+- **Real inboxes only in the charters** (§7.10.6), against staging with `GMAIL_*` set.
+
+### 7.10.6 Manual charters (recorded, real inbox)
+
+These read the tester's real mailbox (the student's own Gmail; an Outlook address too if there is one). The recordings show private mail, so they go to the git-ignored `charter-runs/<VN date>/` folder, like the bot-e2e evidence, not to `docs/testing/recordings/`; the Excel *Evidence* column gets that local path. Run on staging with `GMAIL_*` set on that Vercel project.
+
+| ID | Charter | Checkpoints | Proves |
+|---|---|---|---|
+| *Sign-up with a real code* (planned; next free MT ID) | Register a new address that is the tester's real inbox → time until the mail arrives → check the spam folder → type one wrong code → wait out the Resend countdown and resend → use the old code, then the new one; a second run uses "Wrong email? Change it" | The mail arrives in about 5–15 s (Gmail to Gmail about 5 s, to Outlook about 10 s); it is in the inbox, not spam; subject, language and body as in §2.12.1, no links or images; the old code fails after a resend; the Dashboard opens with the Cash wallet and default categories; Vercel logs show no code and only the masked email; in Atlas the `emailCodes` row is gone | Verified sign-up works with real mail on the deployed system |
+| *Forgot password with a real code* (planned; next free MT ID) | Log in as the same account in two browsers → in one, "Forgot password?" → code from the inbox → new password; then "Forgot password?" for an address with no account | The other browser is logged out on its next refresh; the old password fails and the new one works; the unknown address gets the same screen and no mail arrives | Password reset works with real mail, and the page reveals no accounts |
+
+### 7.10.7 Acceptance checks → cases
+
+| §2.12.6 check (row) | Cases |
+|---|---|
+| 1. Register → 202 and one mail; no user yet; the right code → 201 with wallet and categories | *sign-up with code*, *send failure*, *code email*, *register 201 or 202*, *verify screen*, *sign-up E2E*; *Sign-up with a real code* |
+| 2. A taken email → 409, no mail; a user created meanwhile → verify 409 | *taken email* |
+| 3. 5 wrong codes, then `CODE_EXPIRED`; expired after 10 minutes | *wrong tries and expiry*, *code helpers*, *verify screen*, *sign-up E2E* |
+| 4. The same right code twice at once → one 201 | *verify race* |
+| 5. Resend within 60 s → 429; the 6th in an hour → 429; the old code fails | *resend limits*, *verify screen*; *Sign-up with a real code* |
+| 6. The 11th code email from one IP in 15 minutes → 429 | *mail rate limit* |
+| 7. `forgot` for unknown, locked and active → the same 202; only the active one gets mail | *forgot without enumeration*; *Forgot password with a real code* |
+| 8. Reset → 204; old password fails; every session revoked; codes don't cross purposes | *password reset*, *locked during reset*, *forgot screen*, *forgot E2E*; *Forgot password with a real code* |
+| 9. No plain code or password stored; no code in production logs | *storage and logs*, *code helpers* |
+| 10. No `GMAIL_*`: code in the log in development; production logs straight in and `forgot` → 503 | *no mail configured*, *register 201 or 202*, *forgot screen* |
+| 11. Login, refresh, the bots and the test users behave as before | *nothing else changes* |
+
+### 7.10.8 Open points for the builder
+
+- **429 can leak what 202 hides.** `forgot` and `register/resend` must answer the same whether or not an account or pending sign-up exists, yet "the same 60 s / 5 per hour limits apply". If the limits count only real sends, a 429 appears only for real accounts. Count every request per address, whether or not a mail goes out? *forgot without enumeration* and *resend limits* need that answer.
+- **"Equally fast"** can't be measured reliably in a test. *forgot without enumeration* checks only that the answer does not wait for the send.
+- **The 5–15 s delivery time** depends on Gmail; only the charter measures it, and it is not a pass/fail gate.
+- **Google stopping the account** (the escape hatch in §2.12.4) can't be tested without abusing Gmail. *no mail configured* proves only that production without the secrets still signs people up.
+- **`mailRateLimit` is in memory per instance**, so on Vercel it is best-effort, like `authRateLimit`. The API test proves one instance.
+- **Verify answering 409** (registered meanwhile): §2.12.2 doesn't say whether the `emailCodes` row is then deleted. The TTL removes it either way.

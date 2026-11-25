@@ -1,5 +1,7 @@
 # 9. Agent features (planned design)
 
+> **Status update 2026-11-25: provider and backend superseded.** The provider and backend parts of Part 2 (§2.7 tech stack, §2.8 cost estimate, the Messages API Tool Runner, the Anthropic key, opt-in, admin grant and dollar caps) are replaced by [02-features.md §2.11](02-features.md#211-assistant-and-agent-features-planned): a local **Qwen3.5-2B** served by **vLLM** and a Python **FastAPI + LangGraph agent service** on the team's GPU host, which also reads receipts (after an eval) and suggests categories. Nothing goes to a third-party model any more. Part 3's skills, router and typed query live on in [§2.11.3](02-features.md#2113-the-question-engine-skills-rules-first). The rest of this document is kept as the record of the ideas and alternatives; read it with that in mind.
+
 > **Status: design draft for review, nothing here is built.** Written 2026-11-25. Parts 1 and 2 were checked by independent reviewer agents; Part 3 is a draft whose reviewer notes are listed in the appendix and not yet applied. The buildable spec is now [02-features.md §2.11](02-features.md#211-assistant-and-agent-features-planned), which takes this design's recommended answers to the open decisions (marked ⚑ there) and applies the Part 3 reviewer fixes it needs; embeddings, the LLM planner, C2 and B5 stay here as later options.
 
 - **Part 1** — the 15 agent features (tiers A rule-based, B proactive, C optional AI), first package, open decisions.
