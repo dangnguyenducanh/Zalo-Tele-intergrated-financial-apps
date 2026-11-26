@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -5,6 +6,7 @@ import { inspect } from 'node:util';
 import nodemailer from 'nodemailer';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { env } from '../src/config/env.js';
+import vitestConfig from '../vitest.config.js';
 import { canSendCodes, maskEmail, sendCode, setMailSender } from '../src/services/mail.js';
 
 // Nothing here can reach Gmail (docs/07 §7.10.5). nodemailer's `jsonTransport` is the real one: it builds the message
@@ -97,8 +99,52 @@ describe('code email', () => {
     expect(reset.text).not.toContain('sign-up');
     // The address is the recipient only: not in the body (and so no name either: sendCode takes none).
     expect(signup.text + signup.html).not.toContain('an.nguyen');
-    // Any language but "en" is Vietnamese, the app's default.
-    expect((await render(ask({ language: 'fr' }))).subject).toBe('Mã xác nhận Sổ chi tiêu: 123456');
+    // Any language but "en" is Vietnamese, the app's default: also one that is a key of Object.prototype.
+    for (const language of ['fr', undefined, '', 'constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect((await render(ask({ language }))).subject, String(language)).toBe('Mã xác nhận Sổ chi tiêu: 123456');
+    }
+  });
+
+  test('TC-F1-27 a recipient with CR LF, a comma or a name cannot add a header or a second recipient: only one plain address is sent to', async () => {
+    mailOn();
+    const sender = vi.fn();
+    setMailSender(sender);
+    const bad = [
+      'victim@gmail.com\r\nBcc: attacker@evil.example', // nodemailer reads this as a group whose member is the attacker
+      'a@gmail.com\nBcc: b@evil.example',
+      'a@gmail.com, b@evil.example',
+      'a@gmail.com;b@evil.example',
+      'Name <a@gmail.com>',
+      '"a b"@gmail.com',
+      'a@b@gmail.com',
+      'a@gmail.com\0',
+      ' a@gmail.com',
+      'a@gmail.com ',
+      'nonsense',
+      '@gmail.com',
+      'a@',
+      '',
+      undefined,
+      null,
+      42,
+      ['a@gmail.com'],
+    ];
+    for (const to of bad) {
+      const error = await sendCode(ask({ to })).catch((err) => err);
+      expect(error, String(to)).toBeInstanceOf(Error);
+      expect(error.message, String(to)).toBe('to is one plain address'); // and it repeats nothing the caller sent
+    }
+    expect(sender).not.toHaveBeenCalled();
+    expect(smtp.transports).toHaveLength(0);
+    expect(logged()).toBe(''); // log-only mode did not print it either
+  });
+
+  test('TC-F1-27 a plain address with dots, a plus or letters beyond ASCII is still sent to as it is', async () => {
+    mailOn();
+    for (const to of ['an.nguyen@gmail.com', 'đạt.lê@gmail.com', 'a+b@x.vn']) {
+      const mail = await render(ask({ to }));
+      expect([mail.to.length, mail.to[0].address, mail.cc, mail.bcc], to).toEqual([1, to, undefined, undefined]);
+    }
   });
 
   test('TC-F1-27 a code that is not 6 digits, or an unknown purpose, is refused before anything is sent', async () => {
@@ -284,9 +330,26 @@ describe('the test seam', () => {
     await expect(sendCode(ask())).rejects.toThrow();
   });
 
-  test('TC-F1-31 the test setup clears GMAIL_USER and GMAIL_APP_PASSWORD, so a real server/.env cannot turn mail on in a test', () => {
+  test('TC-F1-31 this run started with no GMAIL_USER and GMAIL_APP_PASSWORD, so a real server/.env cannot turn mail on in a test', () => {
     expect(atStart.process).toEqual([undefined, undefined]);
     expect(atStart.env).toEqual([undefined, undefined]);
+  });
+
+  // The check above is green on any machine that exports neither variable, with or without the setup file. These two
+  // can fail: the first runs the setup file in a child process whose environment holds both, the second reads the
+  // Vitest config that makes every test file start with it.
+  test('TC-F1-31 the setup file deletes GMAIL_USER and GMAIL_APP_PASSWORD whatever the shell exported', () => {
+    const setup = join(dirname(fileURLToPath(import.meta.url)), 'helpers', 'no-gmail.js');
+    const print = 'console.log(JSON.stringify([process.env.GMAIL_USER, process.env.GMAIL_APP_PASSWORD]))';
+    const shell = { ...process.env, GMAIL_USER: 'made-up-sender@example.invalid', GMAIL_APP_PASSWORD: 'made-up-app-password' };
+    const child = (args) => JSON.parse(execFileSync(process.execPath, [...args, '--eval', print], { env: shell, encoding: 'utf8' }));
+
+    expect(child([]), 'without the setup file the child still sees both').toEqual(['made-up-sender@example.invalid', 'made-up-app-password']);
+    expect(child(['--import', setup]), 'with the setup file it sees neither').toEqual([null, null]); // JSON turns undefined into null
+  });
+
+  test('TC-F1-31 vitest.config.js runs the setup file before every test file', () => {
+    expect(vitestConfig.test.setupFiles).toContain('./test/helpers/no-gmail.js');
   });
 
   test('TC-F1-31 only test code calls setMailSender: nothing in server/src does', () => {

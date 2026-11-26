@@ -30,6 +30,10 @@ const COPY = {
 
 let sender; // set only by tests, see setMailSender
 
+// One plain address: no space, control character, comma, semicolon, colon, angle bracket, quote, parenthesis or second "@".
+// Anything else would let nodemailer read a group, a name or a second recipient (CR LF + "Bcc: ..." is a group), not one address.
+const PLAIN_ADDRESS = /^[^\s\p{Cc},;:<>"()[\]\\@]+@[^\s\p{Cc},;:<>"()[\]\\@]+$/u;
+
 // "an.nguyen@gmail.com" -> "a***@gmail.com". Logs and API answers show an address only like this. Nothing of an address
 // with no local part or no "@" is shown.
 export function maskEmail(email) {
@@ -51,7 +55,7 @@ export function setMailSender(deliver) {
 }
 
 function buildMessage({ to, purpose, code, language }) {
-  const copy = COPY[language] ?? COPY.vi;
+  const copy = language === 'en' ? COPY.en : COPY.vi; // not COPY[language]: "constructor" or "__proto__" would find a member of Object.prototype
   const lines = [copy.about[purpose], code, copy.valid, copy.ignore];
   return {
     // The address is the sender's own: GMAIL_USER is unset only when a test seam replaces delivery.
@@ -91,6 +95,7 @@ function safeErrorCode(err) {
 export async function sendCode({ to, purpose, code, language }) {
   if (purpose !== 'signup' && purpose !== 'reset') throw new Error('unknown purpose');
   if (typeof code !== 'string' || !/^\d{6}$/.test(code)) throw new Error('a code is 6 digits'); // it goes into HTML as it is
+  if (typeof to !== 'string' || !PLAIN_ADDRESS.test(to)) throw new Error('to is one plain address'); // it goes into a header as it is
 
   const deliver = sender ?? (smtpOn() ? sendOverSmtp : undefined);
   if (!deliver) {
