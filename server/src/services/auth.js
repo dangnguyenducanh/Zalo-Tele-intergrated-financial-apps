@@ -78,6 +78,7 @@ export async function login({ email, password }, client) {
   // user again now that the session exists: a changed hash means the password just checked is no longer valid (the
   // answer of a fresh login, 401), and a lock means 403. Either way the new session dies with the login.
   // "Log out other devices" leaves the hash alone, so a login overlapping it stays valid: its password is still right.
+  // ponytail: ceiling: a lock then unlock inside one bcrypt window, or a login racing a theft revoke-all, keeps its session.
   const now = await User.findById(user._id).select('+passwordHash status').lean();
   const passwordChanged = !now || now.passwordHash !== user.passwordHash;
   if (passwordChanged || now.status === 'locked') {
