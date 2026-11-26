@@ -119,7 +119,7 @@ def test_logs_hold_ids_and_error_classes_only(make_app, auth, settings, caplog):
         assert line.endswith(('error=RuntimeError',)) or ' status=' in line
     everything = ' '.join(lines)
     assert settings.agent_secret not in repr(settings) and settings.mongodb_uri_agent not in repr(settings)
-    for secret in ('phở', 'cà phê', '45k', 'wrong-secret-value', settings.agent_secret, settings.mongodb_uri_agent, 'agent:pw'):
+    for secret in ('phở', 'cà phê', '45k', 'wrong-secret-value', settings.agent_secret, settings.mongodb_uri_agent, 'PASTE_pw'):
         assert secret not in everything
     assert 'request=telegram:123:456 node=http status=200' in everything
     assert 'a b' not in everything  # an id that is not made of id characters is replaced

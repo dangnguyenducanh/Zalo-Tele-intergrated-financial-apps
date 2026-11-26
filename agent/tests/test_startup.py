@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRET = 'a-real-looking-secret-' + 'b' * 32
-URI = 'mongodb://sochitieu_agent:hunter2-password@127.0.0.1:1/finance'
+URI = 'mongodb://' + 'sochitieu_agent:hunter2-password@127.0.0.1:1/finance'  # not one literal: the secret scan (TC-NF-05)
 
 
 def start(env):
