@@ -261,10 +261,20 @@ def test_a_total_that_later_lines_leave_alone_is_kept(copied):
                                         'Số tiền nộp', 'Tiền nộp', 'Khách nộp'])
 def test_cash_handed_over_under_any_label_is_not_the_total(cash_label):
     """TC-F10-24 a figure that is a printed total plus the printed change is the cash handed over, whatever its label (BUG-037)"""
-    recorded = lines(('Thành tiền', 87000), (cash_label, 100000), ('Tiền thừa', 13000))
-    assert choose_total(87000, recorded) == 87000
-    assert choose_total(100000, recorded) is None  # the direct read took the cash: not presented as the total
-    assert choose_total(None, recorded) is None
+    for total_label in ('Thành tiền', 'Tổng cộng'):
+        recorded = lines((total_label, 87000), (cash_label, 100000), ('Tiền thừa', 13000))
+        assert choose_total(87000, recorded) == 87000
+        # the direct read took the cash: never presented; the figure that plus the printed change is the cash is the total
+        for direct in (100000, None):
+            assert choose_total(direct, recorded) == 87000, (total_label, direct)
+
+
+@pytest.mark.parametrize('cash_label', ['Khách thanh toán', 'Đã thanh toán', 'Tiền thanh toán', 'KH thanh toán', 'Khách nộp', 'Tiền nộp'])
+def test_a_direct_total_whose_cash_is_not_printed_is_the_cash(cash_label):
+    """TC-F10-24 with a change printed, a direct total on an unranked line is trusted only if its cash (total + change) is printed too (PR #124 round 2)"""
+    assert choose_total(100000, lines((cash_label, 100000), ('Tiền thừa', 13000))) is None  # the total is torn off: this is the cash
+    assert choose_total(87000, lines(('g cộng :', 87000), (cash_label, 100000), ('Tiền thừa', 13000))) == 87000
+    assert choose_total(87000, lines((cash_label, 100000), ('Tiền thừa', 13000))) == 87000  # its cash is printed; the printed check of the reader decides
 
 
 def test_two_reads_naming_different_totals_give_no_total():
@@ -272,9 +282,197 @@ def test_two_reads_naming_different_totals_give_no_total():
     assert choose_total(87000, lines(('Tổng cộng', 87000), ('Thanh toán', 100000))) is None
     assert choose_total(115100, lines(('Tổng cộng', 115100), ('Thanh toán', 92000))) is None
     assert choose_total(80000, lines(('Tổng thanh toán', 80000), ('Khách phải trả', 87000))) is None
-    # A better label still wins, and the model's own conversion of the amount in words never counts.
-    assert choose_total(115000, lines(('Tổng cộng', 115000), ('Khách cần trả', 92000))) == 92000
+    # A better label wins when the paper shows it (a discount printed between, or the re-read: see test_a_better_label_
+    # overrides_another_total_line_only_when_the_paper_shows_it); the model's own conversion of the amount in words never counts.
+    assert choose_total(115000, lines(('Tổng cộng', 115000), ('Giảm giá', 23000), ('Khách cần trả', 92000))) == 92000
     assert choose_total(2000000, lines(('SỐ TIỀN', 2500000), ('Số tiền viết bằng chữ', 2000000))) == 2500000
+
+
+# Round 3 of the PR #124 review: on short plain receipts the model echoed the words of its own prompt as labels
+# ("subtotal", "VAT", "amount to pay", "cash") and shifted the printed amounts onto them, so the cash handed over
+# was "amount to pay". The labels of the copy cannot be trusted alone; the verbatim re-read holds the printed ones.
+def reread(*pairs):
+    """A verbatim re-read as the model answers it: the label on one line, its amount on the next."""
+    return [text for pair in pairs for text in pair]
+
+
+ECHOED_REPRO = (
+    146000,
+    lines(('subtotal', 146000), ('VAT', 350000), ('discount', 204000), ('points', 0), ('total', 146000),
+          ('amount to pay', 350000), ('cash', 204000)),
+    reread(('Phở bò tái x1', '89.000'), ('Cơm sườn x2', '57.000'), ('Tổng thanh toán', '146.000'), ('Khách đưa', '350.000'),
+           ('Trả lại', '204.000')))
+
+
+def test_the_review_repro_of_an_echoed_copy():
+    """TC-F10-24 the cash printed as "Khách đưa" is not the total, whatever the copy calls it (PR #124 round 2)"""
+    direct, copied, printed = ECHOED_REPRO
+    assert choose_total(direct, copied, printed) == 146000
+    assert choose_total(None, copied, printed) == 146000
+    assert choose_total(350000, copied, printed) == 146000  # the direct read took the cash, the copy still holds the total
+    assert choose_total(350000, lines(('amount to pay', 350000), ('cash', 204000)), printed) is None  # only the cash is left
+    assert choose_total(direct, copied) in (146000, None)  # without the re-read the two reads disagree: no total, not 350000
+
+
+def test_an_amount_to_pay_that_is_the_total_plus_the_printed_change_is_the_cash():
+    """TC-F10-24 "total + change = cash" holds for a line labelled as an amount to pay too (PR #124 round 2)"""
+    copied = lines(('total', 115000), ('amount to pay', 200000), ('cash', 200000), ('change', 85000))
+    for direct in (115000, 200000, None):
+        assert choose_total(direct, copied) in (115000, None), direct
+    assert choose_total(115000, copied) == 115000
+    assert pick_total(copied) == 115000
+    for payable in ('Khách phải trả', 'Tiền cần thanh toán', 'Tổng thanh toán', 'Amount due'):
+        assert pick_total(lines(('Tổng cộng', 115000), (payable, 200000), ('Tiền mặt', 200000), ('Tiền thối', 85000))) == 115000
+
+
+def test_a_better_label_overrides_another_total_line_only_when_the_paper_shows_it():
+    """TC-F10-24 an amount-to-pay pick that disagrees with the direct read stands only if the re-read prints it as one (PR #124 round 2)"""
+    copied = lines(('Tổng cộng', 115000), ('Khách cần trả', 92000))
+    assert choose_total(115000, copied) is None  # nothing shows that 92000 is the later, adjusted total
+    assert choose_total(115000, copied, ['Tổng cộng', '115.000', 'Khách cần trả', '92.000']) == 92000
+    assert choose_total(115000, copied, ['Tổng cộng 115.000', 'Khách cần trả 92.000']) == 92000
+    # printed as cash, it never stands
+    assert choose_total(115000, copied, ['Tổng cộng 115.000', 'Tiền khách đưa 92.000']) == 115000
+    # a discount printed between the two shows it too
+    assert choose_total(115000, lines(('Tổng cộng', 115000), ('Giảm giá', 23000), ('Khách cần trả', 92000))) == 92000
+    # two payable labels that disagree still give no total, re-read or not
+    assert choose_total(80000, lines(('Tổng thanh toán', 80000), ('Khách phải trả', 87000)),
+                        ['Tổng thanh toán 80.000', 'Khách phải trả 87.000']) is None
+
+
+@pytest.mark.parametrize('printed_as', ['Tiền khách đưa', 'Khách đưa', 'Tiền mặt', 'Cash', 'Cash tendered', 'Tiền KH đưa',
+                                        'Số tiền nhận', 'Trả lại', 'Tiền thối', 'Change', 'Tiền thừa phải trả khách'])
+def test_an_amount_the_reread_prints_only_as_cash_or_change_is_never_the_total(printed_as):
+    """TC-F10-24 whatever the copy calls it, an amount the re-read prints only as cash handed over or change is not the total (PR #124 round 2)"""
+    printed = ['Tổng cộng 87.000', f'{printed_as} 100.000']
+    for label in ('Tổng cộng', 'Khách cần trả', 'Tổng thanh toán', 'Thành tiền', 'total', 'amount to pay', 'Số tiền'):
+        copied = lines(('Tổng cộng', 87000), (label, 100000))
+        assert choose_total(87000, copied, printed) == 87000, label
+        assert choose_total(100000, copied, printed) == 87000, label  # the direct read took the cash, the copy has the total
+        assert choose_total(100000, lines((label, 100000)), printed) is None, label  # both reads took the cash
+        assert choose_total(None, lines((label, 100000)), printed) is None, label
+    assert choose_total(100000, [], printed) is None  # no copied line at all
+    # the cash that equals the total is still printed as a total
+    assert choose_total(87000, lines(('Tổng cộng', 87000), ('Tiền mặt', 87000)), ['Tổng cộng 87.000', 'Tiền mặt 87.000']) == 87000
+
+
+BLOCK_REREADS = {
+    'labels, then the amounts': ['Xúc xích x2', 'Tổng cộng', 'Tiền khách đưa', 'Tiền thôi', '549.000', '1.050.000', '501.000'],
+    'labels mixed with amounts': ['Total', 'Cash', '549.000', 'Change', '1.050.000', '501.000'],
+    'only the labels': ['Tổng cộng', 'Tiền khách đưa', 'Tiền thôi'],
+}
+
+
+@pytest.mark.parametrize('printed', BLOCK_REREADS.values(), ids=BLOCK_REREADS.keys())
+def test_a_reread_that_lists_labels_apart_from_amounts_pairs_nothing(printed):
+    """TC-F10-24 labels listed in a block before their amounts are not paired with them, so the total is not taken for the cash (PR #124 round 2)"""
+    copied = lines(('Xúc xích x2', 84000), ('Tổng cộng', 549000), ('Tiền khách đưa', 1050000), ('Tiền thôi', 501000))
+    assert choose_total(549000, copied, printed) == 549000
+    assert choose_total(None, copied, printed) == 549000
+
+
+@pytest.mark.parametrize('change_label', ['Thừa', 'THỪA', 'Dư', 'Thối', 'Tiền lẻ', 'Thối lại:'])
+def test_a_change_line_with_a_one_word_label(change_label):
+    """TC-F10-24 a change printed as one word ("Thừa", "Dư", "Thối") is change: it never wins, and it proves the amount paid (PR #124 round 2)"""
+    assert pick_total(lines(('Tổng cộng', 87000), (change_label, 13000))) == 87000
+    assert choose_total(None, lines(('Cần thu', 87000), ('Đã thanh toán', 100000), (change_label, 13000))) == 87000
+
+
+@pytest.mark.parametrize('label', ['Total (USD)', 'Total USD', 'TOTAL EUR', 'Tổng cộng (USD)', 'Total $', 'Tổng US$'])
+def test_a_total_in_another_currency_is_not_the_total(label):
+    """TC-F10-25 a total in a foreign currency is not the amount to pay in VND (PR #124 round 2)"""
+    recorded = lines(('Tổng cộng', 2325000), (label, 92))
+    assert pick_total(recorded) == 2325000
+    assert choose_total(2325000, recorded) == 2325000
+    assert pick_total(lines((label, 92))) is None
+
+
+# A real photo (MC-OCR sample, a degraded printout) whose copy gave the received amount a "total" label too: the copy has
+# "Tổng tiền 169000", "Tổng tiền 189000" and "Tiền khách trả 189000", and the direct read took the 189000.
+RECEIVED_TWICE = lines(('Thành tiền', 46000), ('Thành tiền', 42000), ('Thành tiền', 6000), ('Tổng tiền', 169000), ('Tổng tiền', 189000),
+                       ('Tiền khách trả', 189000))
+
+
+def test_a_total_line_that_repeats_the_received_amount_gives_way_to_a_smaller_total():
+    """TC-F10-24 a total line whose amount is also printed on a cash line gives way to a smaller total line nothing links it to (MC-OCR photo, PR #124 round 3)"""
+    for direct in (189000, 169000, None):
+        assert choose_total(direct, RECEIVED_TWICE) == 169000, direct
+    assert pick_total(RECEIVED_TWICE) == 169000
+    # a line between the two that is the difference explains it: the larger one is the figure after it (a service charge)
+    charged = lines(('Tổng cộng', 100000), ('Phí phục vụ 5%', 5000), ('Tổng cộng', 105000), ('Tiền mặt', 105000))
+    for direct in (105000, 100000, None):
+        assert choose_total(direct, charged) in (105000, None), direct
+    assert choose_total(105000, charged) == 105000
+    # one total line equal to the cash (paid exactly) is still the total
+    assert choose_total(87000, lines(('Tổng cộng', 87000), ('Tiền mặt', 87000))) == 87000
+    assert choose_total(None, lines(('Tổng cộng', 87000), ('Tiền khách đưa', 87000))) == 87000
+
+
+def test_an_amount_to_pay_beside_a_total_that_nothing_explains_gives_no_total():
+    """TC-F10-24 an amount-to-pay pick that no other read backs, beside another total that no VAT or discount line explains, is not presented (PR #124 round 2)"""
+    # the review's copy where the re-read printed the labels but not the amounts, and the direct read is off
+    echoed = lines(('subtotal', 190500), ('VAT', 300000), ('discount', 109500), ('total', 190500), ('amount to pay', 300000), ('cash', 109500))
+    assert choose_total(317500, echoed) is None
+    assert choose_total(None, echoed) is None
+    assert choose_total(190500, echoed) is None  # the direct read backs the total line, the copy's label backs the other: no total
+    labels_only = ['Tổng giá trị đơn hàng', 'Đã thanh toán', 'Tiền dư']
+    assert choose_total(317500, echoed, labels_only) is None
+    # the re-read with its amounts shows 300.000 is not an amount to pay: it plus the change printed is not even a total
+    printed = ['Tổng giá trị đơn hàng', '190.500', 'Đã thanh toán', '300.000', 'Tiền dư', '109.500']
+    assert choose_total(317500, echoed, printed) == 190500
+    # two reads that agree stand, and so does a pick the discount line explains
+    assert choose_total(92400, lines(('Tổng cộng', 115100), ('Tiền cần thanh toán', 92400))) == 92400
+    assert choose_total(None, lines(('Tổng cộng', 115100), ('Giảm giá', 22700), ('Tiền cần thanh toán', 92400))) == 92400
+
+
+# A bare or unusual label on the total ("Tổng", "Thành tiền", "Tổng giá trị đơn hàng", ...) is no label we rank. The paper
+# still shows which line is the amount to pay: it plus the printed change is the cash handed over.
+UNRANKED_TOTAL_LABELS = ['Tổng', 'Thành tiền', 'Tổng giá trị đơn hàng', 'TỔNG', 'Tổng bill', 'Phải thu', 'Thực thu', 'Net amount',
+                         'Balance due', 'Thu khách', 'Tổng đơn hàng', 'Tổng hóa đơn']
+
+
+@pytest.mark.parametrize('label', UNRANKED_TOTAL_LABELS)
+def test_an_unranked_total_label_is_read_when_it_plus_the_change_is_the_cash(label):
+    """TC-F10-23 a line whose amount plus the printed change is the cash handed over is the amount to pay, under any label that is not something else (PR #124 round 2)"""
+    copied = lines(('Cà phê sữa x2', 58000), ('Bánh mì x1', 22000), (label, 80000), ('Tiền khách đưa', 100000), ('Tiền thối', 20000))
+    for direct in (None, 80000, 160000, 100000, 20000):  # right, off, the cash, the change
+        assert choose_total(direct, copied) == 80000, direct
+    for paid, change in (('Đã thanh toán', 'Tiền dư'), ('Khách nộp', 'Tiền thừa'), ('Nhận', 'Tiền trả lại'), ('Paid', 'Change')):
+        assert choose_total(160000, lines((label, 80000), (paid, 100000), (change, 20000))) == 80000, paid
+    assert choose_total(None, lines(('Điểm tích lũy', 800), (label, 80000), ('Tiền mặt', 100000), ('Tiền thừa', 20000))) == 80000
+
+
+def test_an_unranked_total_is_found_wherever_the_copy_puts_the_cash():
+    """TC-F10-23 the copy of a sideways photo can list the cash before the amount to pay; the printed change still proves it (PR #124 round 2)"""
+    copied = lines(('Tổng tiền hàng', 115100), ('Tiền khách đưa', 100000), ('Tiền chờ thanh toán', 92400), ('Tiền thôi lại', 7600))
+    for direct in (None, 115100, 92400, 100000):
+        assert choose_total(direct, copied) == 92400, direct
+
+
+def test_an_item_that_plus_the_change_is_another_item_is_not_the_total():
+    """TC-F10-23 items alone never make a total: with the total torn off, an item plus the change that is a later item gives none (PR #124 round 2)"""
+    # 22.000 + 20.000 = 42.000, but 42.000 is followed by another item and is no cash line
+    torn = lines(('Bánh mì x1', 22000), ('Cơm sườn x1', 42000), ('Nước cam x1', 15000), ('Tiền khách đưa', 100000), ('Tiền thối', 20000))
+    assert choose_total(None, torn) is None
+    assert choose_total(79000, torn) is None  # the item sum, as the model invents it
+    # with the real total printed among them, items that fit each other do not matter
+    assert choose_total(None, lines(('Bánh mì x1', 22000), ('Cơm sườn x1', 42000), ('Thành tiền', 64000),
+                                    ('Tiền khách đưa', 100000), ('Tiền thối', 36000))) == 64000
+
+
+def test_an_unranked_line_is_not_read_without_the_change_or_as_something_else():
+    """TC-F10-23 no change printed, a line that is something else, or two candidates: no total from the unranked line (PR #124 round 2)"""
+    assert choose_total(None, lines(('Thành tiền', 80000), ('Tiền mặt', 100000))) is None
+    assert choose_total(None, lines(('Thành tiền', 80000), ('Tiền mặt', 100000), ('Tiền thối', 0))) is None
+    for other in ('Tạm tính', 'Cộng tiền hàng', 'VAT', 'Điểm tích lũy', 'Tiền thuế', 'Giảm giá', 'Số lượng', 'Tiết kiệm'):
+        assert choose_total(None, lines((other, 80000), ('Tiền khách đưa', 100000), ('Tiền thối', 20000))) is None, other
+    # two figures that each plus a printed change give a printed amount: nothing says which one is the total
+    assert choose_total(None, lines(('Thành tiền', 80000), ('Phải thu', 90000), ('Tiền khách đưa', 100000), ('Tiền thối', 20000),
+                                    ('Trả lại', 10000))) is None
+    # the printed change is the proof, not the direct read: one that took an item does not change it
+    assert choose_total(22000, lines(('Bánh mì x1', 22000), ('Thành tiền', 80000), ('Tiền khách đưa', 100000), ('Tiền thối', 20000))) == 80000
+    # an identifier is not money, whatever the sum
+    assert choose_total(None, lines(('Số HĐ', 80000), ('Tiền khách đưa', 100000), ('Tiền thối', 20000))) is None
 
 
 @pytest.mark.parametrize('label', [

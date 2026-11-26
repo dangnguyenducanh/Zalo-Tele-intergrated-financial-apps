@@ -4,7 +4,7 @@ import asyncio
 import time
 
 from picker import choose_total, goods_subtotal_only, is_foot_line, is_money, printed_amounts, receipt_date
-from vllm_client import BadAnswer
+from vllm_client import BadAnswer, NotTheAskedJson, Receipt
 
 TOLERANCE = 1000  # VND: line items that add up to the total within this "match" (KIE's tolerance)
 
@@ -21,15 +21,24 @@ async def _reread(model, task, image_url):
         return []
 
 
+async def _direct(model, image_url):
+    """The direct read. One the model answers with something other than the asked JSON (a page with no money lines can
+    do that) reads nothing: the copied lines and the re-read still decide the total, and without them it is "no total"."""
+    try:
+        return await model.ask('receipt', image_url)
+    except NotTheAskedJson:
+        return Receipt(merchant=None, address=None, date=None, items=[], total_payable=None)
+
+
 async def read_receipt(model, image_url):
     """The photo → the answer of POST /analyze."""
     started = time.monotonic()
     # The re-read does not depend on the other two, so all three run at once (vLLM batches them).
     direct, copied, transcript = await asyncio.gather(
-        model.ask('receipt', image_url), model.ask('lines', image_url), _reread(model, 'transcript', image_url))
+        _direct(model, image_url), model.ask('lines', image_url), _reread(model, 'transcript', image_url))
     timings = {'read': _ms(started)}
 
-    total = choose_total(direct.total_payable, [line.model_dump() for line in copied.lines])
+    total = choose_total(direct.total_payable, [line.model_dump() for line in copied.lines], transcript)
     if total and goods_subtotal_only(total, transcript):
         total = None  # the paper shows it as the goods subtotal; the amount to pay is torn off
     elif total and total not in printed_amounts(transcript):

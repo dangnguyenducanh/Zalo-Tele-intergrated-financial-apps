@@ -301,11 +301,26 @@ def test_model_down(client, model, failure, status):
     assert analyze(client, photo()).status_code == status
 
 
-@pytest.mark.parametrize('task, answer', [
-    ('receipt', 'not json'), ('receipt', {'merchant': 'x'}), ('lines', '{"lines": [{"label": "Tổng'),
-], ids=['not JSON', 'wrong shape', 'cut off line copy'])
+@pytest.mark.parametrize('answer', ['not json', {'merchant': 'x'}, '{"merchant": "A", "items": [{"name": "A", "amount": 1'],
+                         ids=['not JSON', 'wrong shape', 'cut off'])
+def test_a_direct_read_the_model_answers_badly_reads_nothing(client, model, answer):
+    """TC-F10-30 a page the direct read cannot make sense of (an id and date sheet with no money lines) answers total "", not 502"""
+    model.answers = {**GOOD, 'receipt': answer, 'lines': {'lines': []}}
+    res = analyze(client, photo())
+    assert res.status_code == 200
+    assert res.json()['fields'] == {'total': '', 'merchant': '', 'address': '', 'date': ''}
+    assert res.json()['line_items'] == []
+
+
+def test_a_bad_direct_read_does_not_hide_the_copied_total(client, model):
+    """TC-F10-30 the copy and the re-read still give the total when only the direct read is unreadable"""
+    model.answers = {**GOOD, 'receipt': 'not json'}
+    assert analyze(client, photo()).json()['fields']['total'] == '63000'
+
+
+@pytest.mark.parametrize('task, answer', [('lines', '{"lines": [{"label": "Tổng')], ids=['cut off line copy'])
 def test_bad_model_answer(client, model, task, answer):
-    """TC-F10-30 a read the model answers badly is 502, never a half-read total"""
+    """TC-F10-30 a line copy the model answers badly is 502, never a half-read total"""
     model.answers = {**GOOD, task: answer}
     assert analyze(client, photo()).status_code == 502
 
@@ -346,7 +361,7 @@ def test_logs_hold_no_key_photo_or_content(client, model, caplog):
     data = photo()
     with caplog.at_level(logging.DEBUG):
         assert analyze(client, data).status_code == 200
-        model.answers = {**GOOD, 'receipt': 'CỬA HÀNG THỬ is not JSON'}
+        model.answers = {**GOOD, 'lines': 'CỬA HÀNG THỬ is not JSON'}
         assert analyze(client, data).status_code == 502
         assert analyze(client, data, key='a-wrong-secret').status_code == 401
     for secret in (KEY, 'a-wrong-secret', base64.b64encode(data).decode()[:40], 'CỬA HÀNG THỬ', '63000'):

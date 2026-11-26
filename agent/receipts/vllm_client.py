@@ -14,6 +14,10 @@ class BadAnswer(Exception):
     """vLLM answered with an error, or with something other than the asked JSON."""
 
 
+class NotTheAskedJson(BadAnswer):
+    """vLLM answered 200, but the content is not the asked JSON (cut off, or not the schema)."""
+
+
 class Item(BaseModel):
     name: str
     quantity: float | None
@@ -66,11 +70,12 @@ TASKS = {
         '"Tiền cần thanh toán", "Khách phải trả", "Số tiền"). Never use invoice or voucher numbers, dates, years, phone numbers, '
         'tax codes, cash handed over or change. If the total is not visible (torn or cut off), set total_payable to null. '
         'items = the line items you can read, with quantity, unit price and line amount. All amounts are VND integers.'),
+    # No label words are named here ("subtotal, VAT, cash…"): a 2B model echoes the words of its prompt as labels and shifts
+    # the printed amounts onto them (it named the cash "amount to pay"). It copies the labels as printed instead.
     'lines': (Lines, 3000,
         'Read this Vietnamese receipt photo (it may be sideways or torn). Copy every printed line that has a money amount, '
         'top to bottom, with its label exactly as printed (keep Vietnamese words) and the amount as a VND integer. '
-        'Include subtotal, VAT, discount, points, total, amount to pay, cash and change lines. Do not add or compute '
-        'any line that is not printed.'),
+        'Do not add or compute any line that is not printed.'),
     'transcript': (Transcript, 2000,
         'Transcribe all the printed text in this photo, line by line, top to bottom, exactly as printed. Do not translate, '
         'summarize, complete cut-off words or add numbers. Stop where the paper ends.'),
@@ -114,4 +119,4 @@ class Vllm:
         try:
             return schema.model_validate_json(res.json()['choices'][0]['message']['content'])
         except (ValueError, KeyError, IndexError, TypeError) as err:  # pydantic's ValidationError is a ValueError
-            raise BadAnswer(f'{task}: {type(err).__name__}') from None
+            raise NotTheAskedJson(f'{task}: {type(err).__name__}') from None
