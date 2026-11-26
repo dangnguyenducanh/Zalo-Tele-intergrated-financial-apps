@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { Budget } from '@/features/budgets/budgetsApi';
 import type { Category } from '@/features/categories/categoriesApi';
 import type { Transaction } from '@/features/transactions/transactionsApi';
@@ -42,7 +42,13 @@ const drafts = [tx('d1', 32_000, 'grab', 'draft'), tx('d2', 50_000, 'cafe', 'dra
 
 let statsMonths: string[] = []; // the month of every /stats request, in order
 
+// The compare sentence adds days 1..today, so the clock is fixed (only Date; timers stay real): by default the 25th of
+// this month in Vietnam, after every day the fixtures spend on.
+const setToday = (day: number) => vi.useFakeTimers({ toFake: ['Date'], now: new Date(`${THIS_MONTH}-${String(day).padStart(2, '0')}T12:00:00+07:00`) });
+afterEach(() => vi.useRealTimers());
+
 beforeEach(() => {
+  setToday(25);
   resetFake(LAN, true); // logged in as Lan, UI in Vietnamese
   statsMonths = [];
   const monthOf = (request: Request) => {
@@ -88,7 +94,7 @@ test('TC-F6-05 dashboard: greeting, four month cards, charts with text summaries
   ]);
   // This month against last month in weekly columns (TC-NF-14): day 12 is in week 2, day 20 in week 3.
   const compare = screen.getByRole('figure', { name: 'Chi tiêu tháng này' });
-  expect(compare).toHaveTextContent(/Tháng này chi 2\.400\.000\s₫, nhiều hơn tháng trước 2\.400\.000\s₫\. Tuần cao nhất: tuần 2, 2\.000\.000\s₫\./);
+  expect(compare).toHaveTextContent(/Tháng này chi 2\.400\.000\s₫, nhiều hơn cùng kỳ tháng trước 2\.400\.000\s₫\. Tuần cao nhất: tuần 2, 2\.000\.000\s₫\./);
   await userEvent.setup().click(within(compare).getByRole('button', { name: 'Thu nhập' }));
   expect(screen.getByRole('figure', { name: 'Thu nhập tháng này' })).toHaveTextContent(/Tháng này thu 15\.000\.000\s₫.*Tuần cao nhất: tuần 1, 15\.000\.000\s₫\./);
 
@@ -99,6 +105,15 @@ test('TC-F6-05 dashboard: greeting, four month cards, charts with text summaries
   expect(within(latest).getAllByRole('listitem')).toHaveLength(5);
   expect(latest).toHaveTextContent(/món 1.*−10\.000\s₫/);
   expect(screen.getByRole('link', { name: 'Xem tất cả' })).toHaveAttribute('href', '/transactions');
+});
+
+test('TC-F14-03 on the 15th the sentence leaves out the bill of the 20th; the weekly columns still show it', async () => {
+  setToday(15);
+  renderApp('/');
+
+  const compare = await screen.findByRole('figure', { name: 'Chi tiêu tháng này' });
+  expect(compare).toHaveTextContent(/Tháng này chi 2\.000\.000\s₫, nhiều hơn cùng kỳ tháng trước 2\.000\.000\s₫\. Tuần cao nhất: tuần 2, 2\.000\.000\s₫\./);
+  expect(compare).toHaveTextContent('So với cùng kỳ tháng trước');
 });
 
 test('TC-F6-05 switching the month reloads the cards and charts; an empty month says so and offers to set a budget', async () => {
