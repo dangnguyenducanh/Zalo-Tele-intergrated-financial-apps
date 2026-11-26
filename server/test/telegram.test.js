@@ -531,7 +531,12 @@ test('TC-F8-14 setWebhooks registers both bots for a base URL, each with its own
   );
   const vars = { TELEGRAM_BOT_TOKEN: 'tg-token', TELEGRAM_WEBHOOK_SECRET: 'tg-secret', ZALO_BOT_TOKEN: 'zl-token', ZALO_WEBHOOK_SECRET: 'zalo-secret' };
 
-  expect(await setWebhooks('https://demo.example.app/', vars)).toEqual({ telegram: 'ok', zalo: 'ok' });
+  // WhatsApp has no setWebhook call: Meta takes the callback URL in its app dashboard (docs/06 §6.12), so without its settings it is skipped.
+  expect(await setWebhooks('https://demo.example.app/', vars)).toEqual({
+    telegram: 'ok',
+    zalo: 'ok',
+    whatsapp: expect.stringMatching(/^skipped: .*WHATSAPP_VERIFY_TOKEN/),
+  });
   expect(tokens).toEqual(['bottg-token']);
   expect(calls).toEqual([
     { method: 'setWebhook', body: { url: 'https://demo.example.app/api/webhooks/telegram', secret_token: 'tg-secret', allowed_updates: ['message', 'callback_query'] } },
@@ -542,7 +547,16 @@ test('TC-F8-14 setWebhooks registers both bots for a base URL, each with its own
   expect(await setWebhooks('https://demo.example.app', { TELEGRAM_BOT_TOKEN: 'bad', TELEGRAM_WEBHOOK_SECRET: 'tg-secret' })).toEqual({
     telegram: 'failed: Unauthorized',
     zalo: 'skipped: ZALO_BOT_TOKEN or ZALO_WEBHOOK_SECRET not set',
+    whatsapp: expect.stringMatching(/^skipped: /),
   });
+
+  // With the WhatsApp settings the script says what to enter in Meta's dashboard; it calls no Graph API
+  // (an unmocked host fails this test) and never prints the verify token.
+  const whatsapp = { WHATSAPP_ACCESS_TOKEN: 'wa-token', WHATSAPP_PHONE_NUMBER_ID: '123', WHATSAPP_APP_SECRET: 'wa-secret', WHATSAPP_VERIFY_TOKEN: 'wa-verify' };
+  const { whatsapp: advice } = await setWebhooks('https://demo.example.app/', whatsapp);
+  expect(advice).toMatch(/^manual: .*https:\/\/demo\.example\.app\/api\/webhooks\/whatsapp/);
+  for (const secret of Object.values(whatsapp)) expect(advice).not.toContain(secret);
+  expect((await setWebhooks('https://demo.example.app', { ...whatsapp, WHATSAPP_APP_SECRET: '' })).whatsapp).toMatch(/^skipped: /);
 });
 
 // ---------- Linking from the chat: the claim link (docs/02 §2.10.3) ----------
