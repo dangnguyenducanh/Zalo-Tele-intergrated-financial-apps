@@ -52,7 +52,7 @@ The full list (**216 cases**: 208 automated or semi-automated + 8 manual charter
 | F11 Admin | 9 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
 | F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
 | F13 Quick add | 7 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
-| F14 Assistant | 17 (built so far: the one comparison rule, T43, TC-F14-01…03; the agent service scaffold, T44, TC-F14-04…17) | TC-F14-01 `compareRange()` is one rule; TC-F14-05 every agent path but `/health` needs the bearer; TC-F14-13 the agent's database role cannot change app data or create indexes; TC-F14-14 it cannot read `users`, sessions or link tokens; TC-F14-15 `usersForAgent` shows no e-mail or password hash |
+| F14 Assistant | 17 (built so far: the one comparison rule, T43, TC-F14-01…03; the agent service scaffold, T44, TC-F14-04…17) | TC-F14-01 `compareRange()` is one rule; TC-F14-05 every agent path, websocket included, but `/health` needs the bearer; TC-F14-13 the agent's database role cannot change app data or create indexes; TC-F14-14 it cannot read `users`, sessions or link tokens; TC-F14-15 `usersForAgent` shows no e-mail or password hash |
 | Non-functional | 18 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-15 the bot-e2e tool's `--help` and bad options |
 | Manual charters | 8 | MT-01…MT-08 below |
 

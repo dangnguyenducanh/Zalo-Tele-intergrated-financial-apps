@@ -399,14 +399,14 @@ Git-ignored, on the GPU host only, never on Vercel. Create it empty with mode 60
 
 | Variable | Value |
 |---|---|
-| `AGENT_SECRET` | `openssl rand -hex 32`. The same value goes to Vercel (setup step 6) |
+| `AGENT_SECRET` | `openssl rand -hex 32`. The service refuses a secret shorter than 32 characters. The same value goes to Vercel (setup step 6) |
 | `MONGODB_URI_AGENT` | the `sochitieu_agent` URI above |
 | `VLLM_BASE_URL` | `http://127.0.0.1:8300/v1` |
 | `LLM_MODEL` | `qwen3.5-2b` |
 | `EMBED_MODEL` | `BAAI/bge-m3` |
 | `HF_HOME` | the model cache directory on the host, e.g. `/srv/hf-cache` |
 
-The agent service refuses to start without `AGENT_SECRET` or `MONGODB_URI_AGENT` (it exits with a message that names the variable, never its value), so it never runs open. The app user's `MONGODB_URI` is **not** put in this file: it is only for `python -m agent.setup`, which you run elsewhere.
+The agent service refuses to start without `AGENT_SECRET` (at least 32 characters) or `MONGODB_URI_AGENT` (it exits with a message that names the variable, never its value), so it never runs open or with a guessable secret. The app user's `MONGODB_URI` is **not** put in this file: it is only for `python -m agent.setup`, which you run elsewhere.
 
 ### Vercel variables (Express)
 
