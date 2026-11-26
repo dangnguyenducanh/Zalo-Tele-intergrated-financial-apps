@@ -35,11 +35,11 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**217 cases**: 209 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**231 cases**: 223 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
-| F1 Auth | 25 | TC-F1-01 passwords stored as bcrypt hashes; TC-F1-05 refresh rotation + stolen-token reuse detection; TC-F1-06 logout really revokes server-side; TC-F1-08 reload keeps you logged in (silent refresh) |
+| F1 Auth | 31 (T35 added TC-F1-27…31, the mailer) | TC-F1-01 passwords stored as bcrypt hashes; TC-F1-05 refresh rotation + stolen-token reuse detection; TC-F1-06 logout really revokes server-side; TC-F1-08 reload keeps you logged in (silent refresh); TC-F1-27 the code email has no link or image; TC-F1-30 a failed send logs and rethrows neither the address nor the code |
 | F2 Wallets | 12 | TC-F2-02 user B can't touch user A's wallet (404); TC-F2-04 balance excludes drafts and deleted items |
 | F3 Categories | 6 | TC-F3-01 defaults seeded on register; TC-F3-03 deleting a category moves its transactions to "Other" |
 | F4 Transactions | 13 | TC-F4-02 only positive integer VND accepted; TC-F4-07 month boundaries use Vietnam time |
@@ -53,7 +53,7 @@ The full list (**217 cases**: 209 automated or semi-automated + 8 manual charter
 | F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
 | F13 Quick add | 7 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
 | F14 Assistant | 17 (built so far: the one comparison rule, T43, TC-F14-01…03; the agent service scaffold, T44, TC-F14-04…17) | TC-F14-01 `compareRange()` is one rule; TC-F14-05 every agent path, websocket included, but `/health` needs the bearer; TC-F14-13 the agent's database role cannot change app data or create indexes; TC-F14-14 it cannot read `users`, sessions or link tokens; TC-F14-15 `usersForAgent` shows no e-mail or password hash |
-| Non-functional | 19 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-19 `vercel deploy` uploads no `.env` file (BUG-042); TC-NF-15 the bot-e2e tool's `--help` and bad options |
+| Non-functional | 22 (T35 added TC-NF-20…22) | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-19 `vercel deploy` uploads no `.env` file (BUG-042); TC-NF-15 the bot-e2e tool's `--help` and bad options; TC-NF-21 `set-secret.sh --remove` removes only the named keys from `server/.env` and from both Vercel projects |
 | Manual charters | 8 | MT-01…MT-08 below |
 
 **Planned for §2.10 (not in the counts above):** the three WhatsApp cases that need the owner's Meta setup (*one-tap on phones*, *real WhatsApp chat*, the WhatsApp charter, §7.8.5). They have no IDs yet: each takes the next free ID in `test-cases.json` at merge time. Linking from the chat (T33) is built and counted: TC-F7-16…23. The WhatsApp bot (T34) is built and in the catalogue: TC-F8-26…43 (TC-F8-24 is left free: it may be taken by another card in flight), TC-F4-14 and TC-F9-07. The counts in this table are as of T33 and are brought up to date by the next docs refresh, with the cases of T34, T77 and T78.
@@ -168,7 +168,7 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (217 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (231 cases, last results from results.json)
 ```
 
 ## 7.8 One-tap linking and WhatsApp (§2.10)
@@ -522,9 +522,22 @@ Not a row of §2.11.8, but the rule at the top of §2.11 ("nothing goes to a thi
 
 ## 7.10 Email codes: verified sign-up and password reset (planned, §2.12)
 
-> **Planned, not built.** Nothing in this section runs yet. It turns every acceptance check in [02-features.md §2.12.6](02-features.md#2126-acceptance-checks) into test cases. As in §7.8, the cases have **no IDs yet**: each is named by a short *name*, the part of §2.12 it tests and its §2.12.6 row, counted from the top of that table (1–11). The build PR takes the next free TC-F1 ID (F1 Auth) in `test-cases.json` at merge time, and the next MT for the charters, writes them into these tables and §7.10.7, and adds the cases to the catalogue and the Excel report. Until then they are not counted in §7.3. Quoted texts are §2.12's English; the tests match whatever wording and i18n keys the builder settles (vi + en).
+> **Planned, mostly not built.** Only the mailer half listed under *Levels and tools* below runs (T35); nothing else in this section runs yet. It turns every acceptance check in [02-features.md §2.12.6](02-features.md#2126-acceptance-checks) into test cases. As in §7.8, the cases have **no IDs yet**: each is named by a short *name*, the part of §2.12 it tests and its §2.12.6 row, counted from the top of that table (1–11). The build PR takes the next free TC-F1 ID (F1 Auth) in `test-cases.json` at merge time, and the next MT for the charters, writes them into these tables and §7.10.7, and adds the cases to the catalogue and the Excel report. Until then they are not counted in §7.3. Quoted texts are §2.12's English; the tests match whatever wording and i18n keys the builder settles (vi + en).
 
 Levels and tools as in §7.9. **No test ever sends real mail** (§7.10.5).
+
+**Built so far (T35, #80): the mailer half.** `server/test/mail.test.js`, `server/test/env.test.js` and `server/test/secret-tools.test.js` cover it; nothing calls the mailer yet, so none of the API, component or E2E cases below exist yet.
+
+| ID | Covers | Where |
+|---|---|---|
+| TC-F1-27 | *code email* (§7.10.2): sign-up and reset, vi and en, through nodemailer's `jsonTransport`; a bad code or purpose is refused | `mail.test.js` |
+| TC-F1-28 | the mailer half of *no mail configured* (§7.10.3): log-only in development and test, codes off in production without both settings (or with one), SMTP settings when both are set | `mail.test.js` |
+| TC-F1-29 | the mask part of *code helpers* (§7.10.2) | `mail.test.js` |
+| TC-F1-30 | a rejected send whose error text holds the address and the code logs and rethrows neither | `mail.test.js` |
+| TC-F1-31 | the test seam `setMailSender()` replaces delivery in every mode; the setup file clears `GMAIL_*`; nothing in `server/src` calls the seam | `mail.test.js` |
+| TC-NF-20 | `GMAIL_USER` and `GMAIL_APP_PASSWORD` are optional, whitespace is removed from the password, and neither has a test default | `env.test.js` |
+| TC-NF-21 | `tools/set-secret.sh --remove` and `tools/vercel-env-push.sh <target> --remove`, run in a temporary git repo with a made-up `server/.env` and a fake `npx` | `secret-tools.test.js` |
+| TC-NF-22 | the normal push still includes `GMAIL_*` keys that are in the file | `secret-tools.test.js` |
 
 ### 7.10.1 What changes in today's cases
 
@@ -546,8 +559,8 @@ Under test, `GMAIL_*` is unset, so register answers **202** and logs the code in
 
 | Case | Part | Level | Pri | Steps, then **Expect** | Proves | §2.12.6 row |
 |---|---|---|---|---|---|---|
-| *code helpers* | §2.12.1 | Unit | P0 | Make 1,000 codes with `crypto.randomInt` stubbed to return 4,215 once; hash a code; compare a right and a wrong code; mask `an.nguyen@gmail.com`. **Expect:** always 6 digits, "004215" keeps its zeros; only the SHA-256 is kept; the comparison uses `timingSafeEqual`; the mask is `a***@gmail.com` | Codes are well formed and stored safely | 3, 9 |
-| *code email* | §2.12.1 | Unit | P1 | `sendCode({ to, purpose, code, language })` through nodemailer's built-in `jsonTransport` (it builds the message and sends nothing), for sign-up and reset, vi and en. **Expect:** from `"Sổ chi tiêu" <GMAIL_USER>`; subject "Mã xác nhận Sổ chi tiêu: 123456" / "Your Sổ chi tiêu code: 123456"; a text and an HTML part; the body names the purpose, says 10 minutes and "If you didn't ask for this, ignore this email"; no `http`, no `<a`, no `<img` | The mail says what it should and carries no link to scan | 1 |
+| *code helpers* (the mask part is built: TC-F1-29) | §2.12.1 | Unit | P0 | Make 1,000 codes with `crypto.randomInt` stubbed to return 4,215 once; hash a code; compare a right and a wrong code; mask `an.nguyen@gmail.com`. **Expect:** always 6 digits, "004215" keeps its zeros; only the SHA-256 is kept; the comparison uses `timingSafeEqual`; the mask is `a***@gmail.com` | Codes are well formed and stored safely | 3, 9 |
+| *code email* (built, TC-F1-27) | §2.12.1 | Unit | P1 | `sendCode({ to, purpose, code, language })` through nodemailer's built-in `jsonTransport` (it builds the message and sends nothing), for sign-up and reset, vi and en. **Expect:** from `"Sổ chi tiêu" <GMAIL_USER>`; subject "Mã xác nhận Sổ chi tiêu: 123456" / "Your Sổ chi tiêu code: 123456"; a text and an HTML part; the body names the purpose, says 10 minutes and "If you didn't ask for this, ignore this email"; no `http`, no `<a`, no `<img` | The mail says what it should and carries no link to scan | 1 |
 
 ### 7.10.3 API tests
 
@@ -566,7 +579,7 @@ Vitest + Supertest + mongodb-memory-server. `services/mail.js` is replaced with 
 | *locked during reset* | §2.12.3 | API | P1 | Forgot for userB, then an admin locks userB, then reset with the right code; again with the right code. **Expect:** 403 `ACCOUNT_LOCKED`; the code is spent (the second try fails) | A locked account can't be taken back by email | 8 |
 | *send failure* | §2.12.2 | API | P1 | The mock throws on send; register. **Expect:** 503 `EMAIL_SEND_FAILED`; no `emailCodes` row is left | A failed send leaves nothing behind | 1 |
 | *storage and logs* | §2.12.5 | API | P0 | After *sign-up with code* and *password reset*, dump `emailCodes` and `users`; run a sign-up with `NODE_ENV=production` and mail on (transport stubbed) and capture the log. **Expect:** neither the code nor the password appears in any document; the production log has no code and only the masked email | Storage and logging rules | 9 |
-| *no mail configured* | §2.12.4 | API | P0 | With the real `services/mail.js` and `GMAIL_*` unset: a development/test sign-up, reading the code from the log line; then `NODE_ENV=production`: register, then forgot. **Expect:** the log line `[mail] signup code for a***@gmail.com: <code>` and the flow completes; in production register → 201 + cookie (logged in, no code) and forgot → 503 `FEATURE_NOT_CONFIGURED` | Works without mail; the escape hatch | 10 |
+| *no mail configured* (the mailer half is built: TC-F1-28) | §2.12.4 | API | P0 | With the real `services/mail.js` and `GMAIL_*` unset: a development/test sign-up, reading the code from the log line; then `NODE_ENV=production`: register, then forgot. **Expect:** the log line `[mail] signup code for a***@gmail.com: <code>` and the flow completes; in production register → 201 + cookie (logged in, no code) and forgot → 503 `FEATURE_NOT_CONFIGURED` | Works without mail; the escape hatch | 10 |
 | *nothing else changes* | §2.12 | API | P0 | The whole existing suite: F1 login, refresh, sessions and lock cases, the webhook suites, and logins of seeded users. **Expect:** all pass with no change other than the register helpers of §7.10.1 | Option B touches nothing else | 11 |
 | *indexes* | §2.12.5 | API | P2 | Read the `emailCodes` indexes. **Expect:** unique `(purpose, email)` and a TTL index on `expiresAt` | Old rows clean themselves up | — |
 
@@ -583,7 +596,7 @@ Vitest + Supertest + mongodb-memory-server. `services/mail.js` is replaced with 
 ### 7.10.5 Hermetic mail (never real Gmail in tests)
 
 - **SMTP is not HTTP.** `nodemailer` opens a TLS socket to `smtp.gmail.com:465`. MSW and `bot-api-stub.js` see only HTTP, so their "block every other host" rule can't stop a real send. The mail module itself must be replaced in every test run.
-- **Vitest.** `services/mail.js` is replaced with `vi.mock`, which records `{ to, purpose, code, language }` and sends nothing. The test setup also deletes `GMAIL_USER` and `GMAIL_APP_PASSWORD`, so a real `server/.env` can never turn mail on in a test, and *no mail configured* runs the real module in its log-only mode. Only *code email* builds a real message, through nodemailer's `jsonTransport`, which has no network.
+- **Vitest.** `services/mail.js` is replaced with `vi.mock`, which records `{ to, purpose, code, language }` and sends nothing. The test setup (built, T35: `server/test/helpers/no-gmail.js`, listed in `vitest.config.js`) also deletes `GMAIL_USER` and `GMAIL_APP_PASSWORD`, so a real `server/.env`, a shell variable or a CI secret can never turn mail on in a test, and *no mail configured* runs the real module in its log-only mode. Only *code email* builds a real message, through nodemailer's `jsonTransport`, which has no network. Other tests that need a real SMTP path replace `nodemailer.createTransport` (as `mail.test.js` does, to read the SMTP options and to fail a send) and never reach `smtp.gmail.com`. The seam `setMailSender()` (TC-F1-31) replaces delivery in every mode.
 - **E2E server.** A test-only mail stub, like `bot-api-stub.js`, that never loads in production (§2.12.4). It records each code so the Playwright test can read it. How the test reads it (a test-only route on the E2E server, a file, or the server log) is the builder's choice, as with the claim URL in §7.8.7.
 - **Real inboxes only in the charters** (§7.10.6), against staging with `GMAIL_*` set.
 

@@ -76,7 +76,7 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 
 **Projects:** two Vercel projects, **`sochitieu-btl`** (production, DB `finance`) and **`sochitieu-btl-staging`** (staging, DB `finance_staging`). Neither is Git-connected: deploys go through the CLI (below). Build settings live in `vercel.json` (no framework preset, `npm ci`, `npm run build -w client`, output `client/dist`); Node 22.x comes from `engines` in `package.json`. The scripts find the projects through `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_PROD` and `VERCEL_PROJECT_ID_STAGING` in `server/.env`, so no `vercel link` is needed.
 
-**Environment variables** are copied from `server/.env` by `tools/vercel-env-push.sh staging|production [KEY...]` (all keys, or only the ones named). It sets the project's **Production** environment only, since every deploy is a production deploy. Values go through stdin and are never printed. `tools/set-secret.sh KEY...` asks for each value hidden, saves it in `server/.env`, then pushes the changed keys to **both** projects. Changing them needs a **redeploy**.
+**Environment variables** are copied from `server/.env` by `tools/vercel-env-push.sh staging|production [KEY...]` (all keys, or only the ones named). It sets the project's **Production** environment only, since every deploy is a production deploy. Values go through stdin and are never printed. `tools/set-secret.sh KEY...` asks for each value hidden, saves it in `server/.env`, then pushes the changed keys to **both** projects. Changing them needs a **redeploy**. To switch a secret off, `tools/set-secret.sh --remove KEY...` asks for nothing: it deletes the `KEY=` lines from `server/.env`, then removes the variables from **both** projects (`tools/vercel-env-push.sh staging|production --remove KEY...` does one project). A key that is not in `server/.env` is not an error: it is still removed from Vercel. A failed removal is named by key and the retry command is printed. Both tools answer `--help`. **One pair is not copied from `server/.env` at all:** `GMAIL_USER` and `GMAIL_APP_PASSWORD` are set only in the dashboard, never saved in `server/.env` (§6.14).
 
 | Variable | Where it comes from |
 |---|---|
@@ -90,7 +90,7 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `WHATSAPP_NUMBER` | the WhatsApp bot's number, international format, digits only, no leading 0 (e.g. `849…`); optional: without it the link card has no WhatsApp button (§6.12) |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | §6.12; all four are needed, or the WhatsApp webhook answers 503 and the link card hides WhatsApp |
 | `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS`, `CRON_SECRET` *(planned, §2.11)* | §6.13 (`AGENT_URL` is pushed from `AGENT_PUBLIC_URL`, like `KIE_URL`) |
-| `GMAIL_USER`, `GMAIL_APP_PASSWORD` *(planned, §2.12)* | §6.14 |
+| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | set **only in the Vercel dashboard** of both projects, never in `server/.env`, so they are not copied from it (§6.14). Optional; both are needed for mail |
 | `KIE_URL` | the value of `KIE_PUBLIC_URL` (§6.6); if that is empty, a non-local `KIE_URL` is pushed as is |
 | `KIE_API_KEY` | §6.6 |
 
@@ -480,35 +480,40 @@ The KIE lesson: a dead tunnel silently broke receipts. So before a demo (also in
 
 **Both projects run the cron.** §2.11.2 says production only, but every deploy of ours is a production deploy (§6.3), so Vercel runs the `crons` entry in the staging project too, against `finance_staging` and with the same bot tokens. Whether staging should send proactive messages is **left to you**. To stop it, remove `CRON_SECRET` from the staging project after the push (Vercel → `sochitieu-btl-staging` → Settings → Environment Variables) and redeploy staging: its cron calls then get 401. With `AGENT_URL` unset on staging (above), its cron sends only B3 drafts anyway.
 
-## 6.14 Gmail SMTP for email codes (planned, §2.12)
+## 6.14 Gmail SMTP for email codes (§2.12)
 
-> **Planned (§2.12), not built yet.** Today `server/src/config/env.js` has no `GMAIL_*` variable and there is no mailer; register logs the user in at once. Do these steps when `services/mail.js` is merged.
+> **Built (T35):** the mailer (`server/src/services/mail.js`), the two settings and the remove command. **Nothing calls the mailer yet**: sign-up and password reset by email are still planned (§2.12.2, §2.12.3), so setting the variables changes nothing for users until they ship. Do the steps below when the sign-up card (T38) is deployed and checked, not before.
 
 **What each variable does** (both optional; both must be set for mail to be on, §2.12.4):
 
 | Variable | Purpose | When unset |
 |---|---|---|
 | `GMAIL_USER` | The sending Gmail address; mails come from `"Sổ chi tiêu" <GMAIL_USER>` | see below |
-| `GMAIL_APP_PASSWORD` | The 16-character Google app password for that address (not the account password) | see below |
+| `GMAIL_APP_PASSWORD` | The 16-character Google app password for that address (not the account password). Whitespace in it is dropped, so it can be pasted as Google shows it | see below |
 
 With either one unset:
 - **Development and test:** the API boots, and the code is written to the server log instead of sent (`[mail] signup code for a***@gmail.com: 123456`), so the whole flow works without Gmail.
-- **Production:** register works as today (201, logged in, no code), so sign-ups never stop; `POST /api/auth/password/forgot` answers 503 `FEATURE_NOT_CONFIGURED`.
+- **Production:** `sendCode` rejects and `canSendCodes()` is false: register works as today (201, logged in, no code), so sign-ups never stop; `POST /api/auth/password/forgot` answers 503 `FEATURE_NOT_CONFIGURED`. (Those two answers come with the cards that call the mailer.)
+
+**Where they live: the dashboard only (decision D8).** Set `GMAIL_USER` and `GMAIL_APP_PASSWORD` only in the Vercel dashboard of the two projects, **never in `server/.env`**. Every agent worktree gets a copy of that file; a Gmail value in it would let a test run, a local server or a worktree send real mail from your account. The test setup also deletes both variables from the environment, so a test cannot send mail either. For the same reason `tools/set-secret.sh GMAIL_USER GMAIL_APP_PASSWORD` is not the way to set them. Keep them empty in `server/.env` (`.env.example` lists the names, empty). `tools/vercel-env-push.sh` with no KEY still pushes every key that is in `server/.env`, so a Gmail line left there would be pushed: leave none.
 
 **One-time setup** on the Google account that will send the mail:
 
 1. Turn on **2-Step Verification**: Google account → **Security** → **2-Step Verification**. App passwords exist only with it on.
-2. Make an **app password**: Google account → Security → 2-Step Verification → **App passwords**; name it, e.g. `sochitieu`. Google shows the 16 characters once, in groups of four: paste them without the spaces straight into `tools/set-secret.sh` (below).
-3. Changing the Google account's password revokes every app password. Then make a new one and push it again.
+2. Make an **app password**: Google account → Security → 2-Step Verification → **App passwords**; name it, e.g. `sochitieu`. Google shows the 16 characters once, in groups of four.
+3. Changing the Google account's password revokes every app password. Then make a new one and replace it in the dashboard.
 
-**Save and push:**
+**Set them** (do this for **both** projects, `sochitieu-btl` and `sochitieu-btl-staging`):
 
-```bash
-tools/set-secret.sh GMAIL_USER GMAIL_APP_PASSWORD
-```
+1. Vercel → the project → **Settings → Environment Variables** → add `GMAIL_USER` (the Gmail address) and `GMAIL_APP_PASSWORD` (the app password, spaces or not), for the **Production** environment.
+2. **Redeploy** the project (`tools/deploy.sh staging`, then `production`), because variables change only with a new deployment.
+3. Check it, once the sign-up card is live: register a new address on staging, and the code should arrive within about 15 s (look in spam too).
 
-It saves both in `server/.env` and pushes them to **both** Vercel projects (§2.12.5); never commit them. Then **redeploy** both projects. Check it: register a new address on staging, and the code should arrive within about 15 s (look in spam too).
+**Switch mail off** (the escape hatch, §2.12.4): if Google stops the account sending (bounces, or the 500-a-day limit), remove both values and redeploy. Sign-up then works without codes until the account recovers. Either:
 
-**The escape hatch** (§2.12.4): if Google stops the account sending (bounces, or the 500-a-day limit), remove the two values and redeploy. Sign-up then works without codes until the account recovers. §2.12.4 says to do this with `tools/set-secret.sh`, but today the script can't remove a key (an empty paste is asked again, `-` skips), so either the PR that builds the mailer gives it a remove option, or remove them by hand: delete the two lines from `server/.env` and the two variables in Vercel → each project → **Settings → Environment Variables**.
+- delete both variables in the dashboard of each project (**Settings → Environment Variables**), or
+- run `tools/set-secret.sh --remove GMAIL_USER GMAIL_APP_PASSWORD`. It asks for nothing, deletes those lines from `server/.env` if they are there (a key that is not there is not an error), and removes the variables from **both** Vercel projects. A removal that fails (a variable already gone from one project counts too) is named by key, the command exits non-zero and prints the retry command for that project, e.g. `tools/vercel-env-push.sh staging --remove GMAIL_USER`. Values are never printed.
+
+Then redeploy both projects: `tools/deploy.sh staging`, then `tools/deploy.sh production`.
 
 **Logs** never contain the code or the password in production; addresses are masked (`a***@gmail.com`, §2.12.5).
