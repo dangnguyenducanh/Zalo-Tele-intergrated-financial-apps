@@ -135,6 +135,17 @@ def test_answer_shape(client, model):
     assert model.tasks() == ['lines', 'receipt', 'transcript']  # printed on the first re-read: no second one
 
 
+def test_the_foot_of_the_receipt_is_not_a_line_item(client, model):
+    """TC-F10-29 the total, cash and change rows the model lists among the items are dropped; real items stay"""
+    item = lambda name, amount: {'name': name, 'quantity': 1, 'unit_price': None, 'amount': amount}  # noqa: E731
+    model.answers['receipt'] = {**GOOD['receipt'], 'items': [
+        item('Combo tiết kiệm', 40000), item('Thuốc giảm đau', 23000), item('Tổng cộng', 63000), item('Tiền khách đưa', 100000),
+        item('Tiền phải trả lại', 37000), item('Tiền mặt', 100000), item('Total', 63000)]}
+    body = analyze(client, photo()).json()
+    assert [row['name'] for row in body['line_items']] == ['Combo tiết kiệm', 'Thuốc giảm đau']
+    assert body['reconciliation'] == {'is_math_consistent': True}
+
+
 def test_png(client):
     """TC-F10-29 a PNG is read too, and sent to the model as a PNG"""
     assert analyze(client, photo('PNG'), content_type='image/png').status_code == 200

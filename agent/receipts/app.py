@@ -10,7 +10,7 @@ import os
 import warnings
 
 from fastapi import FastAPI, HTTPException, Request
-from PIL import Image, ImageOps
+from PIL import Image
 from starlette.formparsers import MultiPartException, MultiPartParser
 
 from reader import read_receipt
@@ -22,6 +22,11 @@ MAX_PIXELS = 40_000_000
 MAX_SIDE = 2048  # a larger photo is shrunk: its image tokens would not fit the model's 16k window
 READ_BUDGET_S = 90  # the app gives up after 120 s
 FORMATS = {b'\xff\xd8\xff': ('JPEG', 'image/jpeg'), b'\x89PNG\r\n\x1a\n': ('PNG', 'image/png')}
+# The turn that stands a photo upright, by EXIF orientation (tag 274). Not ImageOps.exif_transpose: it also rewrites
+# the EXIF block, and raises on another tag of the wrong type.
+UPRIGHT = {2: Image.Transpose.FLIP_LEFT_RIGHT, 3: Image.Transpose.ROTATE_180, 4: Image.Transpose.FLIP_TOP_BOTTOM,
+           5: Image.Transpose.TRANSPOSE, 6: Image.Transpose.ROTATE_270, 7: Image.Transpose.TRANSVERSE,
+           8: Image.Transpose.ROTATE_90}
 
 log = logging.getLogger('uvicorn.error')  # shown in the container log
 
@@ -69,8 +74,11 @@ def to_data_url(data):
         if image.width * image.height > MAX_PIXELS:
             raise HTTPException(413, 'The image has too many pixels')
         image.load()  # a broken or cut-off file fails here
-        if image.getexif().get(274, 1) != 1 or max(image.size) > MAX_SIDE:
-            upright = ImageOps.exif_transpose(image).convert('RGB')
+        turn = UPRIGHT.get(image.getexif().get(274, 1))
+        if turn is not None or max(image.size) > MAX_SIDE:
+            upright = image.convert('RGB')
+            if turn is not None:
+                upright = upright.transpose(turn)
             upright.thumbnail((MAX_SIDE, MAX_SIDE))
             out = io.BytesIO()
             upright.save(out, 'JPEG', quality=92)

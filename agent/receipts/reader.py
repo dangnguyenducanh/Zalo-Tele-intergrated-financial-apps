@@ -3,7 +3,7 @@
 import asyncio
 import time
 
-from picker import choose_total, goods_subtotal_only, is_money, printed_amounts, receipt_date
+from picker import choose_total, goods_subtotal_only, is_foot_line, is_money, printed_amounts, receipt_date
 from vllm_client import BadAnswer
 
 TOLERANCE = 1000  # VND: line items that add up to the total within this "match" (KIE's tolerance)
@@ -45,7 +45,7 @@ def answer(direct, total, timings):
     items = [
         {'name': item.name.strip(), 'quantity': item.quantity if item.quantity and 0 < item.quantity < 1e6 else 1,
          'unit_price': item.unit_price if is_money(item.unit_price) else None, 'amount': item.amount}
-        for item in direct.items if item.name.strip() and is_money(item.amount)
+        for item in direct.items if item.name.strip() and is_money(item.amount) and not is_foot_line(item.name)
     ]
     adds_up = bool(total and items) and abs(sum(item['amount'] for item in items) - total) <= TOLERANCE
     return {
