@@ -17,7 +17,7 @@ Why the reviewer gets a separate worktree: it rebuilds from the pushed branch wi
 ## 8.2 Worktrees with treehouse
 
 One-time config (committed):
-- `treehouse.toml` sets `base_branch = \"staging\"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 32` (no fixed number of agents; the orchestrator raises it when the pool is full).
+- `treehouse.toml` sets `base_branch = "staging"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 32` (no fixed number of agents; the orchestrator raises it when the pool is full).
 - `.worktreeinclude` lists `server/.env`, so each worktree gets the secrets copied in. They stay git-ignored.
 
 | Who | Command (run from the main checkout) | Lease holder | Released |
