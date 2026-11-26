@@ -119,7 +119,7 @@ Indexes: `{ userId: 1, type: 1, deletedAt: 1 }`.
 | `note` | String | ≤ 200 chars |
 | `occurredAt` | Date | when the money moved |
 | `status` | String | `draft` \| `confirmed` (web entries are created `confirmed`) |
-| `source` | String | `web` \| `telegram` \| `zalo` \| `receipt` |
+| `source` | String | `web` \| `telegram` \| `zalo` \| `whatsapp` \| `receipt` (a bot photo takes its platform as `source`; `receipt` stays for web uploads) |
 | `chatRef` | `{ platform, chatId, messageId }` | for bot drafts; used to edit/answer the bot message and for idempotency |
 | `receipt` | `{ merchant, address, date, total, items:[{name, quantity, unitPrice, amount}], reconciled: Boolean, kieMs: Number, fileRef: String }` | only for receipt drafts |
 | `deletedAt` | Date \| null | |
@@ -128,9 +128,7 @@ Indexes:
 - `{ userId: 1, status: 1, occurredAt: -1 }`: lists, dashboard
 - `{ userId: 1, categoryId: 1, occurredAt: -1 }`: budgets, stats by category
 - `{ userId: 1, walletId: 1 }`: wallet balance
-- `{ "chatRef.platform": 1, "chatRef.chatId": 1, "chatRef.messageId": 1 }` **unique, partial** (only when `chatRef` exists). `messageId` is `"<platform message id>:<line>"` (a receipt uses line 1). If Telegram/Zalo retries the same webhook, no second draft is created.
-
-*Planned (§2.10, see §3.6):* `source` and `chatRef.platform` gain `whatsapp`.
+- `{ "chatRef.platform": 1, "chatRef.chatId": 1, "chatRef.messageId": 1 }` **unique, partial** (only when `chatRef` exists). `messageId` is `"<platform message id>:<line>"` (a receipt uses line 1). If Telegram, Zalo or WhatsApp retries the same webhook, no second draft is created. `chatRef.platform` is `telegram` \| `zalo` \| `whatsapp` (without `whatsapp` every WhatsApp draft would fail validation); for WhatsApp, `chatId` is the BSUID and `messageId` is `"<wamid>:<line>"` (§3.6).
 
 *Planned (§2.11, see §3.7):* `note` and `receipt.merchant` are saved NFC-normalized, and drafts made by the daily cron use `chatRef.messageId = rec:<date>:<key>`.
 
@@ -152,10 +150,10 @@ A budget whose category was deleted is hidden from the list and skipped by "copy
 | Field | Type | Notes |
 |---|---|---|
 | `userId` | ObjectId → User | required |
-| `platform` | String | `telegram` \| `zalo` |
-| `platformUserId` | String | Telegram `from.id` / Zalo `from.id` |
-| `chatId` | String | where to send replies |
-| `displayName` | String | shown on the Bot inbox |
+| `platform` | String | `telegram` \| `zalo` \| `whatsapp` |
+| `platformUserId` | String | Telegram `from.id` / Zalo `from.id` / WhatsApp: the user's business-scoped user ID (BSUID), never the phone number (§3.6) |
+| `chatId` | String | where to send replies (WhatsApp: the same BSUID) |
+| `displayName` | String | shown on the Bot inbox (WhatsApp: the profile name) |
 | `pendingTransactionId` | ObjectId → Transaction \| null | the draft a typed `ok`/`huy` (Telegram and Zalo) or a Zalo amount-only correction acts on; set by text and receipt drafts. If it is no longer a waiting draft, the newest waiting draft from that chat is used. |
 | `viaClaim` | Boolean | default `false`; `true` for a link made by a claim link (§2.10.5). Older rows read as `false` through the default, so no migration |
 | `claimNoticeDismissedAt` | Date \| null | when the user dismissed the "Not you? [Unlink]" notice; the Bot inbox shows it while `viaClaim && !claimNoticeDismissedAt` |
@@ -163,8 +161,6 @@ A budget whose category was deleted is hidden from the list and skipped by "copy
 Indexes: `{ platform: 1, platformUserId: 1 }` **unique** (one web account per chat account, and the backstop when a chat was linked between its claim link and Confirm); `{ userId: 1 }`.
 
 Rows are created two ways: by `/start CODE` / `/link CODE` in the chat (from the message plus the code's `userId`) and by `POST /api/chat-links/claim` (from the claim link's `chat` plus the logged-in user, with `viaClaim: true`).
-
-*Planned (§2.10, see §3.6):* `platform` gains `whatsapp`; for WhatsApp, `platformUserId` and `chatId` are the user's business-scoped user ID (BSUID), never the phone number.
 
 *Planned (§2.11, see §3.7):* one field, `lastConfirmedId`, for fixing or undoing from chat.
 
@@ -234,41 +230,28 @@ Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`; `{ 'chat.platform
 
 **Default wallets on register:** "Tiền mặt / Cash" (`cash`, aliases `tm`, `cash`) set as the default wallet.
 
-## 3.6 One-tap linking and WhatsApp (planned, §2.10)
+## 3.6 WhatsApp (§2.10, built by card T34 #74)
 
-Not built yet (linking from the chat is, and is described in §3.3). It lists what docs/02 §2.10 still changes against §3.3; as each part is built, its change moves into §3.3 and is removed here. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. These parts add no collection and no index.
+What WhatsApp changes in §3.3. It adds no collection and no index. The enums above already list `whatsapp` (adding values needs no data migration), and nothing else in the data model differs from Telegram and Zalo except what the key is.
 
-### `chatLinks` (planned)
+### `chatLinks`
 
-| Field | Today | Planned |
-|---|---|---|
-| `platform` | `telegram` \| `zalo` | `telegram` \| `zalo` \| `whatsapp` |
-| `platformUserId` | Telegram / Zalo `from.id` | WhatsApp: the user's business-scoped user ID (BSUID): `from_user_id` on the message, `user_id` on the contact. Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key |
-| `chatId` | where to send replies | WhatsApp: the same BSUID; replies are sent with `recipient_type: "individual"` and `recipient: <BSUID>`, never `to` (§2.10.4) |
-| `displayName` | shown on the Bot inbox | WhatsApp: `value.contacts[0].profile.name` |
+- `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID): `from_user_id` on the message (the contact's `user_id` is the same value). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key. A BSUID is scoped to one Meta business portfolio and Meta may regenerate it when the user changes their phone number; the chat then looks like a new, unlinked one and links again.
+- Replies are sent with `recipient_type: "individual"` and `recipient: <BSUID>`, never `to` (§2.10.4). `displayName` is the profile name of the contact whose `user_id` equals the BSUID.
+- WhatsApp rows are created the same two ways as the others (§3.3). `{ platform: 1, platformUserId: 1 }` unique means one web account per WhatsApp user.
 
-- WhatsApp rows are created the same two ways as today's (§3.3).
-- Indexes unchanged. `{ platform: 1, platformUserId: 1 }` unique then also means one web account per WhatsApp user (BSUID).
+### `transactions`
 
-### `transactions` (planned)
+- `source` is `whatsapp` for drafts from the WhatsApp bot, text and receipt photos alike.
+- `chatRef = { platform: 'whatsapp', chatId: <BSUID>, messageId: '<wamid>:<line>' }`, from the message `id`. The unique partial `chatRef` index is what turns a second delivery of the same `wamid` into no second draft (§2.10.4).
 
-| Field | Today | Planned |
-|---|---|---|
-| `source` | `web` \| `telegram` \| `zalo` \| `receipt` | adds `whatsapp` for drafts from the WhatsApp bot, text and receipt photos alike (a bot photo already takes its platform as `source`; `receipt` stays for web uploads) |
-| `chatRef.platform` | `telegram` \| `zalo` | adds `whatsapp` (§2.10.5); without it every WhatsApp draft fails validation |
-| `chatRef.chatId` | the chat's `chatId` | WhatsApp: the BSUID, not a phone number |
-| `chatRef.messageId` | `"<platform message id>:<line>"` | WhatsApp: `"<wamid>:<line>"`, from the message `id` (§2.10.4) |
+### Privacy
 
-- Indexes unchanged. The unique partial `chatRef` index is what turns a second delivery of the same `wamid` into no second draft (§2.10.4).
-- Adding enum values needs no data migration.
-
-### Privacy (planned)
-
-- **WhatsApp: no phone number is stored.** The key is the BSUID (§2.10.4), so `chatLinks`, `linkCodes.chat` and `transactions.chatRef` hold the BSUID, never a phone number. The web shows `displayName` (the WhatsApp profile name), and admin stats count chats per platform without identifiers. Transaction responses still carry `chatRef` as today (the model's `toJSON` keeps it), so a WhatsApp draft's response carries the BSUID, not a phone number.
+- **WhatsApp: no phone number is stored.** `chatLinks`, `linkCodes.chat` and `transactions.chatRef` hold the BSUID, never a phone number: the adapter does not read `from` or `contacts[].wa_id`. The web shows `displayName` (the WhatsApp profile name), and admin stats count chats per platform without identifiers. Transaction responses still carry `chatRef` as before (the model's `toJSON` keeps it), so a WhatsApp draft's response carries the BSUID, not a phone number (test *BSUID only*, TC-F8-37).
 
 ## 3.7 Assistant and agent features (planned, §2.11)
 
-None of this is built yet. It lists what docs/02 §2.11 adds to §3.3; as each part is built, its change moves into §3.3 and is removed here. The questions, receipt reading and category suggestions run in the **agent service** (Python, FastAPI + LangGraph) on the GPU host, next to vLLM serving Qwen3.5-2B (§2.11.4); the backend side is in [04-backend.md §4.11](04-backend.md). Where a shape is not named in §2.11, this section says so or leaves it to the builder.
+Mostly not built yet. It lists what docs/02 §2.11 adds to §3.3; as each part is built, its change moves into §3.3 and is removed here. **Built by T44 (the agent service scaffold):** the command that creates the agent's collections, their indexes and the `usersForAgent` view (`python -m agent.setup`, below), and the agent's MongoDB role (`agent/role.json`); the rows themselves are written by the cards that follow. The questions, receipt reading and category suggestions run in the **agent service** (Python, FastAPI + LangGraph) on the GPU host, next to vLLM serving Qwen3.5-2B (§2.11.4); the backend side is in [04-backend.md §4.11](04-backend.md). Where a shape is not named in §2.11, this section says so or leaves it to the builder.
 
 Two rules shape every row below:
 - **Writes stay in Express.** The agent service writes only its own collections (`agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`) and inserts proposals into `pendingActions`. Every money write (a confirmed action card, a receipt draft, a category move, an A7 keyword) is done by Express through the same services as the web.
@@ -289,7 +272,11 @@ Two rules shape every row below:
 | `channelUsage` | platform and month | Express | not named in §2.11 | not stated |
 | `appSettings` | — (a single row) | Express (admin) | `_id` only | never |
 
-The agent service creates the indexes of its own collections on start.
+**Who creates them.** Not the agent service: its role has no index, collection or drop right (decision D14, default taken 2026-11-25), and it creates nothing when it starts. `python -m agent.setup`, run with the **app user's** `MONGODB_URI` (§6.13 of [06-deployment.md](06-deployment.md)), creates the seven collections of this table that the agent writes (`agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`, `pendingActions`), every index above, the TTL indexes (`agentTurns` and `receiptReads` on their own `{ createdAt: 1 }`, since a TTL index covers one field; `pendingActions` on `{ expiresAt: 1 }`) and the `usersForAgent` view below. Running it again is safe. After any card that changes an agent index or that view, run setup again with the app user. `notices`, `channelUsage` and `appSettings` are Express's and not part of it.
+
+#### `usersForAgent` (view, built by T44)
+
+A MongoDB **view** on `users` whose pipeline is `[{ $project: { _id: 1, language: 1, assistantOn: 1 } }]` (decision D15, default taken 2026-11-25). A role cannot limit the fields of a collection, so a role with `find` on `users` could read every password hash. The agent's role therefore has **no right on `users`** and `find` on this view only, and agent code reads users through it. It shows the user's `_id`, `language` and the "Trợ lý" switch `assistantOn` (absent until a user has one) and nothing else: no e-mail, no name, no hash. `setup` drops and creates it again when its definition differs, so a wider view cannot stay behind.
 
 #### `agentTurns` (planned)
 
@@ -451,7 +438,7 @@ One model, `BAAI/bge-m3`, loaded in the agent service on the GPU: **1024 dimensi
 
 ### Who reaches which collection (planned)
 
-Every turn passes the same graph, so every skill also reads `users`, `categories` and `wallets` (`load_context`), `agentTurns` (the last 6 turns), `agentMemory` and `agentSkills`, and writes one `agentTurns` row. The matrices below show only what differs. R = read, W = write, P = insert a proposal.
+Every turn passes the same graph, so every skill also reads `users` (through the `usersForAgent` view), `categories` and `wallets` (`load_context`), `agentTurns` (the last 6 turns), `agentMemory` and `agentSkills`, and writes one `agentTurns` row. The matrices below show only what differs. R = read, W = write, P = insert a proposal.
 
 **By skill** (the app's collections the skill's tools reach):
 
@@ -501,9 +488,9 @@ Every turn passes the same graph, so every skill also reads `users`, `categories
 
 | Component | Reads | Writes |
 |---|---|---|
-| start-up sync | `agentSkills`, `agentTools` | `agentSkills`, `agentTools` (rows and embeddings), indexes of the agent collections |
+| start-up sync | `agentSkills`, `agentTools` | `agentSkills`, `agentTools` (rows and embeddings). It creates no index (`python -m agent.setup` does, D14) |
 | `ingress` | `agentTurns` (cap count) | `agentTurns` (inserts the turn's row) |
-| `load_context` | `users`, `categories`, `wallets`, `agentTurns`, `pendingActions` (the action a confirm points at) | — |
+| `load_context` | `usersForAgent`, `categories`, `wallets`, `agentTurns`, `pendingActions` (the action a confirm points at) | — |
 | `rewrite_question` | — (uses the context already loaded) | — |
 | `recall_memory` | `agentMemory` | `agentMemory.lastUsedAt` |
 | `find_skills` | `agentSkills` (in memory) | — |
@@ -519,13 +506,13 @@ Every turn passes the same graph, so every skill also reads `users`, `categories
 
 | Collection | Actions in the `sochitieu_agent` role | Used by |
 |---|---|---|
-| `users` | `find` | `load_context`: only `_id`, `language` and `assistantOn` are projected (a role cannot limit fields) |
+| `usersForAgent` (a view on `users`, D15) | `find` | `load_context`: the view keeps only `_id`, `language` and `assistantOn` |
 | `categories`, `wallets`, `transactions`, `budgets` | `find` | `load_context` and the read tools |
 | `pendingActions` | `find`, `insert`, `update` | `propose_action` inserts; `load_context` reads; Express flips the status |
-| `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads` | `find`, `insert`, `update`, `remove`, `createIndex` | the agent service only (`createIndex` because it builds its indexes on start) |
-| anything else (`sessions`, `chatLinks`, `linkCodes`, `emailCodes`, `notices`, `channelUsage`, `appSettings`) | none | Express only |
+| `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads` | `find`, `insert`, `update`, `remove` | the agent service only. No `createIndex`: `python -m agent.setup` makes the indexes (D14) |
+| anything else (`users` itself, `sessions`, `chatLinks`, `linkCodes`, `emailCodes`, `notices`, `channelUsage`, `appSettings`) | none | Express only |
 
-The role is created in Atlas (Database Access → Custom Roles); the steps are in [06-deployment.md](06-deployment.md). With the role scoped like this, a bug or a prompt injection in the agent service cannot change money data, read sessions or tokens, or write outside its own collections.
+The role is created in Atlas (Database Access → Custom Roles); the steps are in [06-deployment.md](06-deployment.md), and **`agent/role.json` is the one committed definition** of it: the pytest suite builds the role from that file on a `mongod` with authentication and checks every row of this table (TC-F14-13 … TC-F14-15). With the role scoped like this, a bug or a prompt injection in the agent service cannot change money data, read password hashes, sessions or tokens, or write outside its own collections, and it cannot create or drop an index or a collection.
 
 ### Changed collections (planned)
 

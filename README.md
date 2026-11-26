@@ -30,9 +30,12 @@ Secrets go in with `tools/set-secret.sh KEY…`, which asks for each value witho
 ```bash
 npm run typecheck && npm run lint
 npm test                 # Vitest: API, webhooks, parser, components (writes test-results/*.xml)
+npm run test:agent       # pytest for the agent service in agent/ (see below; writes test-results/agent-pytest.xml)
 npm run test:e2e         # Playwright: journeys, responsive, axe accessibility, security (with video)
 npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml
 ```
+
+The agent service needs Python 3.12. Once per clone: `python3.12 -m venv agent/.venv && agent/.venv/bin/pip install -r agent/requirements-dev.txt`, then `PATH="$PWD/agent/.venv/bin:$PATH" npm run test:agent`. Its database tests start the `mongod` that `npm test` downloads for mongodb-memory-server (no GPU, model or network service is used).
 
 The last command rebuilds the Excel report: test cases with what each one proves, the bug log with root cause and fix, and the run history. The test plan and the fix-and-retest loop are in [docs/07](docs/07-testing.md).
 
@@ -58,6 +61,7 @@ One member did every part: requirements and design, frontend, backend, database,
 - **Frontend:** React 19 + **TypeScript**, Vite, React Router, Redux Toolkit (RTK Query), MUI, react-i18next
 - **Backend:** Node.js 22, Express 5 (one Vercel Function), Mongoose, JWT + bcrypt
 - **Database:** MongoDB Atlas (free cluster)
+- **Agent service (in progress):** `agent/`, Python 3.12 + FastAPI, on a GPU host next to a local model. Only the scaffold is built so far: health check, bearer-token auth, the least-privilege database role and its setup command ([docs/01 §1.9](docs/01-architecture.md), [docs/06 §6.13](docs/06-deployment.md)).
 - **Bots:** Telegram Bot API and Zalo Bot Platform, both through webhooks
 - **Receipt reading:** [Document-Intelligence-KIE](https://github.com/NguyenVanVuongDev/Document-Intelligence-KIE), used with the author's permission. It runs as a separate Docker service (PaddleOCR + spatial KIE).
 - **Hosting:** Vercel (Hobby) for web and API, Atlas for data, KIE on a machine reached through a Cloudflare Tunnel

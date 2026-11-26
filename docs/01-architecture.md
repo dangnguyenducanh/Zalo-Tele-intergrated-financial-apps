@@ -10,7 +10,7 @@ The system has **three runtime pieces**:
 
 Telegram and Zalo push messages to **webhooks** on the same Vercel API.
 
-**Planned ([§2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned), not built yet):** WhatsApp joins as a third chat app through **Meta's WhatsApp Cloud API**, with the same webhook pattern and bot core as Telegram and Zalo. Dashed lines in the diagram are planned. Every part of this document marked "planned" describes a change against today's code, not something that exists. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.
+**Built ([§2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned), card T34 #74):** WhatsApp is a third chat app through **Meta's WhatsApp Cloud API**, with the same webhook pattern and bot core as Telegram and Zalo. It stays off until the four WhatsApp settings are set (the owner's Meta setup is in [06-deployment.md §6.12](06-deployment.md#612-whatsapp-cloud-api-meta-setup-planned-210)). Dashed lines in the diagram are planned. Every part of this document marked "planned" describes a change against today's code, not something that exists. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.
 
 **Planned ([§2.11](02-features.md#211-assistant-and-agent-features-planned), not built yet):** the bots and the web answer questions about the user's own money, read receipt photos with a local model, and suggest a category when the rules fall back to Khác/Other. A fourth runtime piece does this: an **agent service** (Python 3.12, FastAPI + LangGraph) next to a **vLLM** server that serves **Qwen3.5-2B**, both on the team's GPU host and reached server-to-server through a Cloudflare tunnel, like KIE. Express stays the only public API. It keeps capture (text parser, drafts, ok/huy, buttons), `classify`, the plain commands, auth, **every write** and the cron entry point. A **daily Vercel cron** asks the agent service for the opted-in digests and reports. The rules from §2.11 hold everywhere: nothing goes to a third-party model; a typed amount is parsed only by the rule parser; the bot never saves or changes money data without the user's confirmation; every number in a reply comes from our code and MongoDB. KIE is retired once the local model passes the receipt eval ([§2.11.4 "Local model layer (Qwen3.5-2B on vLLM)"](02-features.md#2114-local-model-layer-qwen35-2b-on-vllm)). The agent design is in §1.9.
 
@@ -22,7 +22,7 @@ flowchart LR
         B[Browser<br/>React SPA]
         TG[Telegram app]
         ZL[Zalo app]
-        WA["WhatsApp app<br/>(planned, §2.10)"]
+        WA["WhatsApp app"]
     end
 
     subgraph Vercel["Vercel project (Hobby): production or staging"]
@@ -34,7 +34,7 @@ flowchart LR
     subgraph External
         TGAPI[Telegram Bot API]
         ZAPI[Zalo Bot API<br/>bot-api.zaloplatforms.com]
-        WAAPI["WhatsApp Cloud API<br/>graph.facebook.com (planned)"]
+        WAAPI["WhatsApp Cloud API<br/>graph.facebook.com"]
         KIE["KIE service (FastAPI + PaddleOCR)<br/>Docker on own machine"]
         CF[Cloudflare Tunnel]
         DB[(MongoDB Atlas<br/>free cluster)]
@@ -52,8 +52,8 @@ flowchart LR
     ZL --> ZAPI -- "webhook POST /api/webhooks/zalo" --> API
     API -- "sendMessage / getFile / editMessageText / answerCallbackQuery" --> TGAPI
     API -- "sendMessage" --> ZAPI
-    WA -.-> WAAPI -.->|"webhook GET + POST /api/webhooks/whatsapp"| API
-    API -.->|"POST …/messages · GET media by image.id"| WAAPI
+    WA --> WAAPI -->|"webhook GET + POST /api/webhooks/whatsapp"| API
+    API -->|"POST …/messages · GET media by image.id"| WAAPI
     API -- "POST /analyze (image)" --> CF --> KIE
     API -- Mongoose --> DB
     CRON -.->|"GET /api/cron/daily (Bearer CRON_SECRET)"| API
@@ -69,7 +69,7 @@ flowchart LR
 | **SPA (client/)** | All screens in **TypeScript**: quick-add box and full forms for typing transactions on the web, Bot inbox (link code + QR, drafts from the bots, receipt photo upload via `POST /api/receipts`), i18n (vi/en), light/dark theme, charts | Built by Vite into static files and served from Vercel's CDN |
 | **API (server/)** | REST API, auth, validation, statistics, bot logic, KIE client | One Express app exported for Vercel; also runs locally with `node` |
 | **Bot core (server/src/bot/)** | Platform-independent: parse text → draft → confirm, plus commands | Telegram and Zalo are thin **adapters** that send and receive messages |
-| **WhatsApp adapter (planned, §2.10.4)** | Maps WhatsApp Cloud API webhook payloads to bot core messages and button presses; sends text and reply-button messages through the Graph API | A third adapter beside Telegram and Zalo, same bot core. File name and layout are left to the builder |
+| **WhatsApp adapter (§2.10.4)** | Maps WhatsApp Cloud API webhook payloads to bot core messages and button presses; sends text and reply-button messages through the Graph API | `server/src/bot/whatsapp.js`, a third adapter beside Telegram and Zalo, same bot core. The signature check and the setup `GET` are in `routes/webhooks.js` |
 | **Chat linking (§2.10.2–2.10.3)** | Website side: the link card has one button per app from `links: { telegram, whatsapp, zalo }`. Chat side: the bot hands an unlinked chat a claim link, confirmed on the `/link` screen, and the Bot inbox then shows a "Not you? [Unlink]" notice for that link until dismissed | `services/chatLinks.js`. Website codes and claim links share the `linkCodes` collection (exactly one of `userId` or `chat` per row) |
 | **Question path (planned, §2.11.1–2.11.3)** | `classify(text, { followUp })` (pure, in `bot/ask.js`, rules of §2.11.1 unchanged) splits a message into **question** or **capture** before `createDrafts`. A question goes to the agent service's `POST /v1/turn`, which answers with text, facts, sources and an optional confirm card | One entry point for the bots, the web drawer (`POST /api/assistant/chat`) and the QuickAdd chip. No database or model in `classify`. Agent service down → the help text and the plain commands |
 | **Agent client (planned, §2.11)** | `services/agent.js`: one client for the agent service (`AGENT_URL`, `AGENT_SECRET`, timeouts 25 s in chat, 40 s on the web, 60 s for receipts, 3 s for a category, `requestId` passthrough). Maps a 503 or a timeout to the help text, `AGENT_UNAVAILABLE` or `AGENT_BUSY` | Replaces the KIE client when `RECEIPT_READER=qwen`. Performs no model call itself |
@@ -153,9 +153,9 @@ Zalo has no buttons: a typed `ok` / `huy` acts on `chatLink.pendingTransactionId
 
 Planned (§2.11): with `RECEIPT_READER=qwen` the photo goes to the agent service instead of KIE (see "Receipt photo → local model" below). The draft and the `ok` / `huy` steps stay as above.
 
-### WhatsApp message → draft → confirm (planned, §2.10.4)
+### WhatsApp message → draft → confirm (§2.10.4)
 
-Not built yet. The flow is the Telegram one above with Meta's payloads, and a signature check in place of the shared secret.
+The flow is the Telegram one above with Meta's payloads, and a signature check in place of the shared secret (built by card T34, #74).
 
 ```mermaid
 sequenceDiagram
@@ -175,21 +175,22 @@ sequenceDiagram
     A->>W: POST graph.facebook.com/…/WHATSAPP_PHONE_NUMBER_ID/messages {recipient_type: individual, recipient: BSUID, type: interactive, interactive.type: button} [✅ Lưu][❌ Huỷ][✏️ Sửa]
     W->>A: POST /api/webhooks/whatsapp {messages[]: type interactive, button_reply.id}
     A->>D: status → confirmed, then check budget (the core's existing confirm path)
-    A->>W: the result to the chat (how it is shown is left to the builder)
+    A->>W: the result as a new text message (WhatsApp cannot edit a sent message)
 ```
 
-What changes against today's webhooks (`server/src/routes/webhooks.js`):
+How it differs from the Telegram and Zalo webhooks (`server/src/routes/webhooks.js`, `server/src/bot/whatsapp.js`):
 
 - **A signature instead of a shared secret.** `/telegram` and `/zalo` compare a header with a secret the API chose (`sameSecret`, constant time). Meta signs each delivery instead: `X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body with WHATSAPP_APP_SECRET>`, also compared in constant time. A mismatch answers 401 and nothing is processed.
-- **The raw body, kept by the global parser.** Today `server/src/app.js` runs `express.json({ limit: '1mb' })` for every route ahead of `/api`, so a route only sees the parsed object, and re-serialising `req.body` does not give back the bytes Meta signed. §2.10.4 changes that one line to `express.json({ limit, verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/webhooks/whatsapp')) req.rawBody = buf } })`, and the route computes the HMAC over `req.rawBody`. Every other route parses as before.
-- **A `GET` setup check.** Telegram and Zalo are registered by `server/src/scripts/setWebhooks.js` and have no `GET` route. WhatsApp's `GET` answers Meta's verify-token check shown above.
+- **The raw body, kept by the global parser.** `server/src/app.js` runs `express.json({ limit: '1mb', verify })` for every route ahead of `/api`; re-serialising `req.body` does not give back the bytes Meta signed (Meta writes non-ASCII characters as `\uXXXX`, so a Vietnamese profile name changes the bytes). `verify` keeps the bytes as `req.rawBody` when `req.originalUrl` starts with `/api/webhooks/whatsapp`, and the route computes the HMAC over `req.rawBody`. Every other route parses as before.
+- **A `GET` setup check.** Telegram and Zalo are registered by `server/src/scripts/setWebhooks.js` and have no `GET` route. WhatsApp's `GET` answers Meta's verify-token check shown above. Meta takes the callback URL in its app dashboard, so for WhatsApp `setWebhooks.js` only prints what to enter there (or `skipped` when the settings are missing).
+- **Off without its settings.** With any of `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` unset, both routes answer 503 `FEATURE_NOT_CONFIGURED` and process nothing, and the link card gets no WhatsApp link (`whatsappConfigured()` in `config/env.js`).
 - **200 first, work in `waitUntil`.** Unchanged pattern. `entry[].changes[].value.messages[]` are handled; `statuses[]` (sent/delivered/read) are ignored; both get 200 so Meta doesn't retry.
-- **No second draft for a second delivery.** The message `id` (`wamid…`) goes into `chatRef.messageId`, like Telegram's and Zalo's `message_id` today, so the unique `chatRef` index on `transactions` (`platform`, `chatId`, `messageId`) stops the copy. Only drafts are deduplicated: as on the other platforms, a redelivered command may be answered twice.
+- **No second draft for a second delivery.** The message `id` (`wamid…`) goes into `chatRef.messageId`, like Telegram's and Zalo's `message_id`, so the unique `chatRef` index on `transactions` (`platform`, `chatId`, `messageId`) stops the copy. Only drafts are deduplicated: as on the other platforms, a redelivered command may be answered twice.
 - **Every closed list of platforms gains `whatsapp` (§2.10.5).** The Mongoose enums `chatLinks.platform`, `transactions.source` and `transactions.chatRef.platform` (without the last, every WhatsApp draft fails validation, so the dedup above never runs), the zod `source` filter in `server/src/routes/transactions.js`, and the platform/source lists of the admin stats in `server/src/services/admin.js`.
-- **Mapping into the core.** `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID: `from_user_id` on the message, `user_id` on the contact). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key and is never stored. `value.contacts[0].profile.name` is `displayName`; `text.body` is the text; an `image.id` is the photo; a `button_reply.id` is a button press into the core's `handleButton`, carrying the same action and draft id as Telegram's `c:<id>` / `x:<id>` callback data. Other message types get the help text.
-- **Buttons.** ✅ Lưu, ❌ Huỷ and ✏️ Sửa use all three reply buttons WhatsApp allows. ✏️ Sửa is a reply button, not a URL button as in Telegram, so pressing it makes the bot reply with `<APP_URL>/bot`.
-- **Receipts.** `GET /<image.id>` with `WHATSAPP_ACCESS_TOKEN` returns a `url` valid for 5 minutes; the adapter downloads it with the same token and passes it to KIE as for the other platforms.
-- **Sending.** `POST https://graph.facebook.com/<version>/<WHATSAPP_PHONE_NUMBER_ID>/messages` with `messaging_product: "whatsapp"`, `recipient_type: "individual"` and `recipient: <BSUID>` (no `to`: Meta reserves `to` for phone numbers, and BSUIDs go in `recipient`). The Graph API version is one constant in the adapter. Replies longer than 4096 characters are split.
+- **Mapping into the core.** `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID: `from_user_id` on the message, `user_id` on the contact). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key and is never stored. The contact with that BSUID gives `profile.name` as `displayName`; `text.body` is the text; an `image.id` is the photo; a `button_reply.id` is a button press into the core's `handleButton`, carrying the same action and draft id as Telegram's `c:<id>` / `x:<id>` callback data (`e:<id>` for ✏️ Sửa). Other message types get the help text. A message with no `from_user_id` (no safe key: the phone number is never one), a message from a group (`group_id`: other people would see the money), an emoji reaction and a `system` message (Meta's note that a user's ID changed) are ignored; the first is logged without the number.
+- **Buttons.** ✅ Lưu, ❌ Huỷ and ✏️ Sửa use all three reply buttons WhatsApp allows (titles ≤ 20 characters, body ≤ 1024, ids `c:`/`x:`/`e:` + the 24-character draft id). ✏️ Sửa is a reply button, not a URL button as in Telegram, so pressing it makes the bot reply with `<APP_URL>/bot`; without `APP_URL` the button is left out. The result of ✅ / ❌ is a new text message, because WhatsApp cannot edit a sent one, so the buttons stay on the old draft message and pressing ✅ twice answers "already saved".
+- **Receipts.** `GET /<image.id>` with `WHATSAPP_ACCESS_TOKEN` returns a `url` valid for 5 minutes; the adapter downloads it with the same token (the URL must be `https`) and passes it to KIE as for the other platforms.
+- **Sending.** `POST https://graph.facebook.com/<version>/<WHATSAPP_PHONE_NUMBER_ID>/messages` with `messaging_product: "whatsapp"`, `recipient_type: "individual"` and `recipient: <BSUID>` (no `to`: Meta reserves `to` for phone numbers, and BSUIDs go in `recipient`). The Graph API version is one constant in the adapter (`GRAPH_VERSION`, `v26.0`). Replies longer than 4096 characters are split at the last line break that fits.
 
 ### Linking from the website: link card (planned, §2.10.2)
 
@@ -463,11 +464,13 @@ Versions are pinned exactly in the `package.json` files (root, `client/`, `serve
 | Rate limiting | express-rate-limit | 8.7.5 | Login and register brute-force guard (per instance, see backend doc) |
 | Vercel helpers | @vercel/functions | 3.11.3 | `waitUntil` (finish bot work after replying 200), `attachDatabasePool` |
 | Telegram / Zalo | plain `fetch` (no SDK) | — | Both are small HTTP APIs (Telegram: `sendMessage`, `getFile`, `editMessageText`, `answerCallbackQuery`; Zalo: `sendMessage`); about 50 to 70 lines each, so nothing extra to explain at the defense |
-| WhatsApp (planned, §2.10) | Meta's WhatsApp Cloud API, called directly | Graph API version pinned at build time | One more adapter behind the same bot core and webhook pattern; no provider such as Twilio, no unofficial library. Calls: `POST /<WHATSAPP_PHONE_NUMBER_ID>/messages` (text and reply buttons), `GET /<image.id>` then the media download |
+| WhatsApp (§2.10) | Meta's WhatsApp Cloud API, called directly | Graph API `v26.0`, pinned in `bot/whatsapp.js` | One more adapter behind the same bot core and webhook pattern; no provider such as Twilio, no unofficial library. Calls: `POST /<WHATSAPP_PHONE_NUMBER_ID>/messages` (text and reply buttons), `GET /<image.id>` then the media download |
 | Agent client (planned, §2.11) | plain `fetch` (no SDK) | — | `services/agent.js` calls the agent service's four endpoints (§1.9). Express loads no model and no AI SDK |
 | Email (planned, §2.12.5) | nodemailer | pinned at build time | Gmail SMTP on port 465 with an app password; one module, `services/mail.js` |
 
-### Agent service (`agent/`, planned, §2.11)
+### Agent service (`agent/`, §2.11)
+
+Built so far (T44): the scaffold, with these pins in `agent/requirements.txt`. `sentence-transformers` (and the torch it brings) is in `agent/requirements-model.txt`, which only the Dockerfile installs: CI and the tests never download it or a model. The rest of the service comes with the cards that follow.
 
 | Concern | Choice | Version | Why |
 |---|---|---|---|
@@ -535,7 +538,7 @@ Zalo-Tele-intergrated-financial-apps/
 │   ├── wt-env.sh           # per-worktree ports and dev database
 │   ├── bot-e2e/            # real-chat bot checker: bot-e2e.mjs, scenarios.json
 │   └── test-report/        # build-report.mjs: JSON + test results → Excel
-├── .github/workflows/ci.yml # npm ci, typecheck, lint, test on every PR and push to main
+├── .github/workflows/ci.yml # npm ci, typecheck, lint, test, then the agent's pytest, on every PR and push to main
 ├── .claude/agents/         # coder, reviewer, merger agent definitions
 ├── playwright.config.ts    # e2e: client/e2e against a test API + Vite
 ├── eslint.config.js
@@ -546,11 +549,11 @@ Zalo-Tele-intergrated-financial-apps/
 └── package.json            # npm workspaces: client, server
 ```
 
-Planned (§2.10): a WhatsApp adapter beside the Telegram and Zalo ones, and the route `/api/webhooks/whatsapp`. File names and component layout are left to the builder. The new variables are `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_NUMBER` (international format, digits only, for `wa.me`) and `ZALO_BOT_URL` (the bot's share link from Zalo Bot Creator). A platform with missing settings is skipped by the webhook-registration script and hidden in the link card.
+Built (§2.10, card T34): the WhatsApp adapter `server/src/bot/whatsapp.js` beside the Telegram and Zalo ones, and the route `/api/webhooks/whatsapp` in `routes/webhooks.js`. The new variables are `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_NUMBER` (international format, digits only, for `wa.me`) and `ZALO_BOT_URL` (the bot's share link from Zalo Bot Creator). A platform with missing settings is skipped by the webhook-registration script and hidden in the link card.
 
 Planned (§2.11), in Express: `server/src/bot/ask.js` (`classify`), `services/agent.js` (the agent client), `routes/assistant.js` (the drawer's endpoints), the cron route `GET /api/cron/daily` and the admin `POST /api/admin/cron/daily`, a `crons` entry in `vercel.json`, and the drawer in `client/src/features/assistant/`. The question engine (skills, router, typed query, templates) is not in Express: it lives in the agent service. New Vercel variables: `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS` and `CRON_SECRET`, all optional: a missing one turns its feature off (§2.11.6). `AGENT_URL` comes from `AGENT_PUBLIC_URL`, as `KIE_URL` comes from `KIE_PUBLIC_URL`.
 
-Planned (§2.11), a new top-level `agent/` folder (Python, runs on the GPU host, not on Vercel): the FastAPI app, the graphs, `tools/` (one handler per tool), `skills/*.yaml` (the skill registry's seed), `prompts/` (one system prompt per node, vi and en), `eval/` (skill, receipt and categorizer evals), `models.lock` (the model commit hashes), the `docker-compose.yml` of §6.13 and a git-ignored `agent/.env`. Exact file names are left to the builder.
+A top-level `agent/` folder (Python, runs on the GPU host, not on Vercel; `.vercelignore` keeps it out of Vercel uploads). **Built (T44, the scaffold):** `app.py` (FastAPI: `/health`, the bearer check, Express's error shape, the log line), `config.py` (settings; the service refuses to start without `AGENT_SECRET`, which must be at least 32 characters, or `MONGODB_URI_AGENT`), `embedder.py` (the `Embedder` interface, a fake for tests, and the bge-m3 loader that imports sentence-transformers lazily at the `models.lock` revision), `setup.py` (`python -m agent.setup`: collections, indexes and the `usersForAgent` view), `role.json` (the one definition of the `sochitieu_agent` role), `models.lock`, `requirements*.txt`, `Dockerfile`, `docker-compose.yml` (`agent` and `tunnel`), `.env.example` and `tests/` (pytest, run by `npm run test:agent` and by CI). **Planned (§2.11), later cards:** the graphs, `tools/` (one handler per tool), `skills/*.yaml` (the skill registry's seed), `prompts/` (one system prompt per node, vi and en) and `eval/` (skill, receipt and categorizer evals). File names of the planned parts are left to the builder.
 
 Planned (§2.12): `services/mail.js`, the `emailCodes` model, the auth routes `register/verify`, `register/resend`, `password/forgot` and `password/reset`, and the `/verify-email` and `/forgot-password` screens. New variables: `GMAIL_USER` and `GMAIL_APP_PASSWORD`, both optional and both needed for mail (§2.12.4).
 
@@ -568,7 +571,7 @@ File layout inside these folders is left to the builder. **Where the new secrets
 | Drafts | `transactions.status = 'draft'` | Separate drafts collection | One model and one list UI; confirming a draft is just a status change |
 | Money | Integer VND | Float | No rounding errors (same idea as ezBookkeeping's int64 amounts) |
 | Deleting | Soft delete (`deletedAt`) | Hard delete | Statistics stay consistent and deletes can be undone (ezBookkeeping uses the same pattern) |
-| WhatsApp (planned, §2.10) | Meta's WhatsApp Cloud API directly: one more adapter behind the bot core and the webhook pattern, on Vercel | A provider such as Twilio; unofficial WhatsApp libraries | §2.10 decides this without giving reasons. Ours: webhooks fit the existing `waitUntil` design on Vercel (see "Bot updates"), so the adapter is built the same way as the Telegram and Zalo ones |
+| WhatsApp (§2.10) | Meta's WhatsApp Cloud API directly: one more adapter behind the bot core and the webhook pattern, on Vercel | A provider such as Twilio; unofficial WhatsApp libraries | §2.10 decides this without giving reasons. Ours: webhooks fit the existing `waitUntil` design on Vercel (see "Bot updates"), so the adapter is built the same way as the Telegram and Zalo ones |
 | Linking from the chat (§2.10.3) | Claim link + **Confirm** on the website, with a warning, and a "Not you? [Unlink]" notice afterwards | Auto-link: the chat is linked to whoever opens the link | A claim link links the chat that asked for it to whoever opens it, so it can be used for phishing: an attacker messages the bot from their own unlinked chat and sends the claim link to a victim; if the victim confirms, the attacker's chat is linked to the victim's account and can read `/today` and `/month` and create and confirm transactions there. The display name on the confirm screen comes from the chat app and can be faked, so it is not proof. It can't take over the web login. Mitigations: the warning on the confirm screen ("Only confirm if you just messaged the bot yourself…"), the 10-minute single-use token, and the Bot inbox notice "New chat linked from a chat link: … Not you? [Unlink]" until dismissed (`chatLinks.viaClaim`, `claimNoticeDismissedAt`). Linking from the website has no such risk, because the code starts in the logged-in account |
 | Claim link storage (§2.10.5) | The existing `linkCodes` collection: a row has exactly one of `userId` (website code) or `chat` (claim link) | A new collection | Keeps the TTL index and hash-only storage; each lookup only matches its own kind, so neither works in the other's place |
 | Questions (planned, §2.11) | Skills first (pipeline skills with templates, no LLM); the local model only to pick among close skills, fill tool arguments as guided JSON, or phrase an agent-mode answer, always through our own read-only tools | An LLM parsing typed amounts; an LLM writing the numbers | Every number shown comes from our code and MongoDB (the guard rejects any other digit), and typed capture stays rule-based, so the "Text understanding" row above stays true for typed text. That row's wording, and §1.7's "AI/receipts" row, change in the first Stage AI PR (§2.11.6–2.11.7) |
@@ -748,6 +751,6 @@ Re-embedding: a row whose `embedHash` (SHA-256 of its text) changed is re-embedd
 - **What reaches the model.** The standalone question, the names and ids of this user's categories and wallets (as enums), the facts the tools returned (for agent-mode wording), a receipt image, and a draft's note for a category tie. Never the user's id, name, email, phone, chat names or chat ids, and never a token. All of it stays on the GPU host: nothing goes to a third-party model.
 - **The model cannot choose whose data it reads.** `FORBIDDEN_ARGS` in the tool registry (`userId`, `token`, `query`) are never in a tool's LLM-visible schema and are dropped if the model sends them. Every tool closes over `userId` from the request context, and preset arguments win over LLM arguments.
 - **The model cannot write numbers.** `generate_answer` writes `[[factId]]` placeholders that our code fills; `guard_output` rejects any digit, number word or verdict word not in the facts and falls back to the template.
-- **The agent service cannot change money data.** Its MongoDB user `sochitieu_agent` has a custom role: `find` on `users` (only `_id`, `language`, `settings`, `assistantOn` are used), `categories`, `wallets`, `transactions`, `budgets`; `find`/`insert`/`update` on `pendingActions`; `find`/`insert`/`update`/`remove` on `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`. Writes to app data happen only in Express, through the same services as the web, after the user's confirm where §2.11 requires one.
+- **The agent service cannot change money data or read password hashes.** Its MongoDB user `sochitieu_agent` has a custom role (`agent/role.json`): `find` on `usersForAgent`, a view on `users` that projects only `_id`, `language` and `assistantOn`, and on `categories`, `wallets`, `transactions`, `budgets`; `find`/`insert`/`update` on `pendingActions`; `find`/`insert`/`update`/`remove` on `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`. It has **no right on `users`** (a role cannot limit fields, so `find` on `users` would expose every hash; decision D15) and no index or collection right (D14): `python -m agent.setup`, run with the app user, creates them. Writes to app data happen only in Express, through the same services as the web, after the user's confirm where §2.11 requires one.
 - **Express ↔ agent service.** Server-to-server only, `Authorization: Bearer ${AGENT_SECRET}` compared in constant time; the browser and the chat apps never call the agent service. The tunnel exposes the agent's port only; `GET /health` answers without auth and returns no user data.
 - **Logs** on both sides carry the request id, node, timing and error class, never the question, notes, figures, tool arguments or the image. `agentTurns` keeps the turn for 30 days (TTL) for caps and debugging; admins never see it.

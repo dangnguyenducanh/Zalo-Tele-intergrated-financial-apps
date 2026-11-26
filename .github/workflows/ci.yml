@@ -33,3 +33,24 @@ jobs:
         with:
           name: test-results
           path: test-results/
+      # The agent service (agent/): Python 3.12, a fake model and embedder, no GPU. It stays after `npm test` because its
+      # database tests start the mongod that mongodb-memory-server downloaded there. sentence-transformers and torch are
+      # not in requirements-dev.txt, so CI never downloads them. It sits below the upload above so that this block and
+      # other cards' Python steps can be merged in either order without a conflict.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            agent/requirements.txt
+            agent/requirements-dev.txt
+      - run: pip install -r agent/requirements-dev.txt
+      - run: npm run test:agent
+        env:
+          HF_HUB_OFFLINE: '1'
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: agent-test-results
+          path: test-results/agent-pytest.xml
+          if-no-files-found: ignore

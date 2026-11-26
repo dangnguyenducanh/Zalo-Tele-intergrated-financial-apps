@@ -43,7 +43,12 @@ beforeEach(() => {
   };
   server.use(
     http.get('*/api/admin/stats', () =>
-      HttpResponse.json({ users: 2, activeUsers7d: 1, chatLinks: { telegram: 3, zalo: 1 }, transactionsBySource: { web: 10, telegram: 5, zalo: 0, receipt: 2 } }),
+      HttpResponse.json({
+        users: 2,
+        activeUsers7d: 1,
+        chatLinks: { telegram: 3, zalo: 1, whatsapp: 2 },
+        transactionsBySource: { web: 10, telegram: 5, zalo: 0, whatsapp: 4, receipt: 2 },
+      }),
     ),
     http.get('*/api/admin/users', async ({ request }) => {
       await log(request);
@@ -85,8 +90,9 @@ test('TC-F11-08 users page: stats, search, lock behind a confirm dialog, and LAS
 
   expect(await screen.findByRole('heading', { level: 1, name: 'Quản trị người dùng' })).toBeInTheDocument();
   const chats = (await screen.findByText('Chat đã liên kết')).parentElement!;
-  expect(chats).toHaveTextContent('4');
-  expect(chats).toHaveTextContent('Telegram 3 · Zalo 1');
+  expect(chats).toHaveTextContent('6'); // Telegram 3 + WhatsApp 2 + Zalo 1
+  expect(chats).toHaveTextContent('Telegram 3 · WhatsApp 2 · Zalo 1');
+  expect(screen.getByText('Web 10 · Telegram 5 · WhatsApp 4 · Zalo 0 · Hoá đơn 2')).toBeInTheDocument();
 
   const table = await screen.findByRole('region', { name: 'Số người dùng tìm thấy: 2' });
   expect(within(table).getByRole('rowheader', { name: /Lan \(bạn\)/ })).toBeInTheDocument();

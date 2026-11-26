@@ -1,0 +1,228 @@
+{
+  "_comment": "WhatsApp Cloud API webhook bodies in the shape of Meta's documented samples for the `messages` field (developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages), with business-scoped user IDs. The ids and numbers are made up; tests copy them and change id, user and text. The phone number 84912345678 must never be stored or returned.",
+  "text": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "contacts": [{ "profile": { "name": "Anh Nguyen" }, "wa_id": "84912345678", "user_id": "VN.13491208655302741918" }],
+              "messages": [
+                {
+                  "from": "84912345678",
+                  "from_user_id": "VN.13491208655302741918",
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgA=",
+                  "timestamp": "1763620200",
+                  "type": "text",
+                  "text": { "body": "grab 32k" }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  },
+  "image": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "contacts": [{ "profile": { "name": "Anh Nguyen" }, "wa_id": "84912345678", "user_id": "VN.13491208655302741918" }],
+              "messages": [
+                {
+                  "from": "84912345678",
+                  "from_user_id": "VN.13491208655302741918",
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgB=",
+                  "timestamp": "1763620210",
+                  "type": "image",
+                  "image": { "caption": "hoá đơn", "mime_type": "image/jpeg", "sha256": "Zk3fQmZ0x1b0y2m9o5d1o3c5p7q9r1s3t5u7v9w1x3y=", "id": "1104938573226018" }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  },
+  "buttonReply": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "contacts": [{ "profile": { "name": "Anh Nguyen" }, "wa_id": "84912345678", "user_id": "VN.13491208655302741918" }],
+              "messages": [
+                {
+                  "context": { "from": "15550783881", "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgARGBI4NDA4RDJBRTk3Mzc5RjI1RjIA" },
+                  "from": "84912345678",
+                  "from_user_id": "VN.13491208655302741918",
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgC=",
+                  "timestamp": "1763620220",
+                  "type": "interactive",
+                  "interactive": { "type": "button_reply", "button_reply": { "id": "c:000000000000000000000000", "title": "✅ Lưu" } }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  },
+  "audio": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "contacts": [{ "profile": { "name": "Anh Nguyen" }, "wa_id": "84912345678", "user_id": "VN.13491208655302741918" }],
+              "messages": [
+                {
+                  "from": "84912345678",
+                  "from_user_id": "VN.13491208655302741918",
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgD=",
+                  "timestamp": "1763620230",
+                  "type": "audio",
+                  "audio": { "mime_type": "audio/ogg; codecs=opus", "sha256": "Qm9jY2hpbmgxMjM0NTY3ODkwYWJjZGVmZ2hpamtsbW4=", "id": "2290384718832911", "voice": true }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  },
+  "sticker": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "contacts": [{ "profile": { "name": "Anh Nguyen" }, "wa_id": "84912345678", "user_id": "VN.13491208655302741918" }],
+              "messages": [
+                {
+                  "from": "84912345678",
+                  "from_user_id": "VN.13491208655302741918",
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgE=",
+                  "timestamp": "1763620240",
+                  "type": "sticker",
+                  "sticker": { "mime_type": "image/webp", "sha256": "c3RpY2tlcjEyMzQ1Njc4OTBhYmNkZWZnaGlqa2xtbm8=", "id": "3391022874455170", "animated": false }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  },
+  "location": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "contacts": [{ "profile": { "name": "Anh Nguyen" }, "wa_id": "84912345678", "user_id": "VN.13491208655302741918" }],
+              "messages": [
+                {
+                  "from": "84912345678",
+                  "from_user_id": "VN.13491208655302741918",
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgF=",
+                  "timestamp": "1763620250",
+                  "type": "location",
+                  "location": { "latitude": 21.0285, "longitude": 105.8542, "name": "Hồ Hoàn Kiếm", "address": "Hà Nội" }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  },
+  "unsupported": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "contacts": [{ "profile": { "name": "Anh Nguyen" }, "wa_id": "84912345678", "user_id": "VN.13491208655302741918" }],
+              "messages": [
+                {
+                  "from": "84912345678",
+                  "from_user_id": "VN.13491208655302741918",
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgG=",
+                  "timestamp": "1763620260",
+                  "type": "unsupported",
+                  "errors": [{ "code": 131051, "title": "Message type is not supported", "message": "Message type is not supported", "error_data": { "details": "Message type is not currently supported" } }]
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  },
+  "statuses": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "102290129340398",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+              "statuses": [
+                {
+                  "id": "wamid.HBgLODQ5MTIzNDU2NzgVAgARGBI4NDA4RDJBRTk3Mzc5RjI1RjIA",
+                  "status": "delivered",
+                  "timestamp": "1763620300",
+                  "recipient_id": "84912345678",
+                  "recipient_user_id": "VN.13491208655302741918",
+                  "conversation": { "id": "bf9a1d6c5e3a4b2d9c8e7f6a5b4c3d2e", "origin": { "type": "service" } },
+                  "pricing": { "billable": false, "pricing_model": "PMP", "category": "service", "type": "free_customer_service" }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

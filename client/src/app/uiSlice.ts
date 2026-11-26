@@ -1,6 +1,7 @@
 import { createSlice, type Dispatch, type PayloadAction } from '@reduxjs/toolkit';
 import i18n, { currentLanguage } from '@/i18n';
 import type { Language, ThemeMode } from '@/types/api';
+import { vnThisMonth } from '@/utils/vnToday';
 
 // Shared UI state (docs/05 §5.3). Theme and language are mirrored to localStorage.
 
@@ -25,8 +26,6 @@ function saveThemeMode(mode: ThemeMode) {
   }
 }
 
-const thisMonth = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).slice(0, 7); // "YYYY-MM"
-
 export type Snackbar = { message: string; severity: 'success' | 'info' | 'warning' | 'error' };
 
 type UiState = {
@@ -38,7 +37,7 @@ type UiState = {
 
 const uiSlice = createSlice({
   name: 'ui',
-  initialState: (): UiState => ({ themeMode: readThemeMode(), language: currentLanguage(), month: thisMonth(), snackbar: null }),
+  initialState: (): UiState => ({ themeMode: readThemeMode(), language: currentLanguage(), month: vnThisMonth(), snackbar: null }),
   reducers: {
     themeModeChanged: (state, action: PayloadAction<ThemeMode>) => {
       state.themeMode = action.payload;

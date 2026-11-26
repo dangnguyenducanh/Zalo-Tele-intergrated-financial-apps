@@ -1,0 +1,31 @@
+# The agent service and its tunnel on the GPU host (runbook: docs/06 §6.13). Both use the host network and listen on
+# loopback only, so no port is published. vLLM joins this project with T63, and its depends_on is added then.
+name: sochitieu-agent
+
+services:
+  agent:
+    build: .
+    image: sochitieu/agent:local
+    network_mode: host # so 127.0.0.1 is the host's loopback: the service on :8310, vLLM later on :8300
+    env_file: .env # the only service that gets the secrets
+    volumes:
+      - ${HF_HOME:?set HF_HOME in agent/.env}:${HF_HOME} # the model cache, downloaded once
+    read_only: true # it writes only to the model cache and /tmp
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] # bge-m3 runs on the GPU
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.11.2
+    network_mode: host
+    command: ["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:8310"] # the agent only; vLLM is never exposed
+    read_only: true # a quick tunnel keeps no file; /tmp is there in case cloudflared wants one
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
