@@ -93,19 +93,30 @@ function findWallet(keys, used, wallets) {
 
 // The amount in VND. An amount with a unit or separators ("50k", "150.000") beats a bare
 // number read as thousands ("2" in "2 ly trà sữa 50k"); otherwise the first one wins.
+// A bare year or month after "năm" / "tháng" is a date, never the amount (BUG-039).
 function findAmount(keys, used) {
   const found = [];
   for (let i = 0; i < keys.length; i++) {
     if (used.has(i)) continue;
     const next = keys[i + 1];
     const withUnit = next && !used.has(i + 1) && UNIT_WORD.test(next) ? readAmount(keys[i] + next) : null;
-    const amount = withUnit ?? readAmount(keys[i]);
+    const amount = withUnit ?? (isYearOrMonth(keys, i) ? null : readAmount(keys[i]));
     if (amount) found.push({ ...amount, indexes: withUnit ? [i, i + 1] : [i] });
   }
   const pick = found.find((a) => !a.guessed) ?? found[0];
   if (!pick) return null;
   pick.indexes.forEach((i) => used.add(i));
   return pick.value;
+}
+
+// "năm 2026" (year 1900–2099) or "tháng 10" (month 1–12): the plain number at keys[i] is a date.
+// "50k" and "2.026" are not plain numbers, so they stay money.
+function isYearOrMonth(keys, i) {
+  const [before, key] = [keys[i - 1], keys[i]];
+  const n = Number(key);
+  if (before === 'nam') return /^\d{4}$/.test(key) && n >= 1900 && n <= 2099;
+  if (before === 'thang') return /^\d{1,2}$/.test(key) && n >= 1 && n <= 12;
+  return false;
 }
 
 // One normalized word → { value, guessed } or null. See the table in docs/02 §2.5.

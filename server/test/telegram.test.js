@@ -348,6 +348,19 @@ test('TC-F8-23 a line over the 10^13 ₫ ceiling makes no draft and is named; th
   expect(await Transaction.countDocuments()).toBe(1);
 });
 
+test('TC-F8-25 a year or month before the amount is a date: the draft keeps the real amount, a date-only line makes no draft (BUG-039)', async () => {
+  await linkedUser();
+  const replies = await say('thuê nhà năm 2026 36tr\nthue nha nam 2025 12.000.000\nan toi thang 10 50\ntiền nhà tháng 10');
+  expect((await Transaction.find().sort({ _id: 1 }).lean()).map((t) => [t.amount, t.status])).toEqual([
+    [36_000_000, 'draft'],
+    [12_000_000, 'draft'],
+    [50_000, 'draft'],
+  ]);
+  expect(textOf(replies.at(-1))).toMatch(/^⚠️ Chưa ghi dòng 4: không đọc được số tiền/); // named, like any line with no amount
+  expect(textOf((await say('năm 2025'))[0])).toBe(viText.help); // only a date: the help text, as for "cafe"
+  expect(await Transaction.countDocuments()).toBe(3);
+});
+
 test("TC-F8-06 ✅ confirms and ❌ discards, only on the presser's own drafts", async () => {
   const a = await linkedUser(CHAT_A);
   const b = await linkedUser(CHAT_B);

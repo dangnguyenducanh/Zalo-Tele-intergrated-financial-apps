@@ -379,6 +379,18 @@ test('TC-F13-07 POST /transactions/parse names a line over the 10^13 ₫ ceiling
   expect([only.status, only.body.error.code]).toEqual([422, 'NO_AMOUNT_FOUND']);
 });
 
+test('TC-F8-25 POST /transactions/parse reads the amount, not a year or month typed before it; a date-only line has no amount (BUG-039)', async () => {
+  const { me } = await newUser();
+
+  const res = await me.post('/transactions/parse', { text: 'thuê nhà năm 2026 36tr\nhọc phí năm 2025 12.000.000\nbảo hiểm năm 2026 1500000\nan toi thang 10 50\ntiền nhà tháng 10' });
+  expect(res.status).toBe(200);
+  expect(res.body.drafts.map((d) => d.amount)).toEqual([36_000_000, 12_000_000, 1_500_000, 50_000]);
+  expect(res.body.noAmountLines).toEqual([5]);
+  const only = await me.post('/transactions/parse', { text: 'năm 2025' });
+  expect([only.status, only.body.error.code]).toEqual([422, 'NO_AMOUNT_FOUND']);
+  expect(await Transaction.countDocuments()).toBe(0);
+});
+
 test('TC-F4-12 one money value is at most 10^13 ₫, so wallet and month totals stay exact integers', async () => {
   const { me, walletId, food } = await newUser();
   const MAX = 10_000_000_000_000;
