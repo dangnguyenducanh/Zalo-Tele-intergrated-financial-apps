@@ -90,7 +90,7 @@ test('TC-F8-41 the four WhatsApp settings are optional; when set, the phone numb
 
 const gmail = (e) => [e.GMAIL_USER, e.GMAIL_APP_PASSWORD];
 
-test('TC-NF-20 GMAIL_USER and GMAIL_APP_PASSWORD are optional, alone or together, and an empty value counts as not set', () => {
+test('TC-NF-21 GMAIL_USER and GMAIL_APP_PASSWORD are optional, alone or together, and an empty value counts as not set', () => {
   const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64) };
   expect(gmail(parseEnv(base))).toEqual([undefined, undefined]);
   expect(gmail(parseEnv({ ...base, GMAIL_USER: '', GMAIL_APP_PASSWORD: '' }))).toEqual([undefined, undefined]);
@@ -100,7 +100,7 @@ test('TC-NF-20 GMAIL_USER and GMAIL_APP_PASSWORD are optional, alone or together
   expect(gmail(parseEnv({ ...base, NODE_ENV: 'development' }))).toEqual([undefined, undefined]);
 });
 
-test('TC-NF-20 the app password loses every whitespace character, so the four groups Google shows can be pasted as shown', () => {
+test('TC-NF-21 the app password loses every whitespace character, so the four groups Google shows can be pasted as shown', () => {
   const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64), GMAIL_USER: 'sender@gmail.com' };
   expect(parseEnv({ ...base, GMAIL_APP_PASSWORD: 'abcd efgh ijkl mnop' }).GMAIL_APP_PASSWORD).toBe('abcdefghijklmnop');
   expect(parseEnv({ ...base, GMAIL_APP_PASSWORD: ' abcd\tefgh\u00a0ijkl\r\nmnop \n' }).GMAIL_APP_PASSWORD).toBe('abcdefghijklmnop');
@@ -108,7 +108,16 @@ test('TC-NF-20 the app password loses every whitespace character, so the four gr
   expect(parseEnv({ ...base, GMAIL_APP_PASSWORD: '   ' }).GMAIL_APP_PASSWORD).toBeUndefined();
 });
 
-test('TC-NF-20 GMAIL_USER must be an e-mail address; the startup error names it but not its value', () => {
+test('TC-NF-21 a space or newline pasted around GMAIL_USER is dropped, so it cannot stop the API from booting', () => {
+  const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64) };
+  for (const pasted of [' sender@gmail.com', 'sender@gmail.com\n', 'sender@gmail.com ', '\tsender@gmail.com\r\n']) {
+    expect(parseEnv({ ...base, GMAIL_USER: pasted }).GMAIL_USER, JSON.stringify(pasted)).toBe('sender@gmail.com');
+  }
+  // Only whitespace is not an address: the same as unset.
+  expect(parseEnv({ ...base, GMAIL_USER: ' \n' }).GMAIL_USER).toBeUndefined();
+});
+
+test('TC-NF-21 GMAIL_USER must be an e-mail address; the startup error names it but not its value', () => {
   const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64) };
   let message = '';
   try {
@@ -120,7 +129,7 @@ test('TC-NF-20 GMAIL_USER must be an e-mail address; the startup error names it 
   expect(message).not.toMatch(/hunter2/);
 });
 
-test('TC-NF-20 under NODE_ENV=test neither Gmail variable has a default: a default would turn mail on in every suite', () => {
+test('TC-NF-21 under NODE_ENV=test neither Gmail variable has a default: a default would turn mail on in every suite', () => {
   expect(gmail(parseEnv({ NODE_ENV: 'test' }))).toEqual([undefined, undefined]);
   expect(gmail(parseEnv({ NODE_ENV: 'test', GMAIL_USER: 'sender@gmail.com' }))).toEqual(['sender@gmail.com', undefined]);
 });

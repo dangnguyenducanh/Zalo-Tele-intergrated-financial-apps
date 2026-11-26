@@ -43,7 +43,13 @@ export function parseEnv(source) {
     WHATSAPP_VERIFY_TOKEN: optional(z.string(), 'test-whatsapp-verify-token'),
     // Email codes (docs/02 §2.12.4): mail is on only when both are set. Unlike the other optional variables they have NO
     // NODE_ENV=test default, because a default would turn mail on in every suite. Set only in the Vercel dashboard, never in server/.env (D8).
-    GMAIL_USER: z.email().optional(),
+    // Whitespace around the pasted address is dropped, and only whitespace counts as not set (as for the password).
+    GMAIL_USER: z
+      .string()
+      .trim()
+      .transform((user) => user || undefined)
+      .pipe(z.email().optional())
+      .optional(),
     // Google shows the app password in four groups; whatever whitespace came with the paste is dropped, and spaces alone count as not set.
     GMAIL_APP_PASSWORD: z
       .string()
