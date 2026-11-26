@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 // Shared by the settings, journeys and non-functional specs. Every test registers its own fresh account through
@@ -10,15 +11,12 @@ export const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho
 
 export type Account = { email: string; headers: Record<string, string>; walletId: string; category: (vi: string) => string };
 
-let registrations = 0;
-
 // The one place a spec signs up through the API (docs/07-testing.md §7.10.1): when e-mail codes arrive, only this
 // function changes. Every call comes from its own address (X-Forwarded-For, the server trusts one proxy hop), so a
 // per-IP mail limit can't stop the suite. Returns the e-mail, the access token and the user.
 export async function registerByApi(request: APIRequestContext, name = 'Lan', password = PASSWORD) {
   const email = `${name.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const n = ++registrations; // 10.<worker pid>.<count high>.<count low>: unique across Playwright workers and calls
-  const forwardedFor = `10.${process.pid % 256}.${(n >> 8) & 255}.${n & 255}`;
+  const forwardedFor = `10.${randomBytes(3).join('.')}`; // random per call, so no two workers or calls share an address
   const res = await request.post('/api/auth/register', { headers: { 'X-Forwarded-For': forwardedFor }, data: { name, email, password, language: 'vi' } });
   expect(res.status()).toBe(201);
   const { accessToken, user } = (await res.json()) as { accessToken: string; user: { defaultWalletId: string } };

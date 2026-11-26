@@ -74,7 +74,7 @@ async function api(method, path, { token, body } = {}) {
     headers: { ...(body && { 'content-type': 'application/json' }), ...(token && { authorization: `Bearer ${token}` }) },
     body: body && JSON.stringify(body),
     signal: AbortSignal.timeout(20_000),
-  });
+  }).catch(() => fail(`Cannot reach ${base}: is the site up and --target right?`));
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   return { status: res.status, data };
 }
@@ -89,7 +89,13 @@ async function login() {
         `{"email":"<that email>","password":"<that password>"} to ${credsFile}\nand run: chmod 600 ${credsFile}`,
     );
   }
-  const { status, data } = await api('POST', '/auth/login', { body: JSON.parse(readFileSync(credsFile, 'utf8')) });
+  let creds;
+  try {
+    creds = JSON.parse(readFileSync(credsFile, 'utf8'));
+  } catch {
+    fail(`${credsFile} is not valid JSON: it must hold {"email":"<that email>","password":"<that password>"}`);
+  }
+  const { status, data } = await api('POST', '/auth/login', { body: creds });
   if (status !== 200) fail(`login failed: ${status} ${data?.error?.code ?? ''}`);
   return data.accessToken;
 }

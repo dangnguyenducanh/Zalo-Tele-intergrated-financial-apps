@@ -3,7 +3,7 @@
 // the missing-login case points at a port nobody listens on.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,4 +54,33 @@ test('TC-NF-20 a command that needs a login, with no credentials file, makes no 
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+// A hand-made credentials file with bad JSON, and a host that cannot be reached: one line, no stack (CLAUDE.md #9).
+function withCredsFile(content) {
+  const home = mkdtempSync(join(tmpdir(), 'bot-e2e-home-'));
+  try {
+    mkdirSync(join(home, '.config', 'bot-e2e'), { recursive: true });
+    writeFileSync(join(home, '.config', 'bot-e2e', '127.0.0.1:9.json'), content);
+    return spawnSync(process.execPath, [cli, 'state', '--target', 'http://127.0.0.1:9'], { encoding: 'utf8', timeout: 10_000, env: { ...process.env, HOME: home } });
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test('TC-NF-20 a credentials file with bad JSON exits 1 with one line naming the file and its shape, no stack trace', () => {
+  const { status, stderr } = withCredsFile('{"email": oops');
+  assert.equal(status, 1);
+  assert.equal(stderr.trim().split('\n').length, 1, stderr);
+  assert.match(stderr, /127\.0\.0\.1:9\.json/);
+  assert.match(stderr, /"email".*"password"/);
+  assert.doesNotMatch(stderr, /\n\s+at |SyntaxError/);
+});
+
+test('TC-NF-20 an unreachable host exits 1 with one line, no stack trace', () => {
+  const { status, stderr } = withCredsFile('{"email":"a@b.c","password":"x"}');
+  assert.equal(status, 1);
+  assert.equal(stderr.trim().split('\n').length, 1, stderr);
+  assert.match(stderr, /127\.0\.0\.1:9/);
+  assert.doesNotMatch(stderr, /\n\s+at |TypeError/);
 });
