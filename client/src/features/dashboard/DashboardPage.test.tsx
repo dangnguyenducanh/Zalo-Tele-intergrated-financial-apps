@@ -116,6 +116,33 @@ test('TC-F14-03 on the 15th the sentence leaves out the bill of the 20th; the we
   expect(compare).toHaveTextContent('So với cùng kỳ tháng trước');
 });
 
+// 03:00 on 01/12 in Vietnam is still 30/11 in UTC. The page opens on December, and November, one click back, is a past month:
+// the whole of it is compared with the whole of October, not "days 1..30" as on the last day of the current month.
+test('TC-F14-03 after midnight in Vietnam (still the day before in UTC) the old month is a past month', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-30T20:00:00Z') });
+  server.use(
+    http.get('*/api/stats/daily', ({ request }) => {
+      const month = new URL(request.url).searchParams.get('month') ?? '';
+      return HttpResponse.json(
+        month === '2026-11'
+          ? daily(month, { 15: { expense: 100_000 }, 30: { expense: 50_000 } })
+          : month === '2026-10'
+            ? [...daily(month, { 15: { expense: 30_000 } }), { date: '2026-10-31', income: 0, expense: 70_000 }] // October has 31 days
+            : daily(month),
+      );
+    }),
+  );
+  const user = userEvent.setup();
+  renderApp('/');
+
+  expect(await screen.findByRole('heading', { level: 1, name: 'Xin chào, Lan' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Tháng trước' })); // December → November
+  // A past month: November's whole 150.000 ₫ against October's whole 100.000 ₫ (day 31 included).
+  await waitFor(() =>
+    expect(screen.getByRole('figure', { name: 'Chi tiêu tháng này' })).toHaveTextContent(/Tháng này chi 150\.000\s₫, nhiều hơn cùng kỳ tháng trước 50\.000\s₫\./),
+  );
+});
+
 test('TC-F6-05 switching the month reloads the cards and charts; an empty month says so and offers to set a budget', async () => {
   const user = userEvent.setup();
   renderApp('/');

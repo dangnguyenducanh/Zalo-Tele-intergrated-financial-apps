@@ -68,13 +68,13 @@ test('TC-F14-03 the big figure and the caption say the same days; the switch to 
   expect(screen.getByRole('figure', { name: 'Thu nhập tháng này' })).toHaveTextContent('Hai tháng này chưa có giao dịch nào.');
 });
 
-test('TC-F14-03 the English sentence says "the same days last month"', async () => {
+test('TC-F14-03 the English sentence says "the same days last month", both months stopping at 28/02', async () => {
   await i18n.changeLanguage('en');
-  renderCompare('2026-03', '2026-03-30'); // 30 days of March against the 28 days of February
+  // 30/03: days 1..28 of March against all 28 days of February; the 500.000 ₫ of the 29th is not in the sentence.
+  renderCompare('2026-03', '2026-03-30', sparseDays('2026-03', { 10: { expense: 300_000 }, 29: { expense: 500_000 } }), sparseDays('2026-02', { 10: { expense: 100_000 } }));
   const figure = screen.getByRole('figure', { name: 'Spending this month' });
   const money = (amount: number) => spaced(formatMoney(amount, 'en'));
-  const [now, before] = [thousandsUpTo(30) * 1000, thousandsUpTo(28) * 1000];
-  expect(figure).toHaveTextContent(`This month you spent ${money(now)}, ${money(now - before)} more than the same days last month.`);
+  expect(figure).toHaveTextContent(`This month you spent ${money(300_000)}, ${money(200_000)} more than the same days last month.`);
   expect(figure).toHaveTextContent('Compared with the same days last month');
 });
 

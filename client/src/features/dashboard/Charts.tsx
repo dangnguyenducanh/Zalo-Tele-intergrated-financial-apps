@@ -78,6 +78,7 @@ export function MonthCompare({ month, today, days, previousDays }: { month: stri
   const range = sameDays(month, today);
   const total = sumDays(days, flow, range.current);
   const totalBefore = sumDays(previousDays, flow, range.previous);
+  const empty = [...now, ...before].every((value) => value === 0); // the columns show nothing: judged on the whole months, not the same days
   const chartBox = useNoTabStops<HTMLDivElement>();
   const color = flow === 'expense' ? palette.spend : palette.income;
   // Last month in a neutral slate that keeps 3:1 against the card (WCAG 1.4.11), this month in its own colour.
@@ -87,15 +88,14 @@ export function MonthCompare({ month, today, days, previousDays }: { month: stri
   const peak = now.indexOf(Math.max(...now));
   const what = t(flow === 'expense' ? 'compare.spent' : 'compare.earned');
   const diff = total - totalBefore;
-  const summary =
-    total === 0 && totalBefore === 0
-      ? t('compare.empty')
-      : [
-          t(diff > 0 ? 'compare.more' : diff < 0 ? 'compare.less' : 'compare.same', { what, now: money(total), diff: money(Math.abs(diff)) }),
-          total > 0 ? t('compare.peak', { n: peak + 1, amount: money(now[peak]!) }) : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
+  const summary = empty
+    ? t('compare.empty')
+    : [
+        t(diff > 0 ? 'compare.more' : diff < 0 ? 'compare.less' : 'compare.same', { what, now: money(total), diff: money(Math.abs(diff)) }),
+        total > 0 ? t('compare.peak', { n: peak + 1, amount: money(now[peak]!) }) : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
 
   return (
     <ChartFigure

@@ -50,8 +50,11 @@ function parseDay(text) {
   return { year, month, day };
 }
 
-// Both ends back by `months`: the same day of that month, or its last day when it has fewer days (31/03 → 28/02). A period of
-// whole months (the 1st to a month's last day) goes back to whole months, so 01–28/02 is compared with 01–31/01, not 01–28/01.
+// Both ends back by `months`: the same day of that month, or its last day when it has fewer days (31/03 → 28/02).
+// Gap fill, because only dates arrive: a period from the 1st to a month's last day is taken as a whole month and goes back to
+// the whole month before, so 01–28/02 meets 01–31/01 (docs/05 asks for whole against whole in a past month). Dates alone cannot
+// tell that from "February to date on the 28th", which the Dashboard meets with 01–28/01: a caller that knows its range is a month
+// to date (the Dashboard's sameDays) builds the previous range itself and does not use this for it.
 function shiftMonths(from, to, months) {
   const a = parseDay(from);
   const b = parseDay(to);
