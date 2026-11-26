@@ -262,5 +262,41 @@
     "skipped": 1,
     "durationSec": 56,
     "notes": "129 catalogue cases matched; 0 tests without a case ID; post-merge check: tests run on the merged main 0f62de3 (after T24-T29) in a fresh worktree (Vitest, --maxWorkers=2) (not against the production site). Server 194 passed + 1 skipped, client 126 passed"
+  },
+  {
+    "id": "RUN-023",
+    "date": "2026-11-26 03:29",
+    "env": "post-merge",
+    "suite": "server-vitest.xml, client-vitest.xml",
+    "total": 375,
+    "passed": 374,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 82,
+    "notes": "145 catalogue cases matched; 0 tests without a case ID"
+  },
+  {
+    "id": "RUN-024",
+    "date": "2026-11-26 03:39",
+    "env": "post-merge",
+    "suite": "server-vitest.xml, client-vitest.xml",
+    "total": 406,
+    "passed": 405,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 96,
+    "notes": "146 catalogue cases matched; 0 tests without a case ID"
+  },
+  {
+    "id": "RUN-025",
+    "date": "2026-11-26 03:51",
+    "env": "post-merge",
+    "suite": "server-vitest.xml, client-vitest.xml",
+    "total": 409,
+    "passed": 408,
+    "failed": 0,
+    "skipped": 1,
+    "durationSec": 113,
+    "notes": "147 catalogue cases matched; 0 tests without a case ID"
   }
 ]
