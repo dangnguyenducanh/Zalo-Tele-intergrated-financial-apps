@@ -69,7 +69,9 @@
     { "name": "top 3 then an amount", "text": "top 3 cafe 50", "found": [{ "kind": "top", "text": "top 3" }], "rest": "cafe 50" },
     { "name": "top with a unit is money", "text": "top 3k cafe", "found": [], "rest": "top 3k cafe" },
     { "name": "top with no number", "text": "top cafe", "found": [], "rest": "top cafe" },
-    { "name": "top 999 is the edge", "text": "top 999 top 1000", "found": [{ "kind": "top", "text": "top 999" }], "rest": "top 1000" },
+    { "name": "top 999 is the largest N", "text": "top 999 cafe", "found": [{ "kind": "top", "text": "top 999" }], "rest": "cafe" },
+    { "name": "top 1000 is over the bound", "text": "top 1000 cafe", "found": [], "rest": "top 1000 cafe" },
+    { "name": "top 0 is under the bound", "text": "top 0 cafe", "found": [], "rest": "top 0 cafe" },
     { "name": "a leading plus is not a word", "text": "+top 3", "found": [{ "kind": "top", "text": "top 3" }], "rest": "" }
   ]
 }

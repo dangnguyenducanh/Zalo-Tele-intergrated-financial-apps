@@ -365,9 +365,11 @@ test('TC-F8-25 a year or month before the amount is a date: the draft keeps the 
   expect(await Transaction.countDocuments()).toBe(3);
 });
 
+const nfd = (text) => text.normalize('NFD'); // a decomposing keyboard or a paste: "o" + hook-above mark, not the one letter "ỏ"
+
 test('TC-F14-27 a question typed in a Telegram chat gets the help text and makes no draft; a capture still does (docs/02 §2.11.1)', async () => {
   await linkedUser();
-  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', 'hôm nay ăn gì?', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi', '/hỏi phở 45k', '/Hỏi'];
+  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', 'hôm nay ăn gì?', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi', '/hỏi phở 45k', '/Hỏi', nfd('/hỏi phở 45k'), nfd('/Hỏi')];
 
   for (const text of questions) {
     const replies = await say(text);

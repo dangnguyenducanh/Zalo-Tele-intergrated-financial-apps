@@ -66,8 +66,9 @@ async function messagesOf(link) {
 }
 
 // "/start ABC234" → ['start', 'ABC234']; "/today@my_bot" → ['today', '']; "/Hỏi x" → ['hoi', 'x']; anything else → [].
+// \p{M} keeps the accent marks of a decomposed "/hỏi" (a letter plus a combining mark) inside the command word.
 function readCommand(text) {
-  const match = /^\/([\p{L}\p{N}_]+)(?:@\w+)?(?:\s+([\s\S]*))?$/u.exec(text.trim());
+  const match = /^\/([\p{L}\p{M}\p{N}_]+)(?:@\w+)?(?:\s+([\s\S]*))?$/u.exec(text.trim());
   return match ? [normalize(match[1]), (match[2] ?? '').trim()] : [];
 }
 

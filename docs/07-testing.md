@@ -35,7 +35,7 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**230 cases**: 222 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**231 cases**: 223 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
@@ -58,7 +58,7 @@ The full list (**230 cases**: 222 automated or semi-automated + 8 manual charter
 
 **Planned for §2.10 (not in the counts above):** the three WhatsApp cases that need the owner's Meta setup (*one-tap on phones*, *real WhatsApp chat*, the WhatsApp charter, §7.8.5). They have no IDs yet: each takes the next free ID in `test-cases.json` at merge time. Linking from the chat (T33) is built and counted: TC-F7-16…23. The WhatsApp bot (T34) is built and in the catalogue: TC-F8-26…43 (TC-F8-24 is left free: it may be taken by another card in flight), TC-F4-14 and TC-F9-07. The counts in this table are as of T33 and are brought up to date by the next docs refresh, with the cases of T34, T77 and T78.
 
-**Planned for §2.11 and §2.12 (not in the counts above):** the assistant cases of §7.9 and the email-code cases of §7.10, named the same way and given IDs the same way. The assistant cases built so far are in the counts above (feature row F14 Assistant): **TC-F14-01…03**, the one comparison rule (T43 #88), **TC-F14-04…17**, the agent service scaffold (T44 #89), **TC-F14-18…23**, the Zalo send counter and quota guard (T49 #94), and **TC-F14-24…27** with the web cases **TC-F13-08, 09**, questions never become drafts (T41 #86).
+**Planned for §2.11 and §2.12 (not in the counts above):** the assistant cases of §7.9 and the email-code cases of §7.10, named the same way and given IDs the same way. The assistant cases built so far are in the counts above (feature row F14 Assistant): **TC-F14-01…03**, the one comparison rule (T43 #88), **TC-F14-04…17**, the agent service scaffold (T44 #89), **TC-F14-18…23**, the Zalo send counter and quota guard (T49 #94), and **TC-F14-24…27** with the web cases **TC-F13-08, 09, 10**, questions never become drafts (T41 #86).
 
 ## 7.4 Manual testing in the browser (recorded)
 
@@ -168,7 +168,7 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (230 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (231 cases, last results from results.json)
 ```
 
 ## 7.8 One-tap linking and WhatsApp (§2.10)
@@ -388,7 +388,7 @@ One test per trigger path through the compiled graph. The fake chat model return
 
 | Case | Step | Level | Pri | Steps, then **Expect** | Proves |
 |---|---|---|---|---|---|
-| *QuickAdd chip* (the notice form is built in T41: **TC-F13-09**, where the notice is not clickable and Shift+Enter and "Open full form" open no dialog; the chip that opens the drawer comes with T51) | R1 | Component | P0 | QuickAdd with MSW answering `question: true`; type, press Enter, press Save, press the chip. **Expect:** the chip "Đây là câu hỏi · Hỏi Sổ chi tiêu ›" instead of preview chips; no `POST /api/transactions`; the chip opens the drawer and sends the text | Enter never saves a question |
+| *QuickAdd chip* (the notice form is built in T41: **TC-F13-09**, where the notice is not clickable and Shift+Enter and "Open full form" open no dialog, and **TC-F13-10**, the L4 spec that checks the notice at 375 and 1280 px, in light and dark, with axe; the chip that opens the drawer comes with T51) | R1 | Component | P0 | QuickAdd with MSW answering `question: true`; type, press Enter, press Save, press the chip. **Expect:** the chip "Đây là câu hỏi · Hỏi Sổ chi tiêu ›" instead of preview chips; no `POST /api/transactions`; the chip opens the drawer and sends the text | Enter never saves a question |
 | *drawer* | R3 | Component | P1 | The drawer with MSW: open it empty; press a starter chip; answer with `route: 'rules'`, then `'agent'`, each with facts, sources and 2 follow-ups; press a follow-up chip; a slow answer, then **Dừng**; **Xoá**; a `capture` answer, then save; close. **Expect:** 4 chips when empty; badges "Theo mẫu" and "AI"; the facts list and the sources line; follow-up chips only under the newest answer, and pressing one sends its text; Dừng aborts the request; Xoá calls `DELETE /api/assistant/thread`; the capture card saves only when pressed; focus goes to the input on open and back to the opener on close; the list is `role="log"`, the finished answer is announced once ([05-frontend.md §5.10.8](05-frontend.md#5108-accessibility-planned-2115)) | The drawer's states and accessibility rules |
 | *drawer errors* | R3 | Component | P1 | MSW answers 503 `AGENT_UNAVAILABLE`, then 503 `AGENT_BUSY`, then a network error; press **Thử lại** each time; then `ai.on` false (`assistantOn` off), then `remainingToday: 0`. **Expect:** the texts of [05-frontend.md §5.10.1](05-frontend.md#5101-the-hỏi-sổ-chi-tiêu-drawer-planned-2115) for each state, announced once; the question stays in the input after an error; Thử lại resends the same `requestId`; with the switch off a question is still sent and its "Theo mẫu" answer shown; at the cap a capture still gets its card | The drawer fails politely |
 | *action card* | AI | Component | P1 | An answer with `action`; press Đồng ý (200), then a card whose confirm answers 404, then 409; a delete card, then Thôi. **Expect:** Đồng ý refetches budgets, stats, transactions, drafts and wallets; a delete shows the undo snackbar; 404 and 409 show their texts; every outcome removes the buttons; button names say the action in full | The web confirm card |

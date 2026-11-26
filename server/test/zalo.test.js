@@ -307,9 +307,11 @@ test('TC-F8-21 Zalo: after a multi-line message, each "ok"/"huy" reaches the nex
   expect(await Transaction.find({ deletedAt: null }).lean()).toMatchObject([{ amount: 40_000, status: 'confirmed' }]);
 });
 
+const nfd = (text) => text.normalize('NFD'); // a decomposing keyboard or a paste: "o" + hook-above mark, not the one letter "ỏ"
+
 test('TC-F14-27 a question typed in a Zalo chat gets the help text and makes no draft; a capture and the amount-only correction still work (docs/02 §2.11.1)', async () => {
   await linkedUser();
-  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi', '/hỏi phở 45k', '/Hỏi'];
+  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi', '/hỏi phở 45k', '/Hỏi', nfd('/hỏi phở 45k'), nfd('/Hỏi')];
 
   for (const text of questions) {
     const replies = await say(text);
