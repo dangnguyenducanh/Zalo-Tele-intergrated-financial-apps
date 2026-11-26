@@ -1,12 +1,32 @@
 #!/usr/bin/env bash
 # Copy server/.env into a Vercel project's Production environment variables.
 # Usage: tools/vercel-env-push.sh staging|production [KEY...]
+#        tools/vercel-env-push.sh staging|production --remove KEY...
 #   With no KEY: push every key (plus the per-target APP_URL, MONGODB_DB, KIE_URL).
 #   With KEYs: push only those (tools/set-secret.sh uses this after saving a secret).
+#   With --remove: delete those variables from that Vercel project. server/.env is not read for them or changed,
+#   so a key that is only in the dashboard (the GMAIL_* pair, docs/06 §6.14) is removed just the same.
 # Values are piped through stdin and NEVER printed or put on a command line; only key names are shown.
 set -euo pipefail
-target="${1:?usage: tools/vercel-env-push.sh staging|production [KEY...]}"
+usage() {
+  cat <<'USAGE'
+Usage: tools/vercel-env-push.sh staging|production [KEY...]
+       tools/vercel-env-push.sh staging|production --remove KEY...
+
+Without a KEY, copies every variable of server/.env to that Vercel project's Production environment; with KEYs, only those.
+With --remove, deletes the named variables from that project (they need not be in server/.env). Redeploy afterwards:
+tools/deploy.sh staging|production. Values are never printed.
+USAGE
+}
+case "${1:-}" in -h | --help) usage; exit 0 ;; esac
+target="${1:?usage: tools/vercel-env-push.sh staging|production [KEY...] | --remove KEY...}"
 shift
+remove=0
+if [ "${1:-}" = "--remove" ]; then
+  remove=1; shift
+  [ $# -gt 0 ] || { usage >&2; exit 2; }
+  for key in "$@"; do [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || { echo "bad key name: $key" >&2; exit 2; }; done
+fi
 root="$(git rev-parse --show-toplevel)"
 env_file="$root/server/.env"
 # The pinned Vercel CLI, from its one definition in tools/deploy.sh.
@@ -25,8 +45,28 @@ export VERCEL_ORG_ID="$(get VERCEL_ORG_ID)"
 case "$target" in
   staging)    export VERCEL_PROJECT_ID="$(get VERCEL_PROJECT_ID_STAGING)"; app_url="$(get STAGING_URL)"; db=finance_staging ;;
   production) export VERCEL_PROJECT_ID="$(get VERCEL_PROJECT_ID_PROD)";    app_url="$(get PROD_URL)";    db=finance ;;
-  *) echo "usage: tools/vercel-env-push.sh staging|production [KEY...]" >&2; exit 2 ;;
+  *) usage >&2; exit 2 ;;
 esac
+
+if [ "$remove" = 1 ]; then
+  [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ] || { echo "VERCEL_ORG_ID or the $target project ID is missing from server/.env" >&2; exit 1; }
+  echo "Removing env from Vercel ($target):"
+  failed_keys=()
+  for key in "$@"; do
+    # </dev/null: a prompt (it should not happen with --confirm-name) fails the key instead of hanging the script.
+    if npx -y "$VERCEL_CLI" env rm "$key" --environment production --confirm-name "$key" </dev/null >/dev/null 2>&1; then
+      echo "  removed $key"
+    else
+      echo "  FAILED $key (not removed, or it was not set there)" >&2; failed_keys+=("$key")
+    fi
+  done
+  if [ ${#failed_keys[@]} -gt 0 ]; then
+    echo "Some keys FAILED for $target. Retry: tools/vercel-env-push.sh $target --remove ${failed_keys[*]}" >&2
+    exit 1
+  fi
+  echo "Done ($target, $# removed). Redeploy (tools/deploy.sh $target) for it to take effect."
+  exit 0
+fi
 
 # Local-only keys that must not go to Vercel (or get a per-target value below).
 skip='^(VERCEL_|SEED_|TEST_USER_|PROD_URL|STAGING_URL|APP_URL|MONGODB_DB|PORT|VITE_PORT|WT_SLOT|KIE_URL|KIE_PUBLIC_URL)'

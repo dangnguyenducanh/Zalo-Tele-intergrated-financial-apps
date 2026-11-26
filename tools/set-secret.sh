@@ -2,12 +2,30 @@
 # Paste secrets without them ever being shown, logged or put on a command line.
 # Usage: tools/set-secret.sh KEY [KEY...]
 #   e.g. tools/set-secret.sh MONGODB_PASSWORD TELEGRAM_BOT_TOKEN ZALO_BOT_TOKEN
+#        tools/set-secret.sh --remove KEY [KEY...]   (switch a secret off: nothing is asked)
 # For each KEY: hidden prompt → saved in server/.env. Then the changed keys are pushed to both
 # Vercel projects through tools/vercel-env-push.sh, which owns the local-only list and the mappings.
 # MONGODB_PASSWORD is special: it is percent-encoded and put into MONGODB_URI.
+# With --remove the keys are instead deleted from server/.env (a key that is not there is fine) and removed from both
+# Vercel projects through `tools/vercel-env-push.sh <target> --remove`.
 # Secret values only travel through the environment and stdin (never argv), and are never printed.
 set -euo pipefail
-[ $# -gt 0 ] || { echo "usage: tools/set-secret.sh KEY [KEY...]  (e.g. MONGODB_PASSWORD TELEGRAM_BOT_TOKEN ZALO_BOT_TOKEN)" >&2; exit 2; }
+usage() {
+  cat <<'USAGE'
+Usage: tools/set-secret.sh KEY [KEY...]
+       tools/set-secret.sh --remove KEY [KEY...]
+
+Without --remove: asks for each value (hidden), saves it in server/.env, then pushes it to both Vercel projects
+(e.g. MONGODB_PASSWORD TELEGRAM_BOT_TOKEN ZALO_BOT_TOKEN).
+With --remove: asks for nothing. Deletes the KEY= lines from server/.env, then removes the variables from both Vercel
+projects, also a key that is not in server/.env. Redeploy afterwards: tools/deploy.sh staging, then production.
+Values are never printed.
+USAGE
+}
+case "${1:-}" in -h | --help) usage; exit 0 ;; esac
+remove=0
+if [ "${1:-}" = "--remove" ]; then remove=1; shift; fi
+[ $# -gt 0 ] || { usage >&2; exit 2; }
 for key in "$@"; do
   [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || { echo "bad key name: $key" >&2; exit 2; }
 done
@@ -15,6 +33,31 @@ root="$(git rev-parse --show-toplevel)"
 env_file="$root/server/.env"
 [ -f "$env_file" ] || { echo "server/.env not found" >&2; exit 1; }
 get() { grep -E "^$1=" "$env_file" | head -1 | cut -d= -f2- || true; }
+
+if [ "$remove" = 1 ]; then
+  tmp=""; trap '[ -z "$tmp" ] || rm -f "$tmp"' EXIT
+  for key in "$@"; do
+    if grep -qE "^$key=" "$env_file"; then echo "  removing $key from server/.env"; else echo "  $key is not in server/.env"; fi
+  done
+  # One pass: drop every line that starts with KEY= (the "=" keeps GMAIL_USER from matching GMAIL_USERNAME).
+  tmp="$(mktemp "$env_file.XXXXXX")" # server/.env.* is git-ignored; mktemp creates it with mode 600
+  KEYS="$*" awk 'BEGIN { n = split(ENVIRON["KEYS"], k, " ") }
+    { for (i = 1; i <= n; i++) if (index($0, k[i] "=") == 1) next }
+    { print }' "$env_file" > "$tmp"
+  cat "$tmp" > "$env_file" # keeps server/.env's own mode (600)
+  rm -f "$tmp"; tmp=""
+  failed=()
+  for target in staging production; do
+    "$root/tools/vercel-env-push.sh" "$target" --remove "$@" || failed+=("$target")
+  done
+  echo
+  if [ ${#failed[@]} -gt 0 ]; then
+    echo "Removed from server/.env, but the Vercel removal FAILED for: ${failed[*]}. Run the Retry command(s) above." >&2
+    exit 1
+  fi
+  echo "Removed: $* (server/.env and both Vercel projects). Redeploy (tools/deploy.sh) for it to take effect."
+  exit 0
+fi
 
 tmp=""
 # Drop anything still waiting on the terminal (extra pasted lines, or an unfinished last line), so it never
