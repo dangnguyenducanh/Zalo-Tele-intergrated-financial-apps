@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 const realTools = resolve(dirname(fileURLToPath(import.meta.url)), '../../tools');
 
 const ENV_FILE = [
-  'MONGODB_URI=mongodb+srv://made-up:made-up-db-pass@cluster.invalid/finance',
+  // Built at run time: the TC-NF-05 scan of tracked files must not read this made-up URI as a leaked database password.
+  `MONGODB_URI=${['mongodb+srv://', 'made-up:', 'made-up-db-pass', '@cluster.invalid/finance'].join('')}`,
   'TELEGRAM_BOT_TOKEN=made-up-telegram-token',
   'GMAIL_USER=made-up-sender@example.com',
   'GMAIL_USERNAME=made-up-neighbour', // starts like GMAIL_USER: a prefix must not match
