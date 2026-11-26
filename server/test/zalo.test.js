@@ -307,6 +307,27 @@ test('TC-F8-21 Zalo: after a multi-line message, each "ok"/"huy" reaches the nex
   expect(await Transaction.find({ deletedAt: null }).lean()).toMatchObject([{ amount: 40_000, status: 'confirmed' }]);
 });
 
+test('TC-F14-27 a question typed in a Zalo chat gets the help text and makes no draft; a capture and the amount-only correction still work (docs/02 §2.11.1)', async () => {
+  await linkedUser();
+  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi'];
+
+  for (const text of questions) {
+    const replies = await say(text);
+    expect([text, replies.map((c) => c.method), textOf(replies[0])]).toEqual([text, ['sendMessage'], viText.help]);
+  }
+  expect(viText.help).toContain('/hoi');
+  expect(await Transaction.countDocuments()).toBe(0);
+  expect(textOf((await say('ok'))[0])).toBe(viText.nothingPending);
+  for (const text of ['chi tiêu 7 ngày qua', 'đã chi gì tháng 9', 'chi tiêu năm 2025']) expect(textOf((await say(text))[0])).toBe(viText.help);
+  expect(await Transaction.countDocuments()).toBe(0);
+
+  // A capture is a draft; a reply with only an amount ("55k") still corrects the newest one (TC-F8-20).
+  for (const text of ['grab 32k', 'cà phê không đường 25', 'ăn tối tháng 10 50']) await say(text);
+  expect((await Transaction.find().sort({ _id: 1 }).lean()).map((t) => [t.amount, t.status])).toEqual([[32_000, 'draft'], [25_000, 'draft'], [50_000, 'draft']]);
+  await say('55k');
+  expect((await Transaction.find().sort({ _id: 1 }).lean()).map((t) => t.amount)).toEqual([32_000, 25_000, 55_000]); // the newest draft was corrected, no new one
+});
+
 // ---- Zalo's monthly quota (docs/02 §2.11.6, card T49): every send is counted, and from 2,850 only capture and linking replies go out ----
 
 const thisMonth = () => monthKey(new Date());

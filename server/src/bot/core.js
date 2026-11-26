@@ -18,6 +18,7 @@ import { updateMe } from '../services/users.js';
 import { AppError } from '../utils/AppError.js';
 import { normalize } from '../utils/normalize.js';
 import { monthKey, vnParts } from '../utils/vnTime.js';
+import { classify } from './ask.js';
 import en from './messages.en.js';
 import vi from './messages.vi.js';
 
@@ -74,6 +75,8 @@ function readCommand(text) {
 // `photo` is the platform's reference to a photo in the message (Telegram file_id, Zalo photo_url).
 // Without a link, a valid "/start CODE" or "/link CODE" links the chat; anything else gets a claim link, the only
 // thing ever stored for an unlinked chat (no message text, no transaction).
+// For a linked, active chat the first match wins, in the order of docs/02 §2.11.1: a photo, "/hoi", any other command,
+// "ok" / "huy", then classify(): a question or a capture. A question never reaches createDrafts.
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
   const [command, arg] = readCommand(message.text);
@@ -83,10 +86,19 @@ export async function handleMessage(adapter, message) {
   const user = await User.findById(link.userId).lean();
   if (user.status === 'locked') return reply(adapter, message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
   if (message.photo) return readReceipt(adapter, link, user.language, message);
+  if (command === 'hoi') return answerQuestion(adapter, message.chatId, user.language);
   if (command) return reply(adapter, message.chatId, await runCommand(link, user, command, arg));
   const word = normalize(message.text);
   if (word === 'ok' || word === 'huy') return reply(adapter, message.chatId, await answerPending(link, word), 'capture');
+  // followUp is false until the assistant's answers are remembered per chat (T50).
+  if (classify(message.text, { followUp: false }) === 'question') return answerQuestion(adapter, message.chatId, user.language);
   return createDrafts(adapter, link, user.language, message);
+}
+
+// A question (a "/hoi …" or a text classify() reads as one) is never money: nothing is drafted or stored. There is no
+// question engine yet, so it gets the help text, which lists "/hoi" and the plain commands. 'other' like any help (docs/02 §2.11.6).
+function answerQuestion(adapter, chatId, language) {
+  return reply(adapter, chatId, messagesFor(language).help);
 }
 
 // A button press (Telegram and WhatsApp ✅ / ❌) → { ok, text }. Only the presser's own drafts can be touched.

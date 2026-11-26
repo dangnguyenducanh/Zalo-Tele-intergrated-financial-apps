@@ -460,6 +460,24 @@ test('TC-F8-33 "phở 45k" → a button message; ✅ saves it, ❌ discards the 
   expect(new Set(graph.map((c) => c.authorization))).toEqual(new Set([`Bearer ${ACCESS_TOKEN}`]));
 });
 
+test('TC-F14-27 a question typed in a WhatsApp chat gets the help text and makes no draft; a capture still gets its button message (docs/02 §2.11.1)', async () => {
+  await linkedUser();
+  graph.length = 0;
+  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi'];
+
+  for (const text of questions) {
+    const replies = await say(text);
+    expect([text, replies.length, textOf(replies[0]), replies[0].body.type]).toEqual([text, 1, viText.help, 'text']); // a plain text, no buttons
+  }
+  expect(viText.help).toContain('/hoi');
+  expect(await Transaction.countDocuments()).toBe(0);
+  for (const text of ['chi tiêu 7 ngày qua', 'đã chi gì tháng 9']) expect(textOf((await say(text))[0])).toBe(viText.help);
+
+  const capture = await say('phở 45');
+  expect(capture[0].body.type).toBe('interactive'); // the three buttons
+  expect(await Transaction.find().lean()).toMatchObject([{ amount: 45_000, status: 'draft', source: 'whatsapp' }]);
+});
+
 test('TC-F8-34 a receipt photo is fetched from the Graph API with the token, read by KIE and becomes a draft with buttons; a redelivery repeats nothing', async () => {
   const { user } = await linkedUser();
   graph.length = 0;

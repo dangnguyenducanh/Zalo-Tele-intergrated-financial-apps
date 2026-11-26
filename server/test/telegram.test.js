@@ -365,6 +365,45 @@ test('TC-F8-25 a year or month before the amount is a date: the draft keeps the 
   expect(await Transaction.countDocuments()).toBe(3);
 });
 
+test('TC-F14-27 a question typed in a Telegram chat gets the help text and makes no draft; a capture still does (docs/02 §2.11.1)', async () => {
+  await linkedUser();
+  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', 'hôm nay ăn gì?', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi', '/hoi phở 45k'];
+
+  for (const text of questions) {
+    const replies = await say(text);
+    expect([text, replies.map((c) => c.method), textOf(replies[0])]).toEqual([text, ['sendMessage'], viText.help]);
+    expect(replies[0].body.reply_markup).toBeUndefined(); // no ✅ / ❌: there is no draft
+  }
+  expect(viText.help).toContain('/hoi');
+  expect(await Transaction.countDocuments()).toBe(0);
+  expect(await ChatLink.findOne()).toMatchObject({ pendingTransactionId: null });
+  expect(textOf((await say('ok'))[0])).toBe(viText.nothingPending); // nothing was offered
+
+  // What is no question and has no amount is answered like any line with no number, and a day count is no amount.
+  for (const text of ['chi tiêu 7 ngày qua', 'đã chi gì tháng 9', 'chi tiêu năm 2025', 'hello bot']) expect(textOf((await say(text))[0])).toBe(viText.help);
+  expect(await Transaction.countDocuments()).toBe(0);
+
+  // Captures still become drafts: with a unit, a bare number, an amount word that looks like a question, a date word.
+  for (const text of ['phở 45k', 'phở 45', 'cà phê không đường 25', 'sửa xe 150k', 'tim heo 50', 'crop top 120', 'ăn tối tháng 10 50', 'thuê nhà năm 2026 36tr']) {
+    const replies = await say(text);
+    expect([text, replies.map((c) => c.method)]).toEqual([text, ['sendMessage']]);
+    expect(replies[0].body.reply_markup).toBeDefined(); // ✅ / ❌
+  }
+  expect((await Transaction.find().sort({ _id: 1 }).lean()).map((t) => [t.amount, t.status])).toEqual([
+    [45_000, 'draft'], [45_000, 'draft'], [25_000, 'draft'], [150_000, 'draft'], [50_000, 'draft'], [120_000, 'draft'], [50_000, 'draft'], [36_000_000, 'draft'],
+  ]);
+});
+
+test('TC-F14-27 the help text lists /hoi, in both languages, and a question in English gets the English one', async () => {
+  await linkedUser();
+  expect(viText.help).toMatch(/\/hoi/);
+  expect(enText.help).toMatch(/\/hoi/);
+  expect(textOf((await say('/lang en'))[0])).toBe(enText.languageSet);
+  expect(textOf((await say('how much did I spend this month?'))[0])).toBe(enText.help);
+  expect(textOf((await say('/hoi tháng này ăn uống hết bao nhiêu'))[0])).toBe(enText.help);
+  expect(await Transaction.countDocuments()).toBe(0);
+});
+
 test("TC-F8-06 ✅ confirms and ❌ discards, only on the presser's own drafts", async () => {
   const a = await linkedUser(CHAT_A);
   const b = await linkedUser(CHAT_B);
