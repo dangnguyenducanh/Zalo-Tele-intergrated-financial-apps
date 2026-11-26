@@ -1,0 +1,12 @@
+{
+  "role": "sochitieuAgent",
+  "database": "finance",
+  "privileges": [
+    { "actions": ["find"], "collections": ["usersForAgent", "categories", "wallets", "transactions", "budgets"] },
+    { "actions": ["find", "insert", "update"], "collections": ["pendingActions"] },
+    {
+      "actions": ["find", "insert", "update", "remove"],
+      "collections": ["agentSkills", "agentTools", "agentTurns", "agentMemory", "agentCategoryVectors", "receiptReads"]
+    }
+  ]
+}

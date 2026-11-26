@@ -1,0 +1,8 @@
+# What CI and the agent image install. The versions are the pins of docs/01 §1.4. sentence-transformers and torch are
+# in requirements-model.txt, which only the Dockerfile installs (CI never downloads them).
+fastapi==0.162.5
+uvicorn==0.54.0
+langgraph==1.2.24
+pymongo==4.18.3
+openai==3.59.0
+# ponytail: only these direct pins; what they pull in floats. Add a lock file (uv pip compile) if CI ever breaks on one.

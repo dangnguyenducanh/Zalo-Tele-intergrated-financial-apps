@@ -21,3 +21,9 @@ docs/testing/recordings/*.mp4
 
 # charter-run and bot-e2e evidence: videos, logs, chat text (docs/testing/bot-e2e.md)
 /charter-runs/
+
+# the agent service (agent/): virtualenvs and Python caches. Its secrets file agent/.env is covered by .env above.
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
