@@ -1,8 +1,9 @@
-// Points both bots at a deployed app, e.g. after a deploy:
+// Points the bots at a deployed app, e.g. after a deploy:
 //   node --env-file=server/.env server/src/scripts/setWebhooks.js https://sochitieu-btl.vercel.app
 // Reads TELEGRAM_BOT_TOKEN + TELEGRAM_WEBHOOK_SECRET and ZALO_BOT_TOKEN + ZALO_WEBHOOK_SECRET from the
 // environment and prints only each platform's answer, never a token or secret. A platform whose
-// variables are missing is skipped.
+// variables are missing is skipped. WhatsApp has no such call: Meta keeps the callback URL on the app and takes
+// it in the dashboard (docs/06 §6.12), so for WhatsApp the script only says what to enter there.
 import { pathToFileURL } from 'node:url';
 
 const PLATFORMS = [
@@ -15,7 +16,9 @@ const PLATFORMS = [
   { name: 'zalo', api: 'https://bot-api.zaloplatforms.com/bot', vars: ['ZALO_BOT_TOKEN', 'ZALO_WEBHOOK_SECRET'], extra: {} },
 ];
 
-// → { telegram: 'ok' | 'failed: <reason>' | 'skipped: …', zalo: … }
+const WHATSAPP_VARS = ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN'];
+
+// → { telegram: 'ok' | 'failed: <reason>' | 'skipped: …', zalo: …, whatsapp: 'manual: …' | 'skipped: …' }
 export async function setWebhooks(baseUrl, vars = process.env) {
   const origin = new URL(baseUrl).origin; // "https://x.app/" and "https://x.app" give the same URL
   const results = {};
@@ -34,6 +37,9 @@ export async function setWebhooks(baseUrl, vars = process.env) {
     const data = await res.json().catch(() => ({}));
     results[name] = data.ok ? 'ok' : `failed: ${data.description ?? `HTTP ${res.status}`}`;
   }
+  results.whatsapp = WHATSAPP_VARS.every((name) => vars[name])
+    ? `manual: in the Meta app dashboard (Configuration) set the callback URL ${origin}/api/webhooks/whatsapp and WHATSAPP_VERIFY_TOKEN as the verify token, then subscribe to "messages"`
+    : `skipped: ${WHATSAPP_VARS.join(', ')} are not all set`;
   return results;
 }
 

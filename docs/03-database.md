@@ -119,7 +119,7 @@ Indexes: `{ userId: 1, type: 1, deletedAt: 1 }`.
 | `note` | String | ≤ 200 chars |
 | `occurredAt` | Date | when the money moved |
 | `status` | String | `draft` \| `confirmed` (web entries are created `confirmed`) |
-| `source` | String | `web` \| `telegram` \| `zalo` \| `receipt` |
+| `source` | String | `web` \| `telegram` \| `zalo` \| `whatsapp` \| `receipt` (a bot photo takes its platform as `source`; `receipt` stays for web uploads) |
 | `chatRef` | `{ platform, chatId, messageId }` | for bot drafts; used to edit/answer the bot message and for idempotency |
 | `receipt` | `{ merchant, address, date, total, items:[{name, quantity, unitPrice, amount}], reconciled: Boolean, kieMs: Number, fileRef: String }` | only for receipt drafts |
 | `deletedAt` | Date \| null | |
@@ -128,9 +128,7 @@ Indexes:
 - `{ userId: 1, status: 1, occurredAt: -1 }`: lists, dashboard
 - `{ userId: 1, categoryId: 1, occurredAt: -1 }`: budgets, stats by category
 - `{ userId: 1, walletId: 1 }`: wallet balance
-- `{ "chatRef.platform": 1, "chatRef.chatId": 1, "chatRef.messageId": 1 }` **unique, partial** (only when `chatRef` exists). `messageId` is `"<platform message id>:<line>"` (a receipt uses line 1). If Telegram/Zalo retries the same webhook, no second draft is created.
-
-*Planned (§2.10, see §3.6):* `source` and `chatRef.platform` gain `whatsapp`.
+- `{ "chatRef.platform": 1, "chatRef.chatId": 1, "chatRef.messageId": 1 }` **unique, partial** (only when `chatRef` exists). `messageId` is `"<platform message id>:<line>"` (a receipt uses line 1). If Telegram, Zalo or WhatsApp retries the same webhook, no second draft is created. `chatRef.platform` is `telegram` \| `zalo` \| `whatsapp` (without `whatsapp` every WhatsApp draft would fail validation); for WhatsApp, `chatId` is the BSUID and `messageId` is `"<wamid>:<line>"` (§3.6).
 
 *Planned (§2.11, see §3.7):* `note` and `receipt.merchant` are saved NFC-normalized, and drafts made by the daily cron use `chatRef.messageId = rec:<date>:<key>`.
 
@@ -152,10 +150,10 @@ A budget whose category was deleted is hidden from the list and skipped by "copy
 | Field | Type | Notes |
 |---|---|---|
 | `userId` | ObjectId → User | required |
-| `platform` | String | `telegram` \| `zalo` |
-| `platformUserId` | String | Telegram `from.id` / Zalo `from.id` |
-| `chatId` | String | where to send replies |
-| `displayName` | String | shown on the Bot inbox |
+| `platform` | String | `telegram` \| `zalo` \| `whatsapp` |
+| `platformUserId` | String | Telegram `from.id` / Zalo `from.id` / WhatsApp: the user's business-scoped user ID (BSUID), never the phone number (§3.6) |
+| `chatId` | String | where to send replies (WhatsApp: the same BSUID) |
+| `displayName` | String | shown on the Bot inbox (WhatsApp: the profile name) |
 | `pendingTransactionId` | ObjectId → Transaction \| null | the draft a typed `ok`/`huy` (Telegram and Zalo) or a Zalo amount-only correction acts on; set by text and receipt drafts. If it is no longer a waiting draft, the newest waiting draft from that chat is used. |
 | `viaClaim` | Boolean | default `false`; `true` for a link made by a claim link (§2.10.5). Older rows read as `false` through the default, so no migration |
 | `claimNoticeDismissedAt` | Date \| null | when the user dismissed the "Not you? [Unlink]" notice; the Bot inbox shows it while `viaClaim && !claimNoticeDismissedAt` |
@@ -163,8 +161,6 @@ A budget whose category was deleted is hidden from the list and skipped by "copy
 Indexes: `{ platform: 1, platformUserId: 1 }` **unique** (one web account per chat account, and the backstop when a chat was linked between its claim link and Confirm); `{ userId: 1 }`.
 
 Rows are created two ways: by `/start CODE` / `/link CODE` in the chat (from the message plus the code's `userId`) and by `POST /api/chat-links/claim` (from the claim link's `chat` plus the logged-in user, with `viaClaim: true`).
-
-*Planned (§2.10, see §3.6):* `platform` gains `whatsapp`; for WhatsApp, `platformUserId` and `chatId` are the user's business-scoped user ID (BSUID), never the phone number.
 
 *Planned (§2.11, see §3.7):* one field, `lastConfirmedId`, for fixing or undoing from chat.
 
@@ -234,37 +230,24 @@ Indexes: `{ codeHash: 1 }` unique; **TTL** `{ expiresAt: 1 }`; `{ 'chat.platform
 
 **Default wallets on register:** "Tiền mặt / Cash" (`cash`, aliases `tm`, `cash`) set as the default wallet.
 
-## 3.6 One-tap linking and WhatsApp (planned, §2.10)
+## 3.6 WhatsApp (§2.10, built by card T34 #74)
 
-Not built yet (linking from the chat is, and is described in §3.3). It lists what docs/02 §2.10 still changes against §3.3; as each part is built, its change moves into §3.3 and is removed here. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. These parts add no collection and no index.
+What WhatsApp changes in §3.3. It adds no collection and no index. The enums above already list `whatsapp` (adding values needs no data migration), and nothing else in the data model differs from Telegram and Zalo except what the key is.
 
-### `chatLinks` (planned)
+### `chatLinks`
 
-| Field | Today | Planned |
-|---|---|---|
-| `platform` | `telegram` \| `zalo` | `telegram` \| `zalo` \| `whatsapp` |
-| `platformUserId` | Telegram / Zalo `from.id` | WhatsApp: the user's business-scoped user ID (BSUID): `from_user_id` on the message, `user_id` on the contact. Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key |
-| `chatId` | where to send replies | WhatsApp: the same BSUID; replies are sent with `recipient_type: "individual"` and `recipient: <BSUID>`, never `to` (§2.10.4) |
-| `displayName` | shown on the Bot inbox | WhatsApp: `value.contacts[0].profile.name` |
+- `platformUserId` and `chatId` are the user's **business-scoped user ID** (BSUID): `from_user_id` on the message (the contact's `user_id` is the same value). Meta omits `from` (the phone number) for users who adopted a WhatsApp username, so the phone number is never the key. A BSUID is scoped to one Meta business portfolio and Meta may regenerate it when the user changes their phone number; the chat then looks like a new, unlinked one and links again.
+- Replies are sent with `recipient_type: "individual"` and `recipient: <BSUID>`, never `to` (§2.10.4). `displayName` is the profile name of the contact whose `user_id` equals the BSUID.
+- WhatsApp rows are created the same two ways as the others (§3.3). `{ platform: 1, platformUserId: 1 }` unique means one web account per WhatsApp user.
 
-- WhatsApp rows are created the same two ways as today's (§3.3).
-- Indexes unchanged. `{ platform: 1, platformUserId: 1 }` unique then also means one web account per WhatsApp user (BSUID).
+### `transactions`
 
-### `transactions` (planned)
+- `source` is `whatsapp` for drafts from the WhatsApp bot, text and receipt photos alike.
+- `chatRef = { platform: 'whatsapp', chatId: <BSUID>, messageId: '<wamid>:<line>' }`, from the message `id`. The unique partial `chatRef` index is what turns a second delivery of the same `wamid` into no second draft (§2.10.4).
 
-| Field | Today | Planned |
-|---|---|---|
-| `source` | `web` \| `telegram` \| `zalo` \| `receipt` | adds `whatsapp` for drafts from the WhatsApp bot, text and receipt photos alike (a bot photo already takes its platform as `source`; `receipt` stays for web uploads) |
-| `chatRef.platform` | `telegram` \| `zalo` | adds `whatsapp` (§2.10.5); without it every WhatsApp draft fails validation |
-| `chatRef.chatId` | the chat's `chatId` | WhatsApp: the BSUID, not a phone number |
-| `chatRef.messageId` | `"<platform message id>:<line>"` | WhatsApp: `"<wamid>:<line>"`, from the message `id` (§2.10.4) |
+### Privacy
 
-- Indexes unchanged. The unique partial `chatRef` index is what turns a second delivery of the same `wamid` into no second draft (§2.10.4).
-- Adding enum values needs no data migration.
-
-### Privacy (planned)
-
-- **WhatsApp: no phone number is stored.** The key is the BSUID (§2.10.4), so `chatLinks`, `linkCodes.chat` and `transactions.chatRef` hold the BSUID, never a phone number. The web shows `displayName` (the WhatsApp profile name), and admin stats count chats per platform without identifiers. Transaction responses still carry `chatRef` as today (the model's `toJSON` keeps it), so a WhatsApp draft's response carries the BSUID, not a phone number.
+- **WhatsApp: no phone number is stored.** `chatLinks`, `linkCodes.chat` and `transactions.chatRef` hold the BSUID, never a phone number: the adapter does not read `from` or `contacts[].wa_id`. The web shows `displayName` (the WhatsApp profile name), and admin stats count chats per platform without identifiers. Transaction responses still carry `chatRef` as before (the model's `toJSON` keeps it), so a WhatsApp draft's response carries the BSUID, not a phone number (test *BSUID only*, TC-F8-37).
 
 ## 3.7 Assistant and agent features (planned, §2.11)
 

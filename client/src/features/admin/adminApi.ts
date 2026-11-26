@@ -26,8 +26,8 @@ export type TemplateInput = Pick<CategoryTemplate, 'names' | 'keywords' | 'icon'
 export type AdminStats = {
   users: number;
   activeUsers7d: number;
-  chatLinks: { telegram: number; zalo: number };
-  transactionsBySource: { web: number; telegram: number; zalo: number; receipt: number };
+  chatLinks: { telegram: number; zalo: number; whatsapp: number };
+  transactionsBySource: { web: number; telegram: number; zalo: number; whatsapp: number; receipt: number };
 };
 
 export const adminApi = api.injectEndpoints({

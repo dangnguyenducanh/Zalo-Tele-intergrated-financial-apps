@@ -42,9 +42,9 @@
     "users": "Người dùng",
     "activeUsers7d": "Hoạt động trong 7 ngày",
     "chatLinks": "Chat đã liên kết",
-    "chatLinksDetail": "Telegram {{telegram}} · Zalo {{zalo}}",
+    "chatLinksDetail": "Telegram {{telegram}} · WhatsApp {{whatsapp}} · Zalo {{zalo}}",
     "transactions": "Giao dịch",
-    "transactionsDetail": "Web {{web}} · Telegram {{telegram}} · Zalo {{zalo}} · Hoá đơn {{receipt}}"
+    "transactionsDetail": "Web {{web}} · Telegram {{telegram}} · WhatsApp {{whatsapp}} · Zalo {{zalo}} · Hoá đơn {{receipt}}"
   },
   "categories": {
     "title": "Danh mục mặc định",

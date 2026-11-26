@@ -13,7 +13,7 @@ export type Transaction = {
   occurredAt: string; // ISO date-time
   note: string;
   status: TransactionStatus; // bots and receipts create drafts; the web saves straight away as confirmed
-  source: 'web' | 'telegram' | 'zalo' | 'receipt';
+  source: 'web' | 'telegram' | 'zalo' | 'whatsapp' | 'receipt';
 };
 
 export type TransactionInput = Pick<Transaction, 'type' | 'amount' | 'walletId' | 'categoryId' | 'occurredAt' | 'note'>;

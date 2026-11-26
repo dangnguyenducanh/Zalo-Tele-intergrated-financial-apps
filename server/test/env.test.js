@@ -73,3 +73,17 @@ test('TC-F7-11 WHATSAPP_NUMBER must be international digits and ZALO_BOT_URL an 
     expect(() => parseEnv({ ...base, ...bad }), JSON.stringify(bad)).toThrow(Object.keys(bad)[0]);
   }
 });
+
+test('TC-F8-41 the four WhatsApp settings are optional; when set, the phone number ID must be digits (it goes into a Graph API URL)', () => {
+  const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64) };
+  const unset = parseEnv({ ...base, WHATSAPP_ACCESS_TOKEN: '' }); // an empty value counts as not set
+  for (const key of ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN']) expect(unset[key]).toBeUndefined();
+
+  const set = { WHATSAPP_ACCESS_TOKEN: 'EAAJB123', WHATSAPP_PHONE_NUMBER_ID: '106540352242922', WHATSAPP_APP_SECRET: 'a1b2c3', WHATSAPP_VERIFY_TOKEN: 'verify me' };
+  expect(parseEnv({ ...base, ...set })).toMatchObject(set);
+  for (const bad of ['106540352242922/messages', '../me', '12 3', 'abc', `${'1'.repeat(31)}`]) {
+    expect(() => parseEnv({ ...base, ...set, WHATSAPP_PHONE_NUMBER_ID: bad }), bad).toThrow('WHATSAPP_PHONE_NUMBER_ID');
+  }
+  // Under NODE_ENV=test the suites get harmless defaults, so they need no server/.env.
+  expect(parseEnv({ NODE_ENV: 'test' })).toMatchObject({ WHATSAPP_ACCESS_TOKEN: 'test-whatsapp-token', WHATSAPP_PHONE_NUMBER_ID: '1234567890' });
+});

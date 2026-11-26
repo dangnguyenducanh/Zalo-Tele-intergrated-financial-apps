@@ -11,7 +11,7 @@ Target: **0 VND/month**. Web and API on Vercel Hobby, data on an Atlas free clus
 | **Cloudflare quick tunnel** (`cloudflared tunnel --url …`) | Public HTTPS URL to a local port, no account | Random `*.trycloudflare.com` URL that **changes on every restart**; meant for testing and demos. A named tunnel (free Cloudflare account + own domain) gives a stable URL. Used for KIE today and, planned, for the agent service (§6.13) |
 | **Telegram Bot API** | Free | Webhook needs HTTPS; bot file downloads ≤ 20 MB |
 | **Zalo Bot Platform** (Basic plan) | Free | Up to **3 bots**, each bot talks to at most **50 users**, **3,000 messages/month**; webhook needs HTTPS; messages ≤ 2000 chars; no buttons |
-| **WhatsApp Cloud API** (Meta), *planned, §2.10* | Messages from users; the bot's replies up to **1,000 a month** per business number (figures from §2.10.1) | Replies past that are billed per message, so a payment method is needed by then; the bot may reply only within **24 h** of the user's last message; up to 3 reply buttons; long replies split at 4096 chars (§2.10.4); webhook needs HTTPS |
+| **WhatsApp Cloud API** (Meta), §2.10 | Messages from users; the bot's replies up to **1,000 a month** per business number (figures from §2.10.1) | Replies past that are billed per message, so a payment method is needed by then; the bot may reply only within **24 h** of the user's last message; up to 3 reply buttons; long replies split at 4096 chars (§2.10.4); webhook needs HTTPS |
 | **Vercel Cron Jobs** (Hobby), *planned, §2.11* | Scheduled `GET` calls to our own function | Once a day at most, fired at any time within the scheduled hour, on **production deployments only**, no retry (§2.11.2) |
 | **GPU host** (our own machine), *planned, §2.11* | vLLM serving Qwen3.5-2B (Apache-2.0) and the agent service with bge-m3; weights downloaded once from Hugging Face | One RTX 5880 Ada (48 GB) shared with other services that already use about 30 GB: vLLM gets `--gpu-memory-utilization 0.25` (≈ 12 GB: 4.5 GB of weights + KV cache), bge-m3 ≈ 2.3 GB. At most **8** requests in the model at once and **16** queued; beyond that `AGENT_BUSY` (§6.13) |
 | **Gmail SMTP**, *planned, §2.12* | A Google account with an app password | About **500 mails a day**; too many bounces or mails to fake addresses make Google stop the account sending for up to 24 h (§2.12.1). Vercel blocks only port 25, so port 465 works |
@@ -88,7 +88,7 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | §6.4 |
 | `ZALO_BOT_TOKEN`, `ZALO_WEBHOOK_SECRET`, `ZALO_BOT_URL` | §6.5 |
 | `WHATSAPP_NUMBER` | the WhatsApp bot's number, international format, digits only, no leading 0 (e.g. `849…`); optional: without it the link card has no WhatsApp button (§6.12) |
-| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` *(planned, §2.10)* | §6.12 |
+| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | §6.12; all four are needed, or the WhatsApp webhook answers 503 and the link card hides WhatsApp |
 | `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS`, `CRON_SECRET` *(planned, §2.11)* | §6.13 (`AGENT_URL` is pushed from `AGENT_PUBLIC_URL`, like `KIE_URL`) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` *(planned, §2.12)* | §6.14 |
 | `KIE_URL` | the value of `KIE_PUBLIC_URL` (§6.6); if that is empty, a non-local `KIE_URL` is pushed as is |
@@ -96,7 +96,7 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 
 Kept local and never pushed: `VERCEL_*`, `SEED_*`, `TEST_USER_*`, `PROD_URL`, `STAGING_URL`, `PORT`, `VITE_PORT`, `WT_SLOT`, the local `APP_URL`, `MONGODB_DB` (replaced by the per-target values above) and `KIE_URL`, `KIE_PUBLIC_URL` (`KIE_PUBLIC_URL` is pushed as `KIE_URL`). Planned (§2.11): `AGENT_URL` and `AGENT_PUBLIC_URL` the same way (`AGENT_PUBLIC_URL` is pushed as `AGENT_URL`). Empty values and `.env.example` placeholders are skipped. Seeding runs locally (§6.7).
 
-The bot variables are the same in both projects. A bot has one webhook, and both point at production (§6.4). The planned WhatsApp bot works the same way: its callback URL is set once per Meta app (§6.12).
+The bot variables are the same in both projects. A bot has one webhook, and both point at production (§6.4). The WhatsApp bot works the same way: its callback URL is set once per Meta app (§6.12).
 
 **Deploy** (staging first):
 
@@ -188,11 +188,11 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 - [ ] Light/dark and vi/en switch on login and in the app bar
 - [ ] `.env` not in git (`git ls-files | grep -E '(^|/)\.env'` shows only `.env.example`)
 - [ ] Real chats after a deploy: `node tools/bot-e2e/bot-e2e.mjs` steps pass (`--target prod` by default; see [docs/testing/bot-e2e.md](testing/bot-e2e.md))
-- [ ] *(Planned, §2.10)* WhatsApp: Meta's **Configuration** panel shows the callback URL saved and `messages` subscribed; **Open WhatsApp** on the link card → Send → "Linked ✓" within 5 s; `phở 45k` → ✅ → saved
+- [ ] *(After the Meta setup, §6.12)* WhatsApp: Meta's **Configuration** panel shows the callback URL saved and `messages` subscribed; **Open WhatsApp** on the link card → Send → "Linked ✓" within 5 s; `phở 45k` → ✅ → saved
 - [ ] Zalo: **Copy & open Zalo** opens the bot with `/link CODE` on the clipboard; paste + send → "Linked ✓"
-- [ ] *(Planned, §2.10)* An unlinked chat gets a claim link on the production `APP_URL` (`…/link?t=…`); Confirm links it and the chat gets the success message
+- [ ] An unlinked chat gets a claim link on the production `APP_URL` (`…/link?t=…`); Confirm links it and the chat gets the success message
 - [ ] The link card shows only the apps whose settings were pushed
-- [ ] *(Planned, §2.10)* The `/link` confirm screen shows the warning ("Only confirm if you just messaged the bot yourself…"); after Confirm the Bot inbox shows "New chat linked from a chat link: … Not you? [Unlink]", and dismissing it keeps it gone after a reload
+- [ ] The `/link` confirm screen shows the warning ("Only confirm if you just messaged the bot yourself…"); after Confirm the Bot inbox shows "New chat linked from a chat link: … Not you? [Unlink]", and dismissing it keeps it gone after a reload
 - [ ] *(Planned, §2.11)* Agent service: the `tunnel` container is up and `AGENT_PUBLIC_URL` is current (the KIE lesson: a dead tunnel silently broke receipts); `https://<agent tunnel>/health` → `vllm: ok`; `nvidia-smi` shows GPU memory headroom; one receipt is read in under 10 s (§6.13)
 - [ ] *(Planned, §2.11)* With the admin runtime switch **off**, ask "tháng này ăn uống hết bao nhiêu?" in the drawer and on Telegram → the help text and the plain commands; switch it **on** (no redeploy) → an exact answer with its sources line; "tháng 10 thu bao nhiêu" in QuickAdd → nothing saved, the question chip shows
 - [ ] *(Planned, §2.11)* A note no keyword matches (e.g. `quà sinh nhật 200k`) lands in Khác/Other → a category suggestion follows the draft within 3 s
@@ -200,7 +200,7 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 - [ ] *(Planned, §2.11)* Vercel → the production project → **Cron Jobs** lists `/api/cron/daily`
 - [ ] *(Planned, §2.11)* Stop the agent service (`docker compose -p sochitieu-agent stop agent`) → a question gets the help text, a photo still becomes a draft through KIE (or the bot asks for the amount); start it again
 - [ ] *(Planned, §2.12)* Register a new address → the code arrives within about 15 s (check spam) → entering it lands on the Dashboard; **Forgot password?** → code → new password → the old one fails
-- [ ] *(Planned, §2.10)* WhatsApp: the linked chat shows the profile name, and the test phone's number appears nowhere in the app (Bot inbox, Transactions, Admin) or in the API responses in DevTools
+- [ ] *(After the Meta setup, §6.12)* WhatsApp: the linked chat shows the profile name, and the test phone's number appears nowhere in the app (Bot inbox, Transactions, Admin) or in the API responses in DevTools
 
 ## 6.10 CI
 
@@ -224,9 +224,11 @@ CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not d
 - KIE: [Document-Intelligence-KIE](https://github.com/NguyenVanVuongDev/Document-Intelligence-KIE) (`README.md`, `src/api/main.py`, `Dockerfile`)
 - Hugging Face: [Spaces overview](https://huggingface.co/docs/hub/en/spaces-overview), [2026 community thread on free CPU Spaces](https://discuss.huggingface.co/t/official-community-complaint-revert-free-cpu-basic-spaces-and-remove-anti-developer-sdk-restrictions/177703)
 
-## 6.12 WhatsApp Cloud API (Meta) setup (planned, §2.10)
+## 6.12 WhatsApp Cloud API (Meta) setup (§2.10)
 
-> **Planned (§2.10), not built yet.** Today there is no WhatsApp bot: `server/src/routes/webhooks.js` has only `/telegram` and `/zalo`, `server/src/config/env.js` has only `WHATSAPP_NUMBER` (the link card's `wa.me` link, card T32), and `setWebhooks.js` knows only Telegram and Zalo. Leave `WHATSAPP_NUMBER` unset until the adapter is live, so the card does not offer a bot that cannot answer. Do these steps when the WhatsApp adapter (§2.10.4) is merged. The bot talks to Meta's WhatsApp Cloud API directly, with no provider in between. Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge.
+> **The adapter is built (card T34, #74); the Meta side is yours.** `server/src/bot/whatsapp.js` and the route `/api/webhooks/whatsapp` are in the code, and nothing was ever sent to Meta by the build: its tests stub the Graph API. Until you have done the steps below the app deploys and works with WhatsApp off: with any of the four webhook settings unset, `GET` and `POST /api/webhooks/whatsapp` answer 503 and the link card hides WhatsApp, even when `WHATSAPP_NUMBER` is set. Do the steps in this order, once. The bot talks to Meta's WhatsApp Cloud API directly, with no provider in between.
+
+**In short:** (1) create the Meta app and the business number (Meta's side, steps 1–4); (2) `tools/set-secret.sh` the six values and redeploy; (3) register the number; (4) enter the callback URL and verify token in Meta's dashboard and subscribe to `messages`; (5) send `phở 45k` from a phone.
 
 **On Meta's side** (once; §2.10.1 lists what the owner needs):
 
@@ -254,11 +256,11 @@ CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not d
 tools/set-secret.sh WHATSAPP_ACCESS_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMBER ZALO_BOT_URL
 ```
 
-It saves them in `server/.env` and pushes them to **both** Vercel projects. The scripts don't change for this: none of the six is on the local-only list in `tools/vercel-env-push.sh`, so they are pushed as typed, like the Telegram and Zalo keys. If a push fails, repeat it with `tools/vercel-env-push.sh production WHATSAPP_ACCESS_TOKEN …` (and `staging`). Then **redeploy** (`tools/deploy.sh production`): Meta's setup check below needs `WHATSAPP_VERIFY_TOKEN` live. The build PRs also add the names, without values, to `.env.example`: T32 (#72) `WHATSAPP_NUMBER` and `ZALO_BOT_URL`, T34 (#74) the other four.
+It saves them in `server/.env` and pushes them to **both** Vercel projects. The scripts don't change for this: none of the six is on the local-only list in `tools/vercel-env-push.sh`, so they are pushed as typed, like the Telegram and Zalo keys. If a push fails, repeat it with `tools/vercel-env-push.sh production WHATSAPP_ACCESS_TOKEN …` (and `staging`). Then **redeploy** (`tools/deploy.sh production`): Meta's setup check below needs `WHATSAPP_VERIFY_TOKEN` live. `.env.example` lists the six names without values.
 
 **Register the number and the webhook** (after that deploy; production URL, as in §6.4):
 
-1. Register the number for the Cloud API, once, with a 6-digit two-step verification PIN you choose (keep it: Meta asks for it to change or remove the number). `<version>` is the Graph API version pinned in the adapter (§2.10.4, chosen at build time). Load the two keys from `server/.env` first, and pass the token through stdin as in §6.4: `-H @-` reads the `Authorization` header from stdin, so the token never appears in curl's arguments (visible in `ps`):
+1. Register the number for the Cloud API, once, with a 6-digit two-step verification PIN you choose (keep it: Meta asks for it to change or remove the number). `<version>` is the Graph API version pinned in the adapter: `v26.0` (`GRAPH_VERSION` in `server/src/bot/whatsapp.js`, §2.10.4; Meta's changelog lists it as supported until July 2028). Load the two keys from `server/.env` first, and pass the token through stdin as in §6.4: `-H @-` reads the `Authorization` header from stdin, so the token never appears in curl's arguments (visible in `ps`):
 
 ```bash
 ( . <(grep -E '^(WHATSAPP_ACCESS_TOKEN|WHATSAPP_PHONE_NUMBER_ID)=' server/.env)
@@ -273,12 +275,21 @@ It saves them in `server/.env` and pushes them to **both** Vercel projects. The 
 
 A Meta app has one callback URL, so, like the Telegram and Zalo bots, the WhatsApp bot points at production only.
 
-`setWebhooks.js` (§6.4) gains a `whatsapp` entry that is **skipped** when its settings are missing (§2.10.5). What it does when they are set is **left to the builder**: Meta keeps the callback URL on the app, and a script can set it only through the Graph API's app subscriptions with an app token, which needs the app ID. The app ID is not one of the six variables. Until the builder decides, steps 2–3 above are the way.
+`setWebhooks.js` (§6.4) has a `whatsapp` entry. With the four settings present it calls nothing and prints `whatsapp: manual: …` with the callback URL to enter: Meta keeps the callback URL on the app, and a script could set it only through the Graph API's app subscriptions with an app token, which needs the app ID, and the app ID is not one of the six variables. So steps 2–3 above are the way. Without the settings it prints `whatsapp: skipped: …`, as it does for Telegram and Zalo.
+
+**If something fails** (the Vercel logs show the status of every call):
+
+- **Verify and save** is refused: a `503` on the `GET` means one of the four settings is missing in that Vercel project or the deploy is older than the push (redeploy); a `403` means the **Verify token** typed in Meta differs from `WHATSAPP_VERIFY_TOKEN`.
+- Meta's dashboard test works but your own messages don't arrive: the app is not subscribed to the WhatsApp Business account (`subscribed_apps`, step 4 above). A `401` on the `POST` has two causes, and the log tells them apart: each refused `POST` writes one warning with its request id, and never the signature or any secret.
+  - `<request id> whatsapp webhook: signature mismatch`: the body arrived but its signature is wrong or missing. `WHATSAPP_APP_SECRET` is not the secret of the app that owns the webhook (**App settings → Basic**, the same app as the number), or something other than Meta is calling.
+  - `<request id> whatsapp webhook: no raw body (content-type …)`: the server kept no raw bytes to check the signature against, because the request was not JSON (the content type is in the line) or the platform handed Express a body it had already read ([04-backend.md §4.1](04-backend.md)). The app secret is not the problem; tests cannot show this one, so tell the developer, with the request id from the log.
+- The bot is silent and the log says `WhatsApp send failed: …`: the access token is expired or lacks `whatsapp_business_messaging` (code 190 or 10), or the 24-hour window was closed (code 131047): only reply to a message you just sent. Nothing in the log contains the token.
+- A user who changed their phone number may get a new BSUID: the bot then sees a new, unlinked chat and sends the claim link, and the user links again.
 
 **When settings are missing** (§2.10.2, §2.10.5):
 
 - The webhook-registration script skips that platform and prints `skipped: …`, as it does for Telegram and Zalo today.
-- The link card leaves the app out of the picker: `POST /api/chat-links/code` returns `null` for its entry in `links`. WhatsApp's link is built from `WHATSAPP_NUMBER` and Zalo's is `ZALO_BOT_URL`, so without them the button is hidden (§2.10.2). WhatsApp is also hidden while any of the four webhook settings in the next point is unset (card T34, #74). Telegram's button follows the same rule with `TELEGRAM_BOT_USERNAME`. The card's side of this rule is built (card T32).
+- The link card leaves the app out of the picker: `POST /api/chat-links/code` returns `null` for its entry in `links`. WhatsApp's link is built from `WHATSAPP_NUMBER` and Zalo's is `ZALO_BOT_URL`, so without them the button is hidden (§2.10.2). WhatsApp is also hidden while any of the four webhook settings in the next point is unset (card T34, #74; `createLinkCode` checks `whatsappConfigured()`). Telegram's button follows the same rule with `TELEGRAM_BOT_USERNAME`. The card's side of this rule is built (card T32).
 - If any of `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /api/webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing (card T34, #74; [04-backend.md §4.2](04-backend.md#42-configuration)). So staging deploys and works without the WhatsApp settings, with WhatsApp hidden and its webhook off.
 
 ## 6.13 Agent service and local model (planned, §2.11)
