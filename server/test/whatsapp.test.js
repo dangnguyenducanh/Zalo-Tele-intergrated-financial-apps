@@ -193,6 +193,7 @@ test('TC-F8-26 the setup GET answers Meta\'s challenge as plain text only for th
 });
 
 test('TC-F8-27 a POST without a valid X-Hub-Signature-256 gets 401; nothing is processed, stored or sent', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {}); // each refusal logs its cause (TC-F8-42)
   await linkedUser();
   graph.length = 0;
   const body = textMessage('grab 32k');
@@ -223,7 +224,70 @@ test('TC-F8-27 a POST without a valid X-Hub-Signature-256 gets 401; nothing is p
   expect(graph).toHaveLength(1);
 });
 
+test('TC-F8-42 a refused POST says why in the log, once per cause, and never prints the header or a secret', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const raw = JSON.stringify(textMessage('grab 32k'));
+  const header = sign(raw);
+
+  // No raw body: the parser did not keep one (not JSON, or no body), whatever the signature says.
+  const notJson = await request(app).post('/api/webhooks/whatsapp').set('Content-Type', 'text/plain').set('X-Hub-Signature-256', header).send(raw);
+  const noBody = await request(app).post('/api/webhooks/whatsapp').set('X-Hub-Signature-256', header);
+  expect([notJson.status, noBody.status]).toEqual([401, 401]);
+  expect(warn.mock.calls).toEqual([
+    [`${notJson.headers['x-request-id']} whatsapp webhook: no raw body (content-type text/plain)`],
+    [`${noBody.headers['x-request-id']} whatsapp webhook: no raw body (content-type none)`],
+  ]);
+  warn.mockClear();
+
+  // A raw body whose signature is missing or wrong.
+  const wrong = [null, `sha256=${'0'.repeat(64)}`, sign(raw, 'another-secret')];
+  const answers = [];
+  for (const signature of wrong) answers.push(await deliver(raw, { signature }));
+  expect(answers.map((res) => res.status)).toEqual([401, 401, 401]);
+  expect(warn.mock.calls).toEqual(answers.map((res) => [`${res.headers['x-request-id']} whatsapp webhook: signature mismatch`]));
+
+  // Nothing printed holds a signature, a header value or a setting.
+  const printed = JSON.stringify(warn.mock.calls);
+  for (const secret of [header, ...wrong.filter(Boolean), APP_SECRET, VERIFY_TOKEN, ACCESS_TOKEN]) expect(printed).not.toContain(secret);
+
+  // A good signature says nothing.
+  warn.mockClear();
+  expect((await deliver(raw)).status).toBe(200);
+  expect(warn).not.toHaveBeenCalled();
+});
+
+test('TC-F8-43 the request log line of the setup GET has the path only: no query, no verify token', async () => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+  errorLog.mockImplementation(() => {}); // the error handler logs a 5xx too, with the URL
+  const url = (token) => `/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=${token}&hub.challenge=1158201444`;
+  const savedEnv = env.NODE_ENV;
+  const savedToken = env.WHATSAPP_VERIFY_TOKEN;
+  env.NODE_ENV = 'development'; // the request log is off under NODE_ENV=test
+  const statuses = [];
+  try {
+    statuses.push((await request(app).get(url(VERIFY_TOKEN))).status); // right token
+    statuses.push((await request(app).get(url(`${VERIFY_TOKEN}x`))).status); // a mistyped token is as secret as the real one
+    env.WHATSAPP_VERIFY_TOKEN = undefined; // the webhook is off: the 5xx path logs the URL too
+    statuses.push((await request(app).get(url(VERIFY_TOKEN))).status);
+    await vi.waitFor(() => expect(info).toHaveBeenCalledTimes(3)); // each line is written when its response is done
+  } finally {
+    env.NODE_ENV = savedEnv;
+    env.WHATSAPP_VERIFY_TOKEN = savedToken;
+  }
+  expect(statuses).toEqual([200, 403, 503]);
+  expect(info.mock.calls.map(([line]) => line.replace(/^[0-9a-f-]{36} /, '').replace(/ \d+ms$/, ''))).toEqual([
+    'GET /api/webhooks/whatsapp 200',
+    'GET /api/webhooks/whatsapp 403',
+    'GET /api/webhooks/whatsapp 503',
+  ]);
+  const printed = JSON.stringify([info.mock.calls, errorLog.mock.calls.map(([line]) => line)]);
+  expect(errorLog).toHaveBeenCalledTimes(1);
+  for (const leak of [VERIFY_TOKEN, 'hub.', '?', '1158201444']) expect(printed).not.toContain(leak);
+  errorLog.mockClear();
+});
+
 test('TC-F8-28 the signature covers the raw bytes Meta sent: extra spaces, \\u escapes and a Vietnamese profile name', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {}); // the tampered body's refusal logs its cause (TC-F8-42)
   const { accessToken } = await registerUser();
   const { body } = await request(app).post('/api/chat-links/code').set('Authorization', `Bearer ${accessToken}`);
   const name = 'Nguyễn Văn Ánh';
@@ -597,7 +661,7 @@ test('TC-F8-38 with any of the four WhatsApp settings unset, both webhook calls 
   expect(await Transaction.countDocuments()).toBe(0);
 });
 
-test('TC-F8-39 audio, sticker, location and unsupported messages get the help text; a group message, a reaction, an unknown button and a message with no id are ignored', async () => {
+test('TC-F8-39 audio, sticker, location and unsupported messages get the help text; a group message, a reaction, a system note, an unknown button and a message with no id are ignored', async () => {
   await linkedUser();
   graph.length = 0;
 
@@ -617,7 +681,8 @@ test('TC-F8-39 audio, sticker, location and unsupported messages get the help te
   const noId = textMessage('grab 32k');
   delete noId.entry[0].changes[0].value.messages[0].id;
   const reaction = incoming('sticker', { type: 'reaction', sticker: undefined, reaction: { message_id: 'wamid.sent1', emoji: '👍' } }); // an emoji on our message
-  for (const body of [group, noId, reaction, pressMessage('zz:nothing'), pressMessage('c:not-a-draft-id'), pressMessage(undefined)]) {
+  const system = incoming('sticker', { type: 'system', sticker: undefined, system: { type: 'user_changed_user_id', body: 'The user changed their username.' } }); // Meta's note that the BSUID changed
+  for (const body of [group, noId, reaction, system, pressMessage('zz:nothing'), pressMessage('c:not-a-draft-id'), pressMessage(undefined)]) {
     expect(await send(body)).toEqual([]);
   }
   expect(await Transaction.countDocuments()).toBe(0);

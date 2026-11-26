@@ -48,6 +48,9 @@ function requireWhatsApp() {
 }
 
 router.get('/whatsapp', (req, res) => {
+  // The verify token is in the query, and the request log (requestId.js) and the 5xx log (error.js) print req.originalUrl
+  // when the response is done, so cut the query off first: a mistyped token is as secret as the real one.
+  req.originalUrl = req.baseUrl + req.path;
   requireWhatsApp();
   const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query; // a repeated parameter is an array
   if (mode !== 'subscribe' || typeof token !== 'string' || typeof challenge !== 'string' || !sameSecret(token, env.WHATSAPP_VERIFY_TOKEN)) {
@@ -59,7 +62,11 @@ router.get('/whatsapp', (req, res) => {
 router.post('/whatsapp', (req, res) => {
   requireWhatsApp();
   const signed = req.rawBody && `sha256=${createHmac('sha256', env.WHATSAPP_APP_SECRET).update(req.rawBody).digest('hex')}`;
-  if (!sameSecret(req.get('X-Hub-Signature-256'), signed)) throw new AppError(401, 'UNAUTHENTICATED', 'Bad webhook signature');
+  if (!sameSecret(req.get('X-Hub-Signature-256'), signed)) {
+    // Both causes answer 401, so say which one in the log (docs/06 "If something fails"). Never print the header or a secret.
+    console.warn(signed ? `${req.id} whatsapp webhook: signature mismatch` : `${req.id} whatsapp webhook: no raw body (content-type ${req.get('Content-Type') ?? 'none'})`);
+    throw new AppError(401, 'UNAUTHENTICATED', 'Bad webhook signature');
+  }
   res.sendStatus(200); // Meta retries anything that is not a 200, so status updates get one too
   inBackground('whatsapp', handleWhatsAppWebhook(req.body));
 });
