@@ -101,6 +101,7 @@ export async function handleWhatsAppWebhook(body) {
 
 async function handleOne(value, message) {
   if (typeof message?.id !== 'string' || message.group_id) return; // groups: other people would see the money
+  if (message.type === 'reaction') return; // an emoji on one of our messages is not something to answer
   const userId = message.from_user_id;
   if (typeof userId !== 'string' || !userId) {
     console.warn(`whatsapp message ${message.id} ignored: no business-scoped user ID`); // the phone number is never a key

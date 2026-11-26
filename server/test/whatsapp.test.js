@@ -597,7 +597,7 @@ test('TC-F8-38 with any of the four WhatsApp settings unset, both webhook calls 
   expect(await Transaction.countDocuments()).toBe(0);
 });
 
-test('TC-F8-39 audio, sticker, location and unsupported messages get the help text; a group message, an unknown button and a message with no id are ignored', async () => {
+test('TC-F8-39 audio, sticker, location and unsupported messages get the help text; a group message, a reaction, an unknown button and a message with no id are ignored', async () => {
   await linkedUser();
   graph.length = 0;
 
@@ -616,7 +616,8 @@ test('TC-F8-39 audio, sticker, location and unsupported messages get the help te
   group.entry[0].changes[0].value.messages[0].group_id = 'GROUP.1234567890'; // other people would see the money
   const noId = textMessage('grab 32k');
   delete noId.entry[0].changes[0].value.messages[0].id;
-  for (const body of [group, noId, pressMessage('zz:nothing'), pressMessage('c:not-a-draft-id'), pressMessage(undefined)]) {
+  const reaction = incoming('sticker', { type: 'reaction', sticker: undefined, reaction: { message_id: 'wamid.sent1', emoji: '👍' } }); // an emoji on our message
+  for (const body of [group, noId, reaction, pressMessage('zz:nothing'), pressMessage('c:not-a-draft-id'), pressMessage(undefined)]) {
     expect(await send(body)).toEqual([]);
   }
   expect(await Transaction.countDocuments()).toBe(0);
