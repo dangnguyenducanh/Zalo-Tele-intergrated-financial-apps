@@ -8,6 +8,7 @@ import { useGetCategoriesQuery } from '@/features/categories/categoriesApi';
 import { formatMoney } from '@/i18n/format';
 import { moneySx } from '@/theme/theme';
 import { sliceColors } from './sliceColors';
+import { sameDays, sumDays } from './sameDays';
 import type { CategoryTotal, DayTotal } from './statsApi';
 import { weekTotals, type Flow } from './weekly';
 
@@ -64,16 +65,19 @@ function useNoTabStops<T extends HTMLElement>() {
 const Dot = ({ color }: { color: string }) => <Box aria-hidden sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />;
 
 // This month against last month, in four weekly columns each (the student asked for columns here, T18).
-// The switch picks spending or income; the big figure and the sentence underneath follow it.
-export function MonthCompare({ days, previousDays }: { days: DayTotal[]; previousDays: DayTotal[] }) {
+// The switch picks spending or income; the big figure and the sentence underneath follow it. The columns show both whole
+// months; the figure and the sentence compare the same days (sameDays): the current month up to `today` against the
+// same days of the month before, any other month whole against whole.
+export function MonthCompare({ month, today, days, previousDays }: { month: string; today: string; days: DayTotal[]; previousDays: DayTotal[] }) {
   const { t } = useTranslation('dashboard');
   const language = useAppSelector((s) => s.ui.language);
   const { palette } = useTheme();
   const [flow, setFlow] = useState<Flow>('expense');
   const now = weekTotals(days, flow);
   const before = weekTotals(previousDays, flow);
-  const total = now.reduce((a, b) => a + b, 0);
-  const totalBefore = before.reduce((a, b) => a + b, 0);
+  const range = sameDays(month, today);
+  const total = sumDays(days, flow, range.current);
+  const totalBefore = sumDays(previousDays, flow, range.previous);
   const chartBox = useNoTabStops<HTMLDivElement>();
   const color = flow === 'expense' ? palette.spend : palette.income;
   // Last month in a neutral slate that keeps 3:1 against the card (WCAG 1.4.11), this month in its own colour.
