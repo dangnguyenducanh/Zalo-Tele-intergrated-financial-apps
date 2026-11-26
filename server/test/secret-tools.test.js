@@ -51,6 +51,9 @@ beforeEach(() => {
   writeFileSync(log, '');
   const top = spawnSync('git', ['init', '-q'], { cwd: repo });
   expect(top.status).toBe(0);
+  // The fake must be the npx bash finds (same environment as run()): on a /tmp mounted noexec bash would skip it and run the real npx.
+  const found = spawnSync('bash', ['-c', 'command -v npx'], { env: { PATH: `${join(repo, 'bin')}:${process.env.PATH}`, HOME: repo }, encoding: 'utf8' });
+  expect(found.stdout.trim()).toBe(join(repo, 'bin', 'npx'));
 });
 
 afterEach(() => rmSync(repo, { recursive: true, force: true }));
@@ -75,7 +78,7 @@ const rm = (key) => `-y vercel@1.2.3 env rm ${key} --environment production --co
 const withoutLines = (...prefixes) => ENV_FILE.split('\n').filter((line) => !prefixes.some((p) => line.startsWith(`${p}=`))).join('\n');
 
 describe('--remove', () => {
-  test('TC-NF-21 set-secret.sh --remove deletes only the named lines, removes the keys from both Vercel projects (also one that is not in the file), prints no value', () => {
+  test('TC-NF-22 set-secret.sh --remove deletes only the named lines, removes the keys from both Vercel projects (also one that is not in the file), prints no value', () => {
     const r = run('set-secret.sh', ['--remove', 'GMAIL_USER', 'GMAIL_APP_PASSWORD']);
 
     expect(r.status, r.out).toBe(0);
@@ -92,7 +95,7 @@ describe('--remove', () => {
     expect(r.out).toMatch(/[Rr]edeploy/);
   });
 
-  test('TC-NF-21 a key that is in neither the file nor Vercel is still sent to both projects, and the file is untouched', () => {
+  test('TC-NF-22 a key that is in neither the file nor Vercel is still sent to both projects, and the file is untouched', () => {
     const r = run('set-secret.sh', ['--remove', 'GMAIL_APP_PASSWORD']);
 
     expect(r.status, r.out).toBe(0);
@@ -100,7 +103,7 @@ describe('--remove', () => {
     expect(r.calls.map((c) => [c.project, c.args])).toEqual([[STAGING, rm('GMAIL_APP_PASSWORD')], [PROD, rm('GMAIL_APP_PASSWORD')]]);
   });
 
-  test('TC-NF-21 a removal that fails is named by key, with a non-zero exit and the retry command for that project only', () => {
+  test('TC-NF-22 a removal that fails is named by key, with a non-zero exit and the retry command for that project only', () => {
     const r = run('set-secret.sh', ['--remove', 'GMAIL_USER', 'GMAIL_APP_PASSWORD'], { fail: `${STAGING}:GMAIL_USER` });
 
     expect(r.status).toBe(1);
@@ -114,7 +117,17 @@ describe('--remove', () => {
     for (const value of VALUES) expect(r.out).not.toContain(value);
   });
 
-  test('TC-NF-21 vercel-env-push.sh <target> --remove removes the keys from that project only', () => {
+  test('TC-NF-22 a project ID missing from server/.env stops that project only, and the failure says which command to retry', () => {
+    writeFileSync(join(repo, 'server', '.env'), ENV_FILE.replace(/^VERCEL_PROJECT_ID_STAGING=.*\n/m, ''));
+    const r = run('set-secret.sh', ['--remove', 'GMAIL_USER']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('VERCEL_ORG_ID or the staging project ID is missing');
+    expect(r.stderr).toContain('Retry: tools/vercel-env-push.sh staging --remove GMAIL_USER'); // the line "Run the Retry command(s) above" points at
+    expect(r.calls.map((c) => [c.project, c.args])).toEqual([[PROD, rm('GMAIL_USER')]]); // production was still done
+  });
+
+  test('TC-NF-22 vercel-env-push.sh <target> --remove removes the keys from that project only', () => {
     const r = run('vercel-env-push.sh', ['production', '--remove', 'GMAIL_USER', 'GMAIL_APP_PASSWORD']);
 
     expect(r.status, r.out).toBe(0);
@@ -123,7 +136,7 @@ describe('--remove', () => {
     expect(r.out).not.toMatch(/made-up/);
   });
 
-  test('TC-NF-21 a bad key name, no key, or an unknown target stops before anything is deleted or sent', () => {
+  test('TC-NF-22 a bad key name, no key, or an unknown target stops before anything is deleted or sent', () => {
     for (const [script, args] of [
       ['set-secret.sh', ['--remove', 'GMAIL_USER', 'gmail_user']],
       ['set-secret.sh', ['--remove', 'GMAIL_USER;ls']],
@@ -139,7 +152,7 @@ describe('--remove', () => {
     }
   });
 
-  test('TC-NF-21 both tools answer --help with their usage, including --remove, and change nothing', () => {
+  test('TC-NF-22 both tools answer --help with their usage, including --remove, and change nothing', () => {
     for (const script of ['set-secret.sh', 'vercel-env-push.sh']) {
       const r = run(script, ['--help']);
       expect(r.status, script).toBe(0);
@@ -152,7 +165,7 @@ describe('--remove', () => {
 });
 
 describe('the normal push', () => {
-  test('TC-NF-22 vercel-env-push.sh with no key still pushes the GMAIL_* keys that are in the file, value on stdin and never printed', () => {
+  test('TC-NF-23 vercel-env-push.sh with no key still pushes the GMAIL_* keys that are in the file, value on stdin and never printed', () => {
     const file = `${ENV_FILE}GMAIL_APP_PASSWORD=made-up-app-password\n`;
     writeFileSync(join(repo, 'server', '.env'), file);
 
@@ -167,7 +180,7 @@ describe('the normal push', () => {
     for (const value of [...VALUES, 'made-up-app-password']) expect(r.out).not.toContain(value);
   });
 
-  test('TC-NF-22 set-secret.sh GMAIL_USER (no --remove) saves the pasted value and pushes it to both projects as before', () => {
+  test('TC-NF-23 set-secret.sh GMAIL_USER (no --remove) saves the pasted value and pushes it to both projects as before', () => {
     const r = run('set-secret.sh', ['GMAIL_USER'], { input: 'new-sender@example.com\n' });
 
     expect(r.status, r.out).toBe(0);

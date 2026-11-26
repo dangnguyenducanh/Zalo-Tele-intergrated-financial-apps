@@ -49,7 +49,7 @@ case "$target" in
 esac
 
 if [ "$remove" = 1 ]; then
-  [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ] || { echo "VERCEL_ORG_ID or the $target project ID is missing from server/.env" >&2; exit 1; }
+  [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ] || { echo "VERCEL_ORG_ID or the $target project ID is missing from server/.env. Add it, then Retry: tools/vercel-env-push.sh $target --remove $*" >&2; exit 1; }
   echo "Removing env from Vercel ($target):"
   failed_keys=()
   for key in "$@"; do
