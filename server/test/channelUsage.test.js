@@ -64,7 +64,7 @@ test('TC-F14-19 recordSend adds 1 to one (platform, month) row, atomically, in t
   expect(await ChannelUsage.find().lean()).toMatchObject([{ platform: 'zalo', month: '2026-11', sent: 25 }]);
   await expect(ChannelUsage.create({ platform: 'zalo', month: '2026-11', sent: 1 })).rejects.toMatchObject({ code: 11000 });
 
-  // Sun 30/11 23:59:59 +07 is still November; Mon 01/12 00:00:00 +07 starts December, with its own count.
+  // Mon 30/11 23:59:59 +07 is still November; Tue 01/12 00:00:00 +07 starts December, with its own count.
   await recordSend('zalo', new Date('2026-11-30T16:59:59Z'));
   expect(await sentIn('2026-11')).toBe(26);
   await recordSend('zalo', new Date('2026-11-30T17:00:00Z'));
