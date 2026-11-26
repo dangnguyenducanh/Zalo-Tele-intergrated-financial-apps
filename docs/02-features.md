@@ -104,6 +104,8 @@ Input is one line per transaction (up to 10 lines per message). Text is lower-ca
 | `150.000`, `150,000`, `150000`, `150000đ`, `150000 vnd` | 150,000 |
 | bare number below 1,000, e.g. `phở 45` | 45,000 *(proposed: treated as thousands; the confirm message shows the value, so a wrong guess is caught)* |
 
+**A year or month is not the amount.** A number written right after `năm` / `nam` that is a 4-digit year (1900–2099), or right after `tháng` / `thang` that is 1–12, is a date and never the amount: `thuê nhà năm 2026 36tr` → 36,000,000 and `ăn tối tháng 10 50` → 50,000 (the bare `50` is read as thousands). The words stay in the note. The number is still money when it carries a money unit (`tháng 10k`, `tháng 10 nghìn`) or thousands separators (`năm 2.026`). A line whose only number is such a date (`tiền nhà tháng 10`, `năm 2025`) has no amount: it is answered like any line with no number and nothing is saved. Every other number after `nam` / `tháng` is read as before, so `cắt tóc nam 50k`, `cắt tóc nam 50000` (`nam` also means "male"), `áo nam 2000k` and `gửi xe tháng 100k` keep their amounts. The flip side: a bare 1900–2099 after `nam` / `năm`, such as `cắt tóc nam 2000`, is read as a year, so that line has no amount; write `2000k` for money.
+
 The amount is rounded to whole đồng and must be from 1 ₫ to 10^13 ₫. A line whose amount is 0 or above that ceiling counts as having no amount. If no line in the message has an amount, the bot replies with help text and examples. Otherwise it saves the lines it can read and names the line numbers it did not record. Lines after the 10th are ignored without a message (the web quick add says so).
 
 **Type:** **income** if the line starts with `+`, or contains an income keyword (`lương`, `thưởng`, `nhận`, `salary`, `bonus`, `received`) or a keyword of an income category. Otherwise it's an **expense**.
@@ -124,6 +126,7 @@ Examples:
 | `grab 32k hôm qua mm` | expense · 32,000 · Đi lại · MoMo (if a wallet has alias `mm`) · yesterday · "grab" |
 | `+lương 15tr` | income · 15,000,000 · Lương · default wallet · now · "lương" |
 | `coffee 30k` | expense · 30,000 · Ăn uống (English keyword) · now · "coffee" |
+| `thuê nhà năm 2026 36tr` | expense · 36,000,000 · Nhà ở · default wallet · now · "thuê nhà năm 2026" (the year is a date, not 2,026) |
 
 ## 2.6 Receipt photos (KIE, then local Qwen)
 
