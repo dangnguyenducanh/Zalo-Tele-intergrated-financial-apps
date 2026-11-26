@@ -206,6 +206,8 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 
 `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` (Node 22): `npm ci`, `npm run typecheck` (client), `npm run lint` (ESLint), `npm test` (Vitest, server then client). The real-KIE contract test skips itself when `KIE_URL` doesn't answer `/health`, so it always skips in CI. JUnit results are uploaded as the `test-results` artifact.
 
+The same `ci` job then tests the agent service (T44), after `npm test` on purpose: Python 3.12 (`actions/setup-python`), `pip install -r agent/requirements-dev.txt` (the pinned FastAPI, uvicorn, LangGraph, pymongo and openai, plus httpx and pytest; **never** sentence-transformers or torch), and `npm run test:agent` with `HF_HUB_OFFLINE=1` and no `VLLM_BASE_URL`. The pytest fixture starts the `mongod` binary that mongodb-memory-server downloaded during `npm test` (it asks that package for the path; locally the first run downloads it), on a free port with authentication, so the database-role tests run against a real MongoDB. No GPU, model weights or network service are used, and the tests fail if they try. Its JUnit file is `test-results/agent-pytest.xml`, uploaded as the `agent-test-results` artifact. The required `ci` check covers both. To run it by hand: `python3.12 -m venv agent/.venv && agent/.venv/bin/pip install -r agent/requirements-dev.txt`, then `PATH="$PWD/agent/.venv/bin:$PATH" npm run test:agent`.
+
 CI does **not** run the Playwright e2e suite (`npm run test:e2e`) and does not deploy. Deploys are manual (§6.3), and the real-chat check above is run by hand after one.
 
 ## 6.11 Sources
@@ -281,7 +283,7 @@ A Meta app has one callback URL, so, like the Telegram and Zalo bots, the WhatsA
 
 ## 6.13 Agent service and local model (planned, §2.11)
 
-> **Planned (§2.11), not built yet.** Today there is no agent code: `server/src/config/env.js` has none of these variables, there is no `agent/` folder, `vercel.json` has no `crons`, and there is no `/api/cron/daily` route. Do these steps when the agent service and `services/agent.js` are merged. The design is in [01-architecture.md §1.9](01-architecture.md#19-agent-service-and-local-model-planned-211) and [§2.11.4](02-features.md#2114-local-model-layer-qwen35-2b-on-vllm). Choices marked ⚑ are recommendations.
+> **Planned (§2.11), partly built.** The scaffold of the agent service is built (T44): `agent/` has `/health`, the bearer check, `python -m agent.setup`, the role definition `agent/role.json`, the Dockerfile and `agent/docker-compose.yml` with `agent` and `tunnel`. There is still no question engine, no vLLM service (T63), no `services/agent.js`, none of these variables in `server/src/config/env.js`, no `crons` in `vercel.json` and no `/api/cron/daily` route. Do these steps when the agent service and `services/agent.js` are merged. The design is in [01-architecture.md §1.9](01-architecture.md#19-agent-service-and-local-model-planned-211) and [§2.11.4](02-features.md#2114-local-model-layer-qwen35-2b-on-vllm). Choices marked ⚑ are recommendations.
 
 **What runs where.** Express on Vercel stays the only public API. On the GPU host, one `docker compose` project, `sochitieu-agent`, runs three services:
 
@@ -314,7 +316,9 @@ vllm serve Qwen/Qwen3.5-2B --served-model-name qwen3.5-2b --host 127.0.0.1 --por
 
 ### The compose project (`agent/docker-compose.yml`)
 
-All three services use host networking, so `127.0.0.1` means the host's loopback and no port is published to the network. A sketch for the builder (file layout is theirs):
+**Built (T44):** `agent/docker-compose.yml` runs `agent` and `tunnel` only, both on the host network (so `127.0.0.1` is the host's loopback and no port is published). `agent` is built from `agent/Dockerfile` (Python 3.12.13; `requirements.txt` and `requirements-model.txt`, so sentence-transformers and torch are installed in the image only; the code is copied to `/app/agent`, keeping the `agent.` import path), reads `agent/.env`, mounts `HF_HOME` (compose reads it from `agent/.env`), runs read-only with no capabilities and starts `uvicorn agent.app:create_app --factory` on `127.0.0.1:8310` without an access log. It loads bge-m3 at the `agent/models.lock` hash when it starts, so it refuses to start while that file still holds a placeholder. `tunnel` is `cloudflare/cloudflared:2026.11.2`. The `vllm` service and the agent's `depends_on` it arrive with T63.
+
+The design for all three services, with host networking (a sketch for the builder of T63; file layout is theirs):
 
 ```yaml
 name: sochitieu-agent
@@ -359,16 +363,22 @@ Compose reads `HF_HOME` from `agent/.env` for the volume paths. The `agent` imag
 
 The agent service never uses the app's `finance_app` user. In Atlas → the project → **Database & Network Access**:
 
-1. **Custom Roles → Add New Custom Role**, name `sochitieuAgent`, with these **Collection Actions** on database `finance`:
+1. **Custom Roles → Add New Custom Role**, name `sochitieuAgent`, with these **Collection Actions** on database `finance` (the committed definition is `agent/role.json`; the tests build the role from that file):
 
 | Actions | Collections |
 |---|---|
-| `find` | `users`, `categories`, `wallets`, `transactions`, `budgets` |
+| `find` | `usersForAgent`, `categories`, `wallets`, `transactions`, `budgets` |
 | `find`, `insert`, `update` | `pendingActions` |
 | `find`, `insert`, `update`, `remove` | `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads` |
 
-   No database or global actions. Free clusters support custom roles; a change can take up to 30 s to apply.
-2. ⚑ **Collections and indexes** (the TTL and unique indexes of [03-database.md](03-database.md)) are created once with the app user, by the agent's setup command run with `MONGODB_URI`, so `sochitieu_agent` needs no index or drop rights. The command's name is left to the builder.
+   **Nothing on `users`** (decision D15, default taken 2026-11-25): a role cannot limit the fields of a collection, so `find` on `users` would let the agent read every password hash. `usersForAgent` is a view on `users` that shows only `_id`, `language` and `assistantOn`; step 2 creates it, and the role can list it before it exists. No database or global actions, no index or drop right (D14). Free clusters support custom roles and views; a change can take up to 30 s to apply. For another database (staging, `finance_staging`) repeat the three rows for that database.
+2. **Collections, indexes and the view** (the TTL and unique indexes of [03-database.md](03-database.md) §3.7, and `usersForAgent`) are created with the **app user**, because `sochitieu_agent` has no right to create them (decision D14, default taken 2026-11-25) and the service creates nothing when it starts. From the repository, with Python 3.12 and `pip install -r agent/requirements.txt`, and the app user's string read from `server/.env` without typing it:
+
+```bash
+MONGODB_URI="$(grep -E '^MONGODB_URI=' server/.env | cut -d= -f2-)" MONGODB_DB=finance python -m agent.setup
+```
+
+   It prints `finance: 7 agent collections with their indexes, view usersForAgent`. `MONGODB_DB` is optional when the URI names the database. Running it again is safe, and it is **run again after any card that changes an agent index or the `usersForAgent` view** (such a card says so). `python -m agent.setup --help` shows the usage. Setup stops with "setup needs the app user" if it is given `sochitieu_agent`'s string.
 3. **Database Users → Add New Database User**: `sochitieu_agent`, **Autogenerate Secure Password**, role: only the custom role `sochitieuAgent`. The network access list already allows `0.0.0.0/0` (§6.2).
 4. Its URI, with the database name: `mongodb+srv://sochitieu_agent:<password>@<cluster>.mongodb.net/finance?retryWrites=true&w=majority&appName=sochitieu-agent`. It goes only into `agent/.env` (next step).
 
@@ -385,7 +395,7 @@ Git-ignored, on the GPU host only, never on Vercel. Create it empty with mode 60
 | `EMBED_MODEL` | `BAAI/bge-m3` |
 | `HF_HOME` | the model cache directory on the host, e.g. `/srv/hf-cache` |
 
-⚑ The agent service refuses to start without `AGENT_SECRET` or `MONGODB_URI_AGENT`, so it never runs open.
+The agent service refuses to start without `AGENT_SECRET` or `MONGODB_URI_AGENT` (it exits with a message that names the variable, never its value), so it never runs open. The app user's `MONGODB_URI` is **not** put in this file: it is only for `python -m agent.setup`, which you run elsewhere.
 
 ### Vercel variables (Express)
 
@@ -405,9 +415,9 @@ All optional; a missing one turns its feature off (§2.11.6):
 ### Setup order
 
 1. **GPU check:** `nvidia-smi` on the GPU host shows **≥ 12 GB free**.
-2. **Atlas:** the custom role and the user `sochitieu_agent` (above), then the agent's setup command for collections and indexes.
+2. **Atlas:** the custom role and the user `sochitieu_agent` (above), then `python -m agent.setup` with the app user for the collections, indexes and the `usersForAgent` view.
 3. **`agent/.env`** (above), and the two hashes in `agent/models.lock`.
-4. **Start:** `docker compose -p sochitieu-agent up -d --build` in `agent/`. The first start downloads the models (several minutes). Then `curl -s http://127.0.0.1:8310/health` → `{"vllm":"ok","embedder":"ok",…}`.
+4. **Start:** `docker compose -p sochitieu-agent up -d --build` in `agent/`. The first start downloads the models (several minutes). Then `curl -s http://127.0.0.1:8310/health` → `{"vllm":"ok","embedder":"ok",…}` (until T63 adds vLLM, `vllm` is `"down"`).
 5. **Tunnel URL:** `docker compose -p sochitieu-agent logs tunnel | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1`.
 6. **Save and push** on the machine with `server/.env` (values are asked hidden; paste the URL from step 5 and the `AGENT_SECRET` from `agent/.env`; type `-` to skip one):
 

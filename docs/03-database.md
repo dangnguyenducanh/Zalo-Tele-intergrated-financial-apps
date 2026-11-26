@@ -268,7 +268,7 @@ Not built yet (linking from the chat is, and is described in §3.3). It lists wh
 
 ## 3.7 Assistant and agent features (planned, §2.11)
 
-None of this is built yet. It lists what docs/02 §2.11 adds to §3.3; as each part is built, its change moves into §3.3 and is removed here. The questions, receipt reading and category suggestions run in the **agent service** (Python, FastAPI + LangGraph) on the GPU host, next to vLLM serving Qwen3.5-2B (§2.11.4); the backend side is in [04-backend.md §4.11](04-backend.md). Where a shape is not named in §2.11, this section says so or leaves it to the builder.
+Mostly not built yet. It lists what docs/02 §2.11 adds to §3.3; as each part is built, its change moves into §3.3 and is removed here. **Built by T44 (the agent service scaffold):** the command that creates the agent's collections, their indexes and the `usersForAgent` view (`python -m agent.setup`, below), and the agent's MongoDB role (`agent/role.json`); the rows themselves are written by the cards that follow. The questions, receipt reading and category suggestions run in the **agent service** (Python, FastAPI + LangGraph) on the GPU host, next to vLLM serving Qwen3.5-2B (§2.11.4); the backend side is in [04-backend.md §4.11](04-backend.md). Where a shape is not named in §2.11, this section says so or leaves it to the builder.
 
 Two rules shape every row below:
 - **Writes stay in Express.** The agent service writes only its own collections (`agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`) and inserts proposals into `pendingActions`. Every money write (a confirmed action card, a receipt draft, a category move, an A7 keyword) is done by Express through the same services as the web.
@@ -289,7 +289,11 @@ Two rules shape every row below:
 | `channelUsage` | platform and month | Express | not named in §2.11 | not stated |
 | `appSettings` | — (a single row) | Express (admin) | `_id` only | never |
 
-The agent service creates the indexes of its own collections on start.
+**Who creates them.** Not the agent service: its role has no index, collection or drop right (decision D14, default taken 2026-11-25), and it creates nothing when it starts. `python -m agent.setup`, run with the **app user's** `MONGODB_URI` (§6.13 of [06-deployment.md](06-deployment.md)), creates the seven collections of this table that the agent writes (`agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`, `pendingActions`), every index above, the TTL indexes (`agentTurns` and `receiptReads` on their own `{ createdAt: 1 }`, since a TTL index covers one field; `pendingActions` on `{ expiresAt: 1 }`) and the `usersForAgent` view below. Running it again is safe. After any card that changes an agent index or that view, run setup again with the app user. `notices`, `channelUsage` and `appSettings` are Express's and not part of it.
+
+#### `usersForAgent` (view, built by T44)
+
+A MongoDB **view** on `users` whose pipeline is `[{ $project: { _id: 1, language: 1, assistantOn: 1 } }]` (decision D15, default taken 2026-11-25). A role cannot limit the fields of a collection, so a role with `find` on `users` could read every password hash. The agent's role therefore has **no right on `users`** and `find` on this view only, and agent code reads users through it. It shows the user's `_id`, `language` and the "Trợ lý" switch `assistantOn` (absent until a user has one) and nothing else: no e-mail, no name, no hash. `setup` drops and creates it again when its definition differs, so a wider view cannot stay behind.
 
 #### `agentTurns` (planned)
 
@@ -451,7 +455,7 @@ One model, `BAAI/bge-m3`, loaded in the agent service on the GPU: **1024 dimensi
 
 ### Who reaches which collection (planned)
 
-Every turn passes the same graph, so every skill also reads `users`, `categories` and `wallets` (`load_context`), `agentTurns` (the last 6 turns), `agentMemory` and `agentSkills`, and writes one `agentTurns` row. The matrices below show only what differs. R = read, W = write, P = insert a proposal.
+Every turn passes the same graph, so every skill also reads `users` (through the `usersForAgent` view), `categories` and `wallets` (`load_context`), `agentTurns` (the last 6 turns), `agentMemory` and `agentSkills`, and writes one `agentTurns` row. The matrices below show only what differs. R = read, W = write, P = insert a proposal.
 
 **By skill** (the app's collections the skill's tools reach):
 
@@ -501,9 +505,9 @@ Every turn passes the same graph, so every skill also reads `users`, `categories
 
 | Component | Reads | Writes |
 |---|---|---|
-| start-up sync | `agentSkills`, `agentTools` | `agentSkills`, `agentTools` (rows and embeddings), indexes of the agent collections |
+| start-up sync | `agentSkills`, `agentTools` | `agentSkills`, `agentTools` (rows and embeddings). It creates no index (`python -m agent.setup` does, D14) |
 | `ingress` | `agentTurns` (cap count) | `agentTurns` (inserts the turn's row) |
-| `load_context` | `users`, `categories`, `wallets`, `agentTurns`, `pendingActions` (the action a confirm points at) | — |
+| `load_context` | `usersForAgent`, `categories`, `wallets`, `agentTurns`, `pendingActions` (the action a confirm points at) | — |
 | `rewrite_question` | — (uses the context already loaded) | — |
 | `recall_memory` | `agentMemory` | `agentMemory.lastUsedAt` |
 | `find_skills` | `agentSkills` (in memory) | — |
@@ -519,13 +523,13 @@ Every turn passes the same graph, so every skill also reads `users`, `categories
 
 | Collection | Actions in the `sochitieu_agent` role | Used by |
 |---|---|---|
-| `users` | `find` | `load_context`: only `_id`, `language` and `assistantOn` are projected (a role cannot limit fields) |
+| `usersForAgent` (a view on `users`, D15) | `find` | `load_context`: the view keeps only `_id`, `language` and `assistantOn` |
 | `categories`, `wallets`, `transactions`, `budgets` | `find` | `load_context` and the read tools |
 | `pendingActions` | `find`, `insert`, `update` | `propose_action` inserts; `load_context` reads; Express flips the status |
-| `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads` | `find`, `insert`, `update`, `remove`, `createIndex` | the agent service only (`createIndex` because it builds its indexes on start) |
-| anything else (`sessions`, `chatLinks`, `linkCodes`, `emailCodes`, `notices`, `channelUsage`, `appSettings`) | none | Express only |
+| `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads` | `find`, `insert`, `update`, `remove` | the agent service only. No `createIndex`: `python -m agent.setup` makes the indexes (D14) |
+| anything else (`users` itself, `sessions`, `chatLinks`, `linkCodes`, `emailCodes`, `notices`, `channelUsage`, `appSettings`) | none | Express only |
 
-The role is created in Atlas (Database Access → Custom Roles); the steps are in [06-deployment.md](06-deployment.md). With the role scoped like this, a bug or a prompt injection in the agent service cannot change money data, read sessions or tokens, or write outside its own collections.
+The role is created in Atlas (Database Access → Custom Roles); the steps are in [06-deployment.md](06-deployment.md), and **`agent/role.json` is the one committed definition** of it: the pytest suite builds the role from that file on a `mongod` with authentication and checks every row of this table (TC-F14-10 … TC-F14-12). With the role scoped like this, a bug or a prompt injection in the agent service cannot change money data, read password hashes, sessions or tokens, or write outside its own collections, and it cannot create or drop an index or a collection.
 
 ### Changed collections (planned)
 

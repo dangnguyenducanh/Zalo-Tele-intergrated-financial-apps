@@ -35,7 +35,7 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**177 cases**: 169 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**193 cases**: 185 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
@@ -52,6 +52,7 @@ The full list (**177 cases**: 169 automated or semi-automated + 8 manual charter
 | F11 Admin | 9 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
 | F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
 | F13 Quick add | 7 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
+| F14 Assistant | 14 (built so far: the agent service scaffold, T44) | TC-F14-02 every agent path but `/health` needs the bearer; TC-F14-10 the agent's database role cannot change app data or create indexes; TC-F14-11 it cannot read `users`, sessions or link tokens; TC-F14-12 `usersForAgent` shows no e-mail or password hash |
 | Non-functional | 18 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-15 the bot-e2e tool's `--help` and bad options |
 | Manual charters | 8 | MT-01…MT-08 below |
 
@@ -156,6 +157,7 @@ Dropdowns limit Status, Severity and Result to valid values, and failed or open 
 ```bash
 npm run typecheck                    # client tsc --noEmit
 npm test                             # unit + API + webhook + component (Vitest), writes test-results/{server,client}-vitest.xml
+npm run test:agent                   # the agent service's pytest (Python 3.12, agent/.venv), writes test-results/agent-pytest.xml
 npm run test:e2e                     # Playwright, writes test-results/e2e.xml + videos
 node --test tools/bot-e2e/bot-e2e.test.mjs   # TC-NF-15: the bot-e2e tool's --help and bad options (not part of npm test)
 npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml
@@ -166,7 +168,7 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (177 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (193 cases, last results from results.json)
 ```
 
 ## 7.8 One-tap linking and WhatsApp (planned, §2.10)
@@ -347,7 +349,9 @@ One test per trigger path through the compiled graph. The fake chat model return
 | *receipt path* | AI | Graph | P0 | `receipt_graph` with the fake VLM returning: a clean receipt; a total that is a year; no total; items that don't add up. **Expect:** steps `ingress, read_receipt, check_total, reconcile, save_turn`; the first gives `{total, merchant, date, items, reconciliation}`; the second and third `NO_TOTAL`; the fourth keeps the total and flags the reconciliation; one `receiptReads` row each, never the image | The new reader keeps §2.6's rules |
 | *memory write* | R5 | Graph | P2 | An A7 tap confirmed in Express, then `remember`; 201 memory rows for one user. **Expect:** one `agentMemory` row "cafe → Ăn uống"; `recall_memory` finds it by cosine ≥ 0.6; the oldest unused row is dropped at 200 | Long-term memory stays small and comes only from the user's own taps |
 
-**Agent API** (pytest + `TestClient`, P0): every `POST` without `Authorization: Bearer ${AGENT_SECRET}`, or with a wrong one, → 401; a body missing `userId`, `channel`, `requestId` or `today` → 422; `GET /health` needs no auth and returns only `{vllm, embedder, model, gpuFreeMb}`; the same `requestId` twice for one user → one `agentTurns` row (unique index), and the second request gets the first answer or 409 (docs/04 decides); with 16 requests waiting on a fake slow model, the 17th → 503 `AGENT_BUSY` at once. **DB role** (P1): the test `mongod` runs with auth and the `sochitieu_agent` custom role of docs/03; an `insert` into `transactions`, `budgets` or `categories` as that user → unauthorized; `find` on them and writes to `agent*` and `pendingActions` succeed.
+**Agent API** (pytest + `TestClient`, P0): every `POST` without `Authorization: Bearer ${AGENT_SECRET}`, or with a wrong one, → 401; a body missing `userId`, `channel`, `requestId` or `today` → 422; `GET /health` needs no auth and returns only `{vllm, embedder, model, gpuFreeMb}`; the same `requestId` twice for one user → one `agentTurns` row (unique index), and the second request gets the first answer or 409 (docs/04 decides); with 16 requests waiting on a fake slow model, the 17th → 503 `AGENT_BUSY` at once. **DB role** (P0 since decision D15): the test `mongod` runs with auth and the `sochitieu_agent` custom role of docs/03 (built from `agent/role.json`); an `insert` into `transactions`, `budgets` or `categories` as that user → unauthorized; `find` on them and writes to `agent*` and `pendingActions` succeed; `find` on `users`, `sessions`, `chatLinks`, `linkCodes` and `emailCodes` is unauthorized; for a user that has an e-mail and a password hash, `usersForAgent` returns only `_id`, `language` and `assistantOn`.
+
+**Built by T44 (the agent service scaffold):** the health, bearer, startup-refusal, error-shape and log checks above are TC-F14-01 … TC-F14-05; the embedder interface TC-F14-06; the setup command TC-F14-07 … TC-F14-09 (collections, indexes, the view, a second run, `--help`); the DB role TC-F14-10 … TC-F14-12; the JUnit case-ID hook TC-F14-13 and the hermetic rules TC-F14-14. The duplicate-`requestId`, 17th-request and body-validation checks wait for `/v1/turn` (T45).
 
 ### 7.9.4 Express tests: unit, API and webhook (Vitest, agent API stubbed)
 
@@ -452,7 +456,7 @@ cases:
 
 ### 7.9.8 Hermetic rules (no real GPU or model in CI)
 
-- **Python.** CI runs pytest with the fake chat model and fake embedder only. `HF_HUB_OFFLINE=1` and no `VLLM_BASE_URL`: a test that tries to download weights or reach vLLM fails. The evals and the load test are not part of CI.
+- **Python.** CI runs pytest with the fake chat model and fake embedder only. `HF_HUB_OFFLINE=1` and no `VLLM_BASE_URL`: a test that tries to download weights or reach vLLM fails. The evals and the load test are not part of CI. Built (T44, TC-F14-14): every agent test runs with `HF_HUB_OFFLINE=1` and `VLLM_BASE_URL` unset, and a connection or DNS lookup to any host but this machine raises.
 - **Express (Vitest).** The agent API is always the MSW stub on a dummy `AGENT_URL`; tests assert the exact number of calls. In *parse question* and the capture cases, the handler fails the test if it is called at all. `AGENT_SECRET` in tests is a dummy.
 - **E2E server.** `AGENT_URL` points at an agent stub inside the E2E server (next to `bot-api-stub.js`), which answers canned turns and can be switched to 503. Every other host stays blocked (TC-NF-11). `CRON_SECRET` has a test value, and E2E drives the cron through "Chạy ngay".
 - **No third party.** No test, eval or charter calls a hosted model API. The only model is ours.
