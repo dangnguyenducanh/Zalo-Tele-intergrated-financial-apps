@@ -3,19 +3,24 @@ import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { afterAll, afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { telegram } from '../src/bot/telegram.js';
 import { whatsapp } from '../src/bot/whatsapp.js';
 import { zalo } from '../src/bot/zalo.js';
+import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import telegramUpdates from './fixtures/telegram-updates.json' with { type: 'json' };
 import whatsappWebhooks from './fixtures/whatsapp-webhooks.json' with { type: 'json' };
 import zaloEvents from './fixtures/zalo-events.json' with { type: 'json' };
 import { botCalls, stubOutboundHttp } from './helpers/bot-api-stub.js';
+import { startTestDb, stopTestDb } from './helpers/db.js';
 
 // BUG-002: the E2E API server (helpers/e2e-server.js) must never call the real Telegram or Zalo Bot API.
 
 let log;
 let outbound;
+// The Zalo adapter counts every message it sends (docs/02 §2.11.6), so calling it needs a database.
+beforeAll(startTestDb);
+afterAll(stopTestDb);
 beforeEach(() => {
   log = [vi.spyOn(console, 'info').mockImplementation(() => {}), vi.spyOn(console, 'error').mockImplementation(() => {})];
 });
@@ -35,6 +40,7 @@ test('TC-NF-11 the stub answers Telegram, Zalo and WhatsApp (Graph API) calls li
   await whatsapp.sendText('VN.13491208655302741918', 'xin chào'); // to the BSUID: WhatsApp has no chat id of its own
 
   expect(sent).toMatchObject({ message_id: 1, chat: { id: '5550001111' }, text: 'xin chào' });
+  expect(await ChannelUsage.find().lean()).toMatchObject([{ platform: 'zalo', sent: 1 }]); // only the Zalo message is counted
   expect(botCalls).toEqual([
     { platform: 'telegram', method: 'sendMessage', chatId: '5550001111' },
     { platform: 'zalo', method: 'sendMessage', chatId: '6ede9afa66b88fe6d6a9' },

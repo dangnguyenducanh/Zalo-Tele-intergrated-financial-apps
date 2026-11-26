@@ -8,6 +8,7 @@ import app from '../src/app.js';
 import enText from '../src/bot/messages.en.js';
 import viText from '../src/bot/messages.vi.js';
 import { env } from '../src/config/env.js';
+import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
@@ -859,4 +860,18 @@ test('TC-F7-21 only claim-made links carry the "Not you?" notice, and only their
   const [byCode, byClaim] = await list();
   expect(Date.parse(byClaim.claimNoticeDismissedAt)).toBeGreaterThan(0);
   expect(byCode.claimNoticeDismissedAt).toBeNull();
+});
+
+// docs/02 §2.11.6: only Zalo (and later WhatsApp) has a monthly quota. Telegram answers everything, whatever Zalo's count is.
+test('TC-F14-23 Telegram is not counted and never silenced by the quota guard, even when Zalo is over its quota', async () => {
+  await linkedUser();
+  await ChannelUsage.updateOne({ platform: 'zalo', month: monthKey(new Date()) }, { sent: 3000 }, { upsert: true });
+  calls.length = 0;
+
+  expect(textOf((await say('/help'))[0])).toBe(viText.help);
+  expect(textOf((await say('/today'))[0])).toMatch(/^📅 Hôm nay/);
+  expect(textOf((await say('xin chào'))[0])).toBe(viText.help); // a message with no amount
+  expect((await say('phở 45k'))[0].body.reply_markup.inline_keyboard[0]).toHaveLength(2); // the draft, with ✅ / ❌ (no ✏️ over http)
+  expect(textOf((await say('ok'))[0])).toMatch(/Đã lưu.*45\.000/);
+  expect(await ChannelUsage.find().lean()).toMatchObject([{ platform: 'zalo', sent: 3000 }]); // nothing counted for Telegram
 });

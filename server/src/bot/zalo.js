@@ -1,6 +1,7 @@
 // Zalo adapter (docs/04 §4.6): turns Zalo Bot Platform events into bot core calls and talks back with sendMessage.
 // Zalo has no buttons, so a draft ends with the "ok / huy" hint and the core resolves the typed answer.
 import { env } from '../config/env.js';
+import { recordSend } from '../services/channelUsage.js';
 import { handleMessage, messagesFor } from './core.js';
 
 // Calls one Bot API method (https://bot.zaloplatforms.com/docs) and returns its `result`.
@@ -17,10 +18,18 @@ async function callApi(method, body) {
   return data.result;
 }
 
+// The one place a Zalo message leaves the app (replies, drafts, the claim message, anything later). Zalo's free plan
+// allows 3,000 a month, so each message the platform accepts is counted here (docs/02 §2.11.6); a refused one throws first.
+async function sendMessage(chatId, text) {
+  const sent = await callApi('sendMessage', { chat_id: chatId, text });
+  await recordSend('zalo');
+  return sent;
+}
+
 // Replies stay far below Zalo's 2000-char limit: a note is at most 200 chars, names at most 40.
 export const zalo = {
   platform: 'zalo',
-  sendText: (chatId, text) => callApi('sendMessage', { chat_id: chatId, text }),
+  sendText: sendMessage,
   sendDraft: (chatId, draft, language) => zalo.sendText(chatId, `${draft.text}\n${messagesFor(language).replyHint}`),
   // A photo arrives as a plain URL, so downloading it is one GET.
   async downloadPhoto(url) {
