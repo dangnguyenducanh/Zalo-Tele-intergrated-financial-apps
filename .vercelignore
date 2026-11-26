@@ -1,0 +1,13 @@
+# Added to what `vercel deploy` already skips (tools/deploy.sh). The CLI never reads .gitignore; it always skips .git,
+# node_modules, .venv, venv, __pycache__, .env.local and .env.*.local itself, and it adds this file to that list, so
+# nothing is let back in (agent/tests/test_vercelignore.py checks that, and that no .env file goes up, BUG-042).
+
+# Every other .env file, in any folder: .env, server/.env (the keys of the dev machine, read by tools/deploy.sh and
+# `npm run seed`), client/.env, .env.production, … Vercel gets its variables from the project settings, not from the upload.
+.env
+.env.*
+!.env.example
+
+# agent/ is the Python service on the GPU host (docs/06 §6.13): nothing in it runs on Vercel, and agent/.env holds its
+# secrets (AGENT_SECRET and the sochitieu_agent database password).
+/agent/

@@ -468,7 +468,9 @@ Versions are pinned exactly in the `package.json` files (root, `client/`, `serve
 | Agent client (planned, §2.11) | plain `fetch` (no SDK) | — | `services/agent.js` calls the agent service's four endpoints (§1.9). Express loads no model and no AI SDK |
 | Email (planned, §2.12.5) | nodemailer | pinned at build time | Gmail SMTP on port 465 with an app password; one module, `services/mail.js` |
 
-### Agent service (`agent/`, planned, §2.11)
+### Agent service (`agent/`, §2.11)
+
+Built so far (T44): the scaffold, with these pins in `agent/requirements.txt`. `sentence-transformers` (and the torch it brings) is in `agent/requirements-model.txt`, which only the Dockerfile installs: CI and the tests never download it or a model. The rest of the service comes with the cards that follow.
 
 | Concern | Choice | Version | Why |
 |---|---|---|---|
@@ -536,7 +538,7 @@ Zalo-Tele-intergrated-financial-apps/
 │   ├── wt-env.sh           # per-worktree ports and dev database
 │   ├── bot-e2e/            # real-chat bot checker: bot-e2e.mjs, scenarios.json
 │   └── test-report/        # build-report.mjs: JSON + test results → Excel
-├── .github/workflows/ci.yml # npm ci, typecheck, lint, test on every PR and push to main
+├── .github/workflows/ci.yml # npm ci, typecheck, lint, test, then the agent's pytest, on every PR and push to main
 ├── .claude/agents/         # coder, reviewer, merger agent definitions
 ├── playwright.config.ts    # e2e: client/e2e against a test API + Vite
 ├── eslint.config.js
@@ -551,7 +553,7 @@ Built (§2.10, card T34): the WhatsApp adapter `server/src/bot/whatsapp.js` besi
 
 Planned (§2.11), in Express: `server/src/bot/ask.js` (`classify`), `services/agent.js` (the agent client), `routes/assistant.js` (the drawer's endpoints), the cron route `GET /api/cron/daily` and the admin `POST /api/admin/cron/daily`, a `crons` entry in `vercel.json`, and the drawer in `client/src/features/assistant/`. The question engine (skills, router, typed query, templates) is not in Express: it lives in the agent service. New Vercel variables: `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS` and `CRON_SECRET`, all optional: a missing one turns its feature off (§2.11.6). `AGENT_URL` comes from `AGENT_PUBLIC_URL`, as `KIE_URL` comes from `KIE_PUBLIC_URL`.
 
-Planned (§2.11), a new top-level `agent/` folder (Python, runs on the GPU host, not on Vercel): the FastAPI app, the graphs, `tools/` (one handler per tool), `skills/*.yaml` (the skill registry's seed), `prompts/` (one system prompt per node, vi and en), `eval/` (skill, receipt and categorizer evals), `models.lock` (the model commit hashes), the `docker-compose.yml` of §6.13 and a git-ignored `agent/.env`. Exact file names are left to the builder.
+A top-level `agent/` folder (Python, runs on the GPU host, not on Vercel; `.vercelignore` keeps it out of Vercel uploads). **Built (T44, the scaffold):** `app.py` (FastAPI: `/health`, the bearer check, Express's error shape, the log line), `config.py` (settings; the service refuses to start without `AGENT_SECRET`, which must be at least 32 characters, or `MONGODB_URI_AGENT`), `embedder.py` (the `Embedder` interface, a fake for tests, and the bge-m3 loader that imports sentence-transformers lazily at the `models.lock` revision), `setup.py` (`python -m agent.setup`: collections, indexes and the `usersForAgent` view), `role.json` (the one definition of the `sochitieu_agent` role), `models.lock`, `requirements*.txt`, `Dockerfile`, `docker-compose.yml` (`agent` and `tunnel`), `.env.example` and `tests/` (pytest, run by `npm run test:agent` and by CI). **Planned (§2.11), later cards:** the graphs, `tools/` (one handler per tool), `skills/*.yaml` (the skill registry's seed), `prompts/` (one system prompt per node, vi and en) and `eval/` (skill, receipt and categorizer evals). File names of the planned parts are left to the builder.
 
 Planned (§2.12): `services/mail.js`, the `emailCodes` model, the auth routes `register/verify`, `register/resend`, `password/forgot` and `password/reset`, and the `/verify-email` and `/forgot-password` screens. New variables: `GMAIL_USER` and `GMAIL_APP_PASSWORD`, both optional and both needed for mail (§2.12.4).
 
@@ -749,6 +751,6 @@ Re-embedding: a row whose `embedHash` (SHA-256 of its text) changed is re-embedd
 - **What reaches the model.** The standalone question, the names and ids of this user's categories and wallets (as enums), the facts the tools returned (for agent-mode wording), a receipt image, and a draft's note for a category tie. Never the user's id, name, email, phone, chat names or chat ids, and never a token. All of it stays on the GPU host: nothing goes to a third-party model.
 - **The model cannot choose whose data it reads.** `FORBIDDEN_ARGS` in the tool registry (`userId`, `token`, `query`) are never in a tool's LLM-visible schema and are dropped if the model sends them. Every tool closes over `userId` from the request context, and preset arguments win over LLM arguments.
 - **The model cannot write numbers.** `generate_answer` writes `[[factId]]` placeholders that our code fills; `guard_output` rejects any digit, number word or verdict word not in the facts and falls back to the template.
-- **The agent service cannot change money data.** Its MongoDB user `sochitieu_agent` has a custom role: `find` on `users` (only `_id`, `language`, `settings`, `assistantOn` are used), `categories`, `wallets`, `transactions`, `budgets`; `find`/`insert`/`update` on `pendingActions`; `find`/`insert`/`update`/`remove` on `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`. Writes to app data happen only in Express, through the same services as the web, after the user's confirm where §2.11 requires one.
+- **The agent service cannot change money data or read password hashes.** Its MongoDB user `sochitieu_agent` has a custom role (`agent/role.json`): `find` on `usersForAgent`, a view on `users` that projects only `_id`, `language` and `assistantOn`, and on `categories`, `wallets`, `transactions`, `budgets`; `find`/`insert`/`update` on `pendingActions`; `find`/`insert`/`update`/`remove` on `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`. It has **no right on `users`** (a role cannot limit fields, so `find` on `users` would expose every hash; decision D15) and no index or collection right (D14): `python -m agent.setup`, run with the app user, creates them. Writes to app data happen only in Express, through the same services as the web, after the user's confirm where §2.11 requires one.
 - **Express ↔ agent service.** Server-to-server only, `Authorization: Bearer ${AGENT_SECRET}` compared in constant time; the browser and the chat apps never call the agent service. The tunnel exposes the agent's port only; `GET /health` answers without auth and returns no user data.
 - **Logs** on both sides carry the request id, node, timing and error class, never the question, notes, figures, tool arguments or the image. `agentTurns` keeps the turn for 30 days (TTL) for caps and debugging; admins never see it.
