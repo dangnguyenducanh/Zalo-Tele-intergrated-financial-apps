@@ -410,3 +410,20 @@ test('TC-F4-12 one money value is at most 10^13 ₫, so wallet and month totals 
   expect((await me.post('/budgets', { month: '2026-10', categoryId: null, limit: MAX })).status).toBe(201);
   await expect(Transaction.create({ ...body, userId: tx.userId, amount: MAX + 1 })).rejects.toThrow(/amount/); // the model agrees
 });
+
+test('TC-F4-14 GET /transactions?source=whatsapp lists only WhatsApp transactions, not a validation error', async () => {
+  const { me, walletId, food } = await newUser();
+  const base = { userId: (await User.findOne())._id, walletId, categoryId: food, type: 'expense', amount: 45_000, occurredAt: new Date() };
+  await Transaction.create([
+    { ...base, note: 'web', source: 'web' },
+    { ...base, note: 'telegram', source: 'telegram', status: 'draft', chatRef: { platform: 'telegram', chatId: '1', messageId: '1:1' } },
+    { ...base, note: 'whatsapp draft', source: 'whatsapp', status: 'draft', chatRef: { platform: 'whatsapp', chatId: 'VN.13491208655302741918', messageId: 'wamid.1:1' } },
+    { ...base, note: 'whatsapp saved', source: 'whatsapp', chatRef: { platform: 'whatsapp', chatId: 'VN.13491208655302741918', messageId: 'wamid.2:1' } },
+  ]);
+
+  const res = await me.get('/transactions?source=whatsapp');
+  expect(res.status).toBe(200);
+  expect(res.body.items.map((t) => t.note).sort()).toEqual(['whatsapp draft', 'whatsapp saved']);
+  expect(res.body.items.every((t) => t.source === 'whatsapp' && t.chatRef.platform === 'whatsapp')).toBe(true);
+  expect((await me.get('/transactions?source=sms')).status).toBe(400); // the list stays closed
+});

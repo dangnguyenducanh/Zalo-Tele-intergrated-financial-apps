@@ -9,7 +9,7 @@ export const MAX_MONEY = 10_000_000_000_000;
 // Where a bot draft came from: used to edit the bot's reply and to ignore a webhook delivered twice.
 const chatRefSchema = new mongoose.Schema(
   {
-    platform: { type: String, enum: ['telegram', 'zalo'], required: true },
+    platform: { type: String, enum: ['telegram', 'zalo', 'whatsapp'], required: true },
     chatId: { type: String, required: true },
     messageId: { type: String, required: true },
   },
@@ -42,7 +42,7 @@ const transactionSchema = new mongoose.Schema(
     note: { type: String, trim: true, maxlength: 200, default: '' },
     occurredAt: { type: Date, required: true },
     status: { type: String, enum: ['draft', 'confirmed'], default: 'confirmed' }, // bots create drafts
-    source: { type: String, enum: ['web', 'telegram', 'zalo', 'receipt'], default: 'web' },
+    source: { type: String, enum: ['web', 'telegram', 'zalo', 'whatsapp', 'receipt'], default: 'web' },
     chatRef: { type: chatRefSchema, default: undefined },
     receipt: { type: receiptSchema, default: undefined },
     deletedAt: { type: Date, default: null },

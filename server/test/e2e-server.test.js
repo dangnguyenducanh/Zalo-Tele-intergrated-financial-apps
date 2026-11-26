@@ -1,11 +1,14 @@
 import { spawn } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { telegram } from '../src/bot/telegram.js';
+import { whatsapp } from '../src/bot/whatsapp.js';
 import { zalo } from '../src/bot/zalo.js';
 import telegramUpdates from './fixtures/telegram-updates.json' with { type: 'json' };
+import whatsappWebhooks from './fixtures/whatsapp-webhooks.json' with { type: 'json' };
 import zaloEvents from './fixtures/zalo-events.json' with { type: 'json' };
 import { botCalls, stubOutboundHttp } from './helpers/bot-api-stub.js';
 
@@ -24,20 +27,23 @@ afterEach(() => {
 });
 const logged = () => log.flatMap((spy) => spy.mock.calls.flat()).join('\n');
 
-test('TC-NF-11 the stub answers Telegram and Zalo Bot API calls like the real API and records method + chat id, never the token', async () => {
+test('TC-NF-11 the stub answers Telegram, Zalo and WhatsApp (Graph API) calls like the real APIs and records method + chat id, never the token', async () => {
   outbound = stubOutboundHttp();
 
   const sent = await telegram.sendText('5550001111', 'xin chào'); // the production adapters, unchanged
   await zalo.sendText('6ede9afa66b88fe6d6a9', 'xin chào');
+  await whatsapp.sendText('VN.13491208655302741918', 'xin chào'); // to the BSUID: WhatsApp has no chat id of its own
 
   expect(sent).toMatchObject({ message_id: 1, chat: { id: '5550001111' }, text: 'xin chào' });
   expect(botCalls).toEqual([
     { platform: 'telegram', method: 'sendMessage', chatId: '5550001111' },
     { platform: 'zalo', method: 'sendMessage', chatId: '6ede9afa66b88fe6d6a9' },
+    { platform: 'whatsapp', method: 'messages', chatId: 'VN.13491208655302741918' },
   ]);
   expect(logged()).toContain('[bot-api-stub] telegram sendMessage chat=5550001111');
   // The test-mode tokens (config/env.js) are in the request URLs, but never in the record or the log.
-  for (const token of ['test-telegram-token', 'test-zalo-token']) {
+  expect(logged()).toContain('[bot-api-stub] whatsapp messages chat=VN.13491208655302741918');
+  for (const token of ['test-telegram-token', 'test-zalo-token', 'test-whatsapp-token']) {
     expect(JSON.stringify(botCalls)).not.toContain(token);
     expect(logged()).not.toContain(token);
   }
@@ -53,6 +59,9 @@ test('TC-NF-11 the stub blocks every other external host and lets localhost thro
     expect(logged()).toContain('[bot-api-stub] blocked outbound request to example.com');
     // A Zalo photo is downloaded from its own host: not stubbed, so it fails loudly instead of slipping out.
     await expect(zalo.downloadPhoto(zaloEvents.image.message.photo_url)).rejects.toThrow('fetch failed');
+    // Likewise a WhatsApp photo: the Graph API's media lookup is not stubbed either.
+    await expect(whatsapp.downloadPhoto('1104938573226018')).rejects.toThrow('fetch failed');
+    expect(logged()).toContain('[bot-api-stub] blocked outbound request to graph.facebook.com');
 
     expect(await (await fetch(`http://127.0.0.1:${port}/`)).text()).toBe('local');
     expect(await (await fetch(`http://localhost:${port}/`)).text()).toBe('local');
@@ -69,8 +78,12 @@ test('TC-NF-11 the E2E server answers bot replies itself, even with real-looking
   await once(freePort, 'listening');
   const { port } = freePort.address();
   freePort.close();
-  const tokens = { TELEGRAM_BOT_TOKEN: '7000000001:AAreal-looking-telegram-token', ZALO_BOT_TOKEN: '3000000001:real-looking-zalo-token' };
-  const secrets = { TELEGRAM_WEBHOOK_SECRET: 'test-telegram-secret', ZALO_WEBHOOK_SECRET: 'test-zalo-secret' };
+  const tokens = {
+    TELEGRAM_BOT_TOKEN: '7000000001:AAreal-looking-telegram-token',
+    ZALO_BOT_TOKEN: '3000000001:real-looking-zalo-token',
+    WHATSAPP_ACCESS_TOKEN: 'EAAJBreal-looking-whatsapp-token',
+  };
+  const secrets = { TELEGRAM_WEBHOOK_SECRET: 'test-telegram-secret', ZALO_WEBHOOK_SECRET: 'test-zalo-secret', WHATSAPP_APP_SECRET: 'test-whatsapp-secret' };
   api = spawn(process.execPath, ['test/helpers/e2e-server.js'], {
     cwd: fileURLToPath(new URL('..', import.meta.url)),
     env: { ...process.env, ...tokens, ...secrets, NODE_ENV: 'test', PORT: String(port), MONGODB_URI: '' }, // '' = in-memory MongoDB
@@ -83,13 +96,23 @@ test('TC-NF-11 the E2E server answers bot replies itself, even with real-looking
   // Unlinked chats: each bot answers "please link your account" through its Bot API.
   const post = (path, header, body) =>
     fetch(`http://127.0.0.1:${port}/api/webhooks/${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...header }, body: JSON.stringify(body) });
+  const whatsappBody = JSON.stringify(whatsappWebhooks.text);
+  const signature = `sha256=${createHmac('sha256', secrets.WHATSAPP_APP_SECRET).update(whatsappBody).digest('hex')}`;
   expect((await post('telegram', { 'X-Telegram-Bot-Api-Secret-Token': secrets.TELEGRAM_WEBHOOK_SECRET }, telegramUpdates.text)).status).toBe(200);
   expect((await post('zalo', { 'X-Bot-Api-Secret-Token': secrets.ZALO_WEBHOOK_SECRET }, zaloEvents.text)).status).toBe(200);
+  // WhatsApp: signed over the bytes sent, so the body goes out as the string that was signed.
+  const whatsappPost = await fetch(`http://127.0.0.1:${port}/api/webhooks/whatsapp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-hub-signature-256': signature },
+    body: whatsappBody,
+  });
+  expect(whatsappPost.status).toBe(200);
 
   await vi.waitFor(
     () => {
       expect(output).toContain(`[bot-api-stub] telegram sendMessage chat=${telegramUpdates.text.message.chat.id}`);
       expect(output).toContain(`[bot-api-stub] zalo sendMessage chat=${zaloEvents.text.message.chat.id}`);
+      expect(output).toContain('[bot-api-stub] whatsapp messages chat=VN.13491208655302741918');
     },
     { timeout: 10_000, interval: 100 },
   );

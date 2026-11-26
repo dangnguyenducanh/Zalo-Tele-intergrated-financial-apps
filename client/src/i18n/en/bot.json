@@ -1,6 +1,6 @@
 {
   "title": "Bot inbox",
-  "intro": "Record spending through Telegram, Zalo or a receipt photo. What the bot read waits here as a draft for you to check before it is saved.",
+  "intro": "Record spending through Telegram, WhatsApp, Zalo or a receipt photo. What the bot read waits here as a draft for you to check before it is saved.",
   "retry": "Retry",
   "sources": {
     "telegram": "Telegram",
