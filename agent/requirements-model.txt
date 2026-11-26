@@ -1,0 +1,3 @@
+# The bge-m3 embedder. Only the Dockerfile installs this file: CI never does (docs/01 §1.4), and the tests use
+# FakeEmbedder. sentence-transformers brings torch, so the image build picks the matching wheel.
+sentence-transformers==6.3.0

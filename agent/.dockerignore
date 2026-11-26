@@ -1,0 +1,8 @@
+# Keep out of the image: secrets, virtualenvs, caches and the tests.
+.env
+.env.*
+.venv
+venv
+__pycache__
+.pytest_cache
+tests
