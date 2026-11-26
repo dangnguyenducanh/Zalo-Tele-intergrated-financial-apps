@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from agent.config import ConfigError, Settings
+
 ROOT = Path(__file__).resolve().parents[2]
 SECRET = 'a-real-looking-secret-' + 'b' * 32
 URI = 'mongodb://' + 'sochitieu_agent:hunter2-password@127.0.0.1:1/finance'  # not one literal: the secret scan (TC-NF-05)
@@ -41,6 +43,26 @@ def test_refuses_to_start_without_its_secret_or_database(env, names):
         assert value not in output  # the message names variables, never what they hold
     with socket.socket() as s:
         assert s.connect_ex(('127.0.0.1', port)) != 0
+
+
+def test_a_short_secret_is_refused_by_name_and_never_echoed():
+    """TC-F14-06 An AGENT_SECRET under 32 characters (docs/06: openssl rand -hex 32) stops the start, naming the variable, never the value"""
+    short = 'hunter3-' + 'c' * 23  # 31 characters
+    code, output, port = start({'AGENT_SECRET': short, 'MONGODB_URI_AGENT': URI})
+    assert code != 0
+    assert 'ConfigError' in output and 'AGENT_SECRET' in output and '32 characters' in output
+    assert 'hunter3' not in output and 'hunter2-password' not in output
+    with socket.socket() as s:
+        assert s.connect_ex(('127.0.0.1', port)) != 0
+
+
+def test_a_secret_of_exactly_32_characters_is_enough_and_spaces_do_not_count():
+    """TC-F14-06 The secret check lets 32 characters through and counts without the spaces at either end"""
+    uri_only = {'MONGODB_URI_AGENT': URI}
+    assert Settings.from_env({**uri_only, 'AGENT_SECRET': 'a' * 32}).agent_secret == 'a' * 32
+    for value in ('a' * 31, '  ' + 'a' * 31 + '  ', ' ' * 40):
+        with pytest.raises(ConfigError, match='AGENT_SECRET'):
+            Settings.from_env({**uri_only, 'AGENT_SECRET': value})
 
 
 def test_refuses_to_start_while_a_model_is_not_pinned():

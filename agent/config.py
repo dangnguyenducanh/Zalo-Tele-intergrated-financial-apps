@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 from pymongo.uri_parser import parse_uri
 
 
+MIN_SECRET_LENGTH = 32  # `openssl rand -hex 32` (docs/06): the service is on a public tunnel with no rate limit
+
+
 class ConfigError(Exception):
     """The service must not start. The message names variables, never their values."""
 
@@ -21,6 +24,8 @@ class Settings:
         missing = [name for name in ('AGENT_SECRET', 'MONGODB_URI_AGENT') if not env.get(name, '').strip()]
         if missing:
             raise ConfigError(f'{" and ".join(missing)} must be set in agent/.env: the service never runs open')
+        if len(env['AGENT_SECRET'].strip()) < MIN_SECRET_LENGTH:
+            raise ConfigError(f'AGENT_SECRET must be at least {MIN_SECRET_LENGTH} characters (openssl rand -hex 32)')
         try:
             parse_uri(env['MONGODB_URI_AGENT'])
         except Exception:  # not chained and not echoed: the string holds the user's password
