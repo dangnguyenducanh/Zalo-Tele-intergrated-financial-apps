@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import mongoose from 'mongoose';
-import { env } from '../config/env.js';
+import { env, whatsappConfigured } from '../config/env.js';
 import { ChatLink } from '../models/ChatLink.js';
 import { LinkCode } from '../models/LinkCode.js';
 import { AppError } from '../utils/AppError.js';
@@ -12,8 +12,9 @@ const CODE_TTL_MS = 10 * 60 * 1000;
 const hashSecret = (secret) => createHash('sha256').update(secret).digest('hex');
 
 // POST /chat-links/code: a random 6-character code for 10 minutes, plus one link per chat app (null when that
-// app's setting is missing). Telegram sends "/start CODE" after one tap on Start; WhatsApp opens the chat with
-// "/link CODE" already typed; a Zalo bot link carries no data, so the user pastes "/link CODE" there.
+// app's setting is missing; WhatsApp also needs its four webhook settings, or the bot could not answer). Telegram
+// sends "/start CODE" after one tap on Start; WhatsApp opens the chat with "/link CODE" already typed; a Zalo bot
+// link carries no data, so the user pastes "/link CODE" there.
 export async function createLinkCode(userId) {
   const code = Array.from({ length: CODE_LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
   const expiresAt = new Date(Date.now() + CODE_TTL_MS);
@@ -21,7 +22,7 @@ export async function createLinkCode(userId) {
   const { TELEGRAM_BOT_USERNAME: telegram, WHATSAPP_NUMBER: whatsapp, ZALO_BOT_URL: zalo } = env;
   const links = {
     telegram: telegram ? `https://t.me/${telegram}?start=${code}` : null,
-    whatsapp: whatsapp ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(`/link ${code}`)}` : null,
+    whatsapp: whatsapp && whatsappConfigured() ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(`/link ${code}`)}` : null,
     zalo: zalo ?? null,
   };
   return { code, expiresAt, links };

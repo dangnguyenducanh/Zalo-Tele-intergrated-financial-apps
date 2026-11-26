@@ -34,6 +34,12 @@ export function parseEnv(source) {
       'https://zalo.me/test-bot',
     ),
     WHATSAPP_NUMBER: optional(z.string().regex(/^[1-9]\d{5,14}$/), '84900000000'), // international (no leading 0), digits only, for wa.me links
+    // The WhatsApp bot (docs/04 §4.2): all four are needed, see whatsappConfigured(). The phone number ID is a path
+    // segment of the Graph API URL, so only digits are accepted.
+    WHATSAPP_ACCESS_TOKEN: optional(z.string(), 'test-whatsapp-token'),
+    WHATSAPP_PHONE_NUMBER_ID: optional(z.string().regex(/^\d{1,30}$/), '1234567890'),
+    WHATSAPP_APP_SECRET: optional(z.string(), 'test-whatsapp-secret'),
+    WHATSAPP_VERIFY_TOKEN: optional(z.string(), 'test-whatsapp-verify-token'),
     KIE_URL: optional(z.url(), 'http://127.0.0.1:9'),
     KIE_API_KEY: optional(z.string(), 'test-kie-key'),
     SEED_ADMIN_EMAIL: z.string().optional(), // used by `npm run seed` only
@@ -50,3 +56,8 @@ export function parseEnv(source) {
 }
 
 export const env = parseEnv(process.env);
+
+// The WhatsApp webhook and the replies need all four settings. With one unset the bot is off: the webhook answers
+// 503 FEATURE_NOT_CONFIGURED and the link card has no WhatsApp button. Read at call time, so tests can unset one.
+export const whatsappConfigured = () =>
+  ['WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN'].every((key) => env[key]);

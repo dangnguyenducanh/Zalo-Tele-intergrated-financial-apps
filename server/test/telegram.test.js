@@ -8,6 +8,7 @@ import app from '../src/app.js';
 import enText from '../src/bot/messages.en.js';
 import viText from '../src/bot/messages.vi.js';
 import { env } from '../src/config/env.js';
+import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
@@ -544,7 +545,12 @@ test('TC-F8-14 setWebhooks registers both bots for a base URL, each with its own
   );
   const vars = { TELEGRAM_BOT_TOKEN: 'tg-token', TELEGRAM_WEBHOOK_SECRET: 'tg-secret', ZALO_BOT_TOKEN: 'zl-token', ZALO_WEBHOOK_SECRET: 'zalo-secret' };
 
-  expect(await setWebhooks('https://demo.example.app/', vars)).toEqual({ telegram: 'ok', zalo: 'ok' });
+  // WhatsApp has no setWebhook call: Meta takes the callback URL in its app dashboard (docs/06 §6.12), so without its settings it is skipped.
+  expect(await setWebhooks('https://demo.example.app/', vars)).toEqual({
+    telegram: 'ok',
+    zalo: 'ok',
+    whatsapp: expect.stringMatching(/^skipped: .*WHATSAPP_VERIFY_TOKEN/),
+  });
   expect(tokens).toEqual(['bottg-token']);
   expect(calls).toEqual([
     { method: 'setWebhook', body: { url: 'https://demo.example.app/api/webhooks/telegram', secret_token: 'tg-secret', allowed_updates: ['message', 'callback_query'] } },
@@ -555,7 +561,16 @@ test('TC-F8-14 setWebhooks registers both bots for a base URL, each with its own
   expect(await setWebhooks('https://demo.example.app', { TELEGRAM_BOT_TOKEN: 'bad', TELEGRAM_WEBHOOK_SECRET: 'tg-secret' })).toEqual({
     telegram: 'failed: Unauthorized',
     zalo: 'skipped: ZALO_BOT_TOKEN or ZALO_WEBHOOK_SECRET not set',
+    whatsapp: expect.stringMatching(/^skipped: /),
   });
+
+  // With the WhatsApp settings the script says what to enter in Meta's dashboard; it calls no Graph API
+  // (an unmocked host fails this test) and never prints the verify token.
+  const whatsapp = { WHATSAPP_ACCESS_TOKEN: 'wa-token', WHATSAPP_PHONE_NUMBER_ID: '123', WHATSAPP_APP_SECRET: 'wa-secret', WHATSAPP_VERIFY_TOKEN: 'wa-verify' };
+  const { whatsapp: advice } = await setWebhooks('https://demo.example.app/', whatsapp);
+  expect(advice).toMatch(/^manual: .*https:\/\/demo\.example\.app\/api\/webhooks\/whatsapp/);
+  for (const secret of Object.values(whatsapp)) expect(advice).not.toContain(secret);
+  expect((await setWebhooks('https://demo.example.app', { ...whatsapp, WHATSAPP_APP_SECRET: '' })).whatsapp).toMatch(/^skipped: /);
 });
 
 // ---------- Linking from the chat: the claim link (docs/02 §2.10.3) ----------
@@ -845,4 +860,18 @@ test('TC-F7-21 only claim-made links carry the "Not you?" notice, and only their
   const [byCode, byClaim] = await list();
   expect(Date.parse(byClaim.claimNoticeDismissedAt)).toBeGreaterThan(0);
   expect(byCode.claimNoticeDismissedAt).toBeNull();
+});
+
+// docs/02 §2.11.6: only Zalo (and later WhatsApp) has a monthly quota. Telegram answers everything, whatever Zalo's count is.
+test('TC-F14-23 Telegram is not counted and never silenced by the quota guard, even when Zalo is over its quota', async () => {
+  await linkedUser();
+  await ChannelUsage.updateOne({ platform: 'zalo', month: monthKey(new Date()) }, { sent: 3000 }, { upsert: true });
+  calls.length = 0;
+
+  expect(textOf((await say('/help'))[0])).toBe(viText.help);
+  expect(textOf((await say('/today'))[0])).toMatch(/^📅 Hôm nay/);
+  expect(textOf((await say('xin chào'))[0])).toBe(viText.help); // a message with no amount
+  expect((await say('phở 45k'))[0].body.reply_markup.inline_keyboard[0]).toHaveLength(2); // the draft, with ✅ / ❌ (no ✏️ over http)
+  expect(textOf((await say('ok'))[0])).toMatch(/Đã lưu.*45\.000/);
+  expect(await ChannelUsage.find().lean()).toMatchObject([{ platform: 'zalo', sent: 3000 }]); // nothing counted for Telegram
 });

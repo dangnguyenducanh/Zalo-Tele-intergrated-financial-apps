@@ -8,7 +8,7 @@ import tseslint from 'typescript-eslint';
 const unusedVars = ['error', { argsIgnorePattern: '^_' }];
 
 export default defineConfig([
-  globalIgnores(['**/dist', '**/test-results', '**/playwright-report', '**/node_modules']),
+  globalIgnores(['**/dist', '**/test-results', '**/playwright-report', '**/node_modules', '**/.venv', '**/venv']),
   {
     files: ['**/*.{js,mjs}'],
     extends: [js.configs.recommended],

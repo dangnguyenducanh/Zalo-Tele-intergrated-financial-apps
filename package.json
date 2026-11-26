@@ -15,6 +15,7 @@
     "typecheck": "npm run typecheck -w client",
     "lint": "eslint .",
     "test": "npm test -w server && npm test -w client",
+    "test:agent": "python -m pytest agent/tests --junitxml=test-results/agent-pytest.xml",
     "test:e2e": "playwright test",
     "seed": "npm run seed -w server",
     "seed:test": "npm run seed:test -w server",

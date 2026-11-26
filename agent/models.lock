@@ -1,0 +1,5 @@
+# The Hugging Face commit hash of each model (40 hex characters). Record them at go-live (docs/06 §6.13) and change
+# one only together with a run of the skill and receipt evals. The agent refuses to load a model whose line is still
+# a placeholder; the Qwen hash is also passed to vLLM as --revision (T63).
+BAAI/bge-m3=PIN_AT_SETUP
+Qwen/Qwen3.5-2B=PIN_AT_SETUP
