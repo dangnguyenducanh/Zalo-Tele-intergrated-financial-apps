@@ -90,7 +90,7 @@ Static files from `client/dist` are served first. `/api/*` goes to the Express f
 | `WHATSAPP_NUMBER` | the WhatsApp bot's number, international format, digits only, no leading 0 (e.g. `849…`); optional: without it the link card has no WhatsApp button (§6.12) |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | §6.12; all four are needed, or the WhatsApp webhook answers 503 and the link card hides WhatsApp |
 | `AGENT_URL`, `AGENT_SECRET`, `RECEIPT_READER`, `ASSISTANT_ENABLED`, `ASSISTANT_CHANNELS`, `CRON_SECRET` *(planned, §2.11)* | §6.13 (`AGENT_URL` is pushed from `AGENT_PUBLIC_URL`, like `KIE_URL`) |
-| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | set **only in the Vercel dashboard** of both projects, never in `server/.env`, so they are not copied from it (§6.14). Optional; both are needed for mail |
+| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | set **only in the Vercel dashboard** of both projects, never in `server/.env`, so they are not meant to be in that file (§6.14: a line that is there is still copied by the no-key push). Optional; both are needed for mail |
 | `KIE_URL` | the value of `KIE_PUBLIC_URL` (§6.6); if that is empty, a non-local `KIE_URL` is pushed as is |
 | `KIE_API_KEY` | §6.6 |
 
@@ -488,7 +488,7 @@ The KIE lesson: a dead tunnel silently broke receipts. So before a demo (also in
 
 | Variable | Purpose | When unset |
 |---|---|---|
-| `GMAIL_USER` | The sending Gmail address; mails come from `"Sổ chi tiêu" <GMAIL_USER>` | see below |
+| `GMAIL_USER` | The sending Gmail address (a space or newline pasted around it is dropped); mails come from `"Sổ chi tiêu" <GMAIL_USER>` | see below |
 | `GMAIL_APP_PASSWORD` | The 16-character Google app password for that address (not the account password). Whitespace in it is dropped, so it can be pasted as Google shows it | see below |
 
 With either one unset:

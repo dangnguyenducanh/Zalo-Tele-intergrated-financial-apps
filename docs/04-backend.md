@@ -66,7 +66,7 @@ An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required 
 | `ASSISTANT_ENABLED` *(planned)* | `true` \| `false`, default `false`; the model gate's ceiling, and the runtime switch's value while `appSettings` has no row |
 | `ASSISTANT_CHANNELS` *(planned)* | comma list, default `web,telegram,zalo,whatsapp` |
 | `CRON_SECRET` *(planned)* | sent by Vercel Cron as `Authorization: Bearer …`; checked with `sameSecret()` |
-| `GMAIL_USER` | optional e-mail address of the Gmail account that sends the codes (§2.12). Set only in the Vercel dashboard of both projects, never in `server/.env` (decision D8, docs/06 §6.14) |
+| `GMAIL_USER` | optional e-mail address of the Gmail account that sends the codes (§2.12); a space or newline around it is dropped, and only whitespace counts as unset. Set only in the Vercel dashboard of both projects, never in `server/.env` (decision D8, docs/06 §6.14) |
 | `GMAIL_APP_PASSWORD` | optional; a 16-character Google app password (2-Step Verification must be on); every whitespace character is removed, so it can be pasted as Google shows it; changing the Google password revokes it. Same rule: dashboard only |
 | `KIE_URL` | `https://<tunnel-host>`, must be a URL |
 | `KIE_API_KEY` | shared secret sent as `X-KIE-Key` (see §4.8) |
@@ -564,7 +564,7 @@ A7: when the parser fell back to Khác/Other, the draft offers the top 3 expense
 **Mail** (§2.12.1, §2.12.5). Server-only dependency `nodemailer` 10.6.1, one module `services/mail.js`:
 
 ```js
-sendCode({ to, purpose, code, language })   // purpose: 'signup' | 'reset'; code: a string of 6 digits
+sendCode({ to, purpose, code, language })   // to: one plain address; purpose: 'signup' | 'reset'; code: a string of 6 digits
 canSendCodes()                              // can a code reach the user? false only in production without both Gmail settings
 maskEmail('an.nguyen@gmail.com')            // 'a***@gmail.com'
 setMailSender(deliver)                      // test seam, see below
@@ -573,7 +573,7 @@ setMailSender(deliver)                      // test seam, see below
 - Gmail SMTP on port 465 (`smtp.gmail.com`; Vercel blocks only port 25), logged in with `GMAIL_USER` and `GMAIL_APP_PASSWORD`. Free, about 500 emails a day.
 - From `"Sổ chi tiêu" <GMAIL_USER>`, in the user's language, plain text plus simple HTML. Subject "Mã xác nhận Sổ chi tiêu: 123456" / "Your Sổ chi tiêu code: 123456". The body says what the code is for, that it is valid for 10 minutes, and to ignore the email if the user didn't ask for it. No links, no images, no tracking.
 - **Modes** (read at call time): both settings set → SMTP, in every mode; not both, outside production → the log line `[mail] signup code for a***@gmail.com: 123456` (or `reset`); not both, in production → codes are off, `sendCode` rejects without logging the code, and callers ask `canSendCodes()` first.
-- **SMTP:** `smtp.gmail.com`, port 465, TLS, with 15 s connection (DNS included), greeting and socket timeouts. A bad `purpose` or a code that is not 6 digits is refused before anything is sent (the code goes into the HTML as it is).
+- **SMTP:** `smtp.gmail.com`, port 465, TLS, with 15 s connection (DNS included), greeting and socket timeouts. A bad `purpose`, a code that is not 6 digits, or a `to` that is not one plain address is refused before anything is sent (the code goes into the HTML as it is, and `to` into a header: a CR LF, a comma or a name in it would add a header or a second recipient). Any `language` but `en` is Vietnamese.
 - **Never leaked:** with mail on, the code and the full address are not logged. A failed send logs only `[mail] send failed for a***@gmail.com: <error code> <SMTP reply code>` and rejects with a plain `Error('the email could not be sent')` that has no `cause` (the nodemailer error and its message can repeat the address). The caller maps that rejection to `EMAIL_SEND_FAILED`; that code is not in the server yet.
 - **Test seam:** `setMailSender(deliver)` replaces delivery in every mode, also with `GMAIL_*` unset; `deliver(request, message)` gets `{ to, purpose, code, language }` and the built nodemailer message. Called with nothing it restores the real delivery. Only test code calls it (a test checks that nothing in `server/src` does); this is how the E2E mail stub will read codes.
 - Register awaits the send (a refusal → `EMAIL_SEND_FAILED` (503) and the row is deleted). `password/forgot` sends inside `waitUntil()`, so it answers as fast for an unknown address as for a real one.
