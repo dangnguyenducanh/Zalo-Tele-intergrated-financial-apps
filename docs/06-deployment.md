@@ -100,7 +100,7 @@ The bot variables are the same in both projects. A bot has one webhook, and both
 
 **Deploy** (staging first):
 
-1. `tools/deploy.sh staging` deploys the current checkout with `--prod` to the project's main domain and prints the URL. It runs the pinned Vercel CLI through `npx` and needs a logged-in CLI.
+1. `tools/deploy.sh staging` deploys the current checkout with `--prod` to the project's main domain and prints the URL. It runs the pinned Vercel CLI through `npx` and needs a logged-in CLI. The CLI never reads `.gitignore`, so `.vercelignore` keeps every `.env` file (but `.env.example`) and `agent/` out of the upload: the CLI itself skips only `.env.local` and `.env.*.local`, and `server/.env` holds the real keys (BUG-042, TC-NF-19). The deployed API reads its variables from the Vercel project, not from a file.
 2. Check staging: `GET /api/health` → `{status:'ok', db:'up'}`, plus a deep link on refresh.
 3. `tools/deploy.sh production`, then check it the same way.
 

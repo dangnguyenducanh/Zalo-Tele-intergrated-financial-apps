@@ -35,7 +35,7 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**216 cases**: 208 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**217 cases**: 209 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
@@ -53,7 +53,7 @@ The full list (**216 cases**: 208 automated or semi-automated + 8 manual charter
 | F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
 | F13 Quick add | 7 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
 | F14 Assistant | 17 (built so far: the one comparison rule, T43, TC-F14-01…03; the agent service scaffold, T44, TC-F14-04…17) | TC-F14-01 `compareRange()` is one rule; TC-F14-05 every agent path, websocket included, but `/health` needs the bearer; TC-F14-13 the agent's database role cannot change app data or create indexes; TC-F14-14 it cannot read `users`, sessions or link tokens; TC-F14-15 `usersForAgent` shows no e-mail or password hash |
-| Non-functional | 18 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-15 the bot-e2e tool's `--help` and bad options |
+| Non-functional | 19 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-19 `vercel deploy` uploads no `.env` file (BUG-042); TC-NF-15 the bot-e2e tool's `--help` and bad options |
 | Manual charters | 8 | MT-01…MT-08 below |
 
 **Planned for §2.10 (not in the counts above):** the three WhatsApp cases that need the owner's Meta setup (*one-tap on phones*, *real WhatsApp chat*, the WhatsApp charter, §7.8.5). They have no IDs yet: each takes the next free ID in `test-cases.json` at merge time. Linking from the chat (T33) is built and counted: TC-F7-16…23. The WhatsApp bot (T34) is built and in the catalogue: TC-F8-26…43 (TC-F8-24 is left free: it may be taken by another card in flight), TC-F4-14 and TC-F9-07. The counts in this table are as of T33 and are brought up to date by the next docs refresh, with the cases of T34, T77 and T78.
@@ -168,7 +168,7 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (216 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (217 cases, last results from results.json)
 ```
 
 ## 7.8 One-tap linking and WhatsApp (§2.10)
