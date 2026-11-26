@@ -544,7 +544,7 @@ agent/
 |---|---|---|
 | `pace({spent, limit, day, daysInMonth})` | `services/budgets.js`, pure | `listBudgets()` adds it to every budget; the confirm warning and the Budgets page |
 | `confirmedInRange(start, end)` | `services/stats.js`, generalizes `confirmedInMonth` | Express's own reads (the agent's tools run the same `$match` in Python) |
-| `compareRange()` | `utils/vnTime` | the Dashboard's MonthCompare ("cùng kỳ tháng trước"); `compare_periods` follows the same rule |
+| `compareRange({ from, to }, unit?)` | `utils/vnTime`, pure (built, T43) | `{ from, to }` as Vietnam dates `YYYY-MM-DD` → the period one `day`, `week`, `month` or `year` before it (the unit the dates imply when none is given; whole months stay whole; a bad date, order or unit is a `RangeError`, §2.11.3). The Dashboard's MonthCompare ("cùng kỳ tháng trước") follows the same rule in the browser; `compare_periods` follows it in the agent service. All read `shared/fixtures/compare-range.json` |
 | `draftHints()` | name only in §2.11; module left to the builder | A6, on bot drafts and in the quick-add preview |
 | `detectRecurring()` | name only in §2.11; module left to the builder | B3 and `/dinhky` |
 | `updateTransaction`, `deleteTransaction`, `restoreTransaction`, `copyBudgets`, `createBudget` | existing | A4, B4 and C3, so chat and web run the same code |
