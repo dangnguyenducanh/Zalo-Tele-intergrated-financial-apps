@@ -24,4 +24,8 @@ services:
     image: cloudflare/cloudflared:2026.11.2
     network_mode: host
     command: ["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:8310"] # the agent only; vLLM is never exposed
+    read_only: true # a quick tunnel keeps no file; /tmp is there in case cloudflared wants one
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     restart: unless-stopped

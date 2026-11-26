@@ -327,7 +327,7 @@ vllm serve Qwen/Qwen3.5-2B --served-model-name qwen3.5-2b --host 127.0.0.1 --por
 
 ### The compose project (`agent/docker-compose.yml`)
 
-**Built (T44):** `agent/docker-compose.yml` runs `agent` and `tunnel` only, both on the host network (so `127.0.0.1` is the host's loopback and no port is published). `agent` is built from `agent/Dockerfile` (Python 3.12.13; `requirements.txt` and `requirements-model.txt`, so sentence-transformers and torch are installed in the image only; the code is copied to `/app/agent`, keeping the `agent.` import path), reads `agent/.env`, mounts `HF_HOME` (compose reads it from `agent/.env`), runs read-only with no capabilities and starts `uvicorn agent.app:create_app --factory` on `127.0.0.1:8310` without an access log. It loads bge-m3 at the `agent/models.lock` hash when it starts, so it refuses to start while that file still holds a placeholder. `tunnel` is `cloudflare/cloudflared:2026.11.2`. The `vllm` service and the agent's `depends_on` it arrive with T63.
+**Built (T44):** `agent/docker-compose.yml` runs `agent` and `tunnel` only, both on the host network (so `127.0.0.1` is the host's loopback and no port is published). `agent` is built from `agent/Dockerfile` (Python 3.12.13; `requirements.txt` and `requirements-model.txt`, so sentence-transformers and torch are installed in the image only; the code is copied to `/app/agent`, keeping the `agent.` import path), reads `agent/.env`, mounts `HF_HOME` (compose reads it from `agent/.env`), runs as a non-root user (uid 10001), read-only with no capabilities and starts `uvicorn agent.app:create_app --factory` on `127.0.0.1:8310` without an access log. It loads bge-m3 at the `agent/models.lock` hash when it starts, so it refuses to start while that file still holds a placeholder. `tunnel` is `cloudflare/cloudflared:2026.11.2` (non-root already), also read-only with no capabilities and `no-new-privileges`. The `vllm` service and the agent's `depends_on` it arrive with T63.
 
 The design for all three services, with host networking (a sketch for the builder of T63; file layout is theirs):
 
@@ -404,7 +404,7 @@ Git-ignored, on the GPU host only, never on Vercel. Create it empty with mode 60
 | `VLLM_BASE_URL` | `http://127.0.0.1:8300/v1` |
 | `LLM_MODEL` | `qwen3.5-2b` |
 | `EMBED_MODEL` | `BAAI/bge-m3` |
-| `HF_HOME` | the model cache directory on the host, e.g. `/srv/hf-cache` |
+| `HF_HOME` | the model cache directory on the host, e.g. `/srv/hf-cache`. The container runs as uid 10001, so make it writable by that user before the first start (`sudo install -d -o 10001 -g 10001 -m 700 /srv/hf-cache`) |
 
 The agent service refuses to start without `AGENT_SECRET` (at least 32 characters) or `MONGODB_URI_AGENT` (it exits with a message that names the variable, never its value), so it never runs open or with a guessable secret. The app user's `MONGODB_URI` is **not** put in this file: it is only for `python -m agent.setup`, which you run elsewhere.
 

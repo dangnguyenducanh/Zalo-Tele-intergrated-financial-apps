@@ -1,4 +1,4 @@
-# Keep out of the image: secrets, virtualenvs, caches and the tests.
+# Keep out of the image: secrets, virtualenvs, caches, the tests and the receipt service (agent/receipts/, its own image).
 .env
 .env.*
 .venv
@@ -6,3 +6,4 @@ venv
 __pycache__
 .pytest_cache
 tests
+receipts
