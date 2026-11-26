@@ -22,7 +22,8 @@ export type TransactionInput = Pick<Transaction, 'type' | 'amount' | 'walletId' 
 // wallet, or no fallback category of that type.
 export type ParsedDraft = Omit<TransactionInput, 'walletId' | 'categoryId'> & { walletId: string | null; categoryId: string | null };
 // noAmountLines: line numbers (1 = first) that have no amount; truncated: the text has more than 10 lines.
-export type ParseResult = { drafts: ParsedDraft[]; noAmountLines: number[]; truncated: boolean };
+// question: the server read the text as a question, not money (docs/02 §2.11.1); the drafts are then empty and nothing may be saved.
+export type ParseResult = { drafts: ParsedDraft[]; noAmountLines: number[]; truncated: boolean; question?: true };
 
 // GET /transactions query string; every filter is optional (docs/04 §4.4).
 export type TransactionQuery = {
