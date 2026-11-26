@@ -1,0 +1,16 @@
+{
+  "title": "Liên kết chat",
+  "loading": "Đang kiểm tra đường link…",
+  "question": "Liên kết <chat/> với <account/>?",
+  "warning": "Chỉ bấm Xác nhận nếu chính bạn vừa nhắn tin cho bot. Cuộc chat được liên kết có thể xem chi tiêu và ghi tiền vào tài khoản này.",
+  "confirm": "Xác nhận",
+  "retry": "Thử lại",
+  "expired": "Đường link đã hết hạn hoặc đã được dùng. Gửi một tin nhắn bất kỳ cho bot để nhận link mới.",
+  "alreadyLinked": "Cuộc chat này đã được liên kết với một tài khoản.",
+  "toInbox": "Đến Hộp thư bot",
+  "notice": {
+    "text": "Chat mới được liên kết từ đường link chat: <chat/>. Không phải bạn?",
+    "unlink": "Huỷ liên kết",
+    "dismiss": "Đóng thông báo về {{name}}"
+  }
+}

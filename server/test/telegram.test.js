@@ -12,6 +12,7 @@ import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
 import { User } from '../src/models/User.js';
+import { createClaimToken } from '../src/services/chatLinks.js';
 import { setWebhooks } from '../src/scripts/setWebhooks.js';
 import { monthKey, vnDate, vnParts } from '../src/utils/vnTime.js';
 import fixtures from './fixtures/telegram-updates.json' with { type: 'json' };
@@ -78,7 +79,7 @@ const textOf = (call) => call.body.text;
 // Calls the REST API as one logged-in user: api(token).get('/chat-links') …
 const api = (accessToken) => {
   const call = (method) => (path, body) => request(app)[method](`/api${path}`).set('Authorization', `Bearer ${accessToken}`).send(body);
-  return { get: call('get'), post: call('post'), delete: call('delete') };
+  return { get: call('get'), post: call('post'), patch: call('patch'), delete: call('delete') };
 };
 
 // Recorded updates, copied and pointed at another chat, text or button.
@@ -251,7 +252,9 @@ test('TC-F7-04 GET /chat-links lists linked chats; DELETE unlinks and the bot th
   const asB = api(b.accessToken);
 
   const { body: links } = await a.me.get('/chat-links');
-  expect(links).toEqual([{ id: expect.any(String), platform: 'telegram', displayName: 'Anh Nguyen', createdAt: expect.any(String) }]);
+  expect(links).toEqual([
+    { id: expect.any(String), platform: 'telegram', displayName: 'Anh Nguyen', createdAt: expect.any(String), viaClaim: false, claimNoticeDismissedAt: null },
+  ]);
   expect((await asB.get('/chat-links')).body).toEqual([]); // only your own
   expect((await asB.delete(`/chat-links/${links[0].id}`)).status).toBe(404); // not B's to remove
   expect((await a.me.delete('/chat-links/not-an-id')).status).toBe(400);
@@ -421,6 +424,7 @@ test('TC-F8-10 an unlinked chat gets link instructions in both languages and not
   expect(await press('c:000000000000000000000000')).toMatchObject([{ method: 'answerCallbackQuery', body: { text: expect.stringContaining('/link') } }]);
   expect(await Transaction.countDocuments()).toBe(0);
   expect(await ChatLink.countDocuments()).toBe(0);
+  expect(await LinkCode.find().lean()).toMatchObject([{ chat: { platform: 'telegram', platformUserId: String(CHAT_A) } }]); // one claim link
 });
 
 test('TC-F8-11 /today and /month match the statistics API, in the language chosen with /lang', async () => {
@@ -552,4 +556,293 @@ test('TC-F8-14 setWebhooks registers both bots for a base URL, each with its own
     telegram: 'failed: Unauthorized',
     zalo: 'skipped: ZALO_BOT_TOKEN or ZALO_WEBHOOK_SECRET not set',
   });
+});
+
+// ---------- Linking from the chat: the claim link (docs/02 §2.10.3) ----------
+const claimUrl = (token) => `http://localhost:5300/link?t=${token}`; // APP_URL under NODE_ENV=test
+const claimTokenIn = (text) => /http:\/\/localhost:5300\/link\?t=([A-Za-z0-9_-]+)/.exec(text)?.[1];
+// What an unlinked chat sends → the token in the bot's one reply.
+const askClaimLink = async (text = 'xin chào', chat = CHAT_A) => claimTokenIn(textOf((await say(text, chat))[0]));
+const preview = (me, token) => me.post('/chat-links/claim/preview', { token });
+// A claim answers first and tells the chat afterwards (waitUntil), like a webhook.
+async function claim(me, token) {
+  const res = await me.post('/chat-links/claim', { token });
+  await Promise.all(background.splice(0));
+  return res;
+}
+const outcome = (res) => [res.status, res.body.error?.code];
+const someChat = { platform: 'telegram', platformUserId: '999', chatId: '999', displayName: 'Someone' };
+
+test('TC-F7-16 an unlinked chat gets a one-time claim link, stored as a hash only; its next message replaces it', async () => {
+  const before = Date.now();
+  const replies = await say('xin chào');
+  expect(replies.map((c) => c.method)).toEqual(['sendMessage']);
+  const first = claimTokenIn(textOf(replies[0]));
+  expect(first).toHaveLength(32); // 24 random bytes as base64url
+  // Both languages: today's "please link" text, then the tap-to-link line.
+  expect(textOf(replies[0])).toBe(
+    `${viText.pleaseLink('http://localhost:5300')}\n${viText.tapToLink(claimUrl(first))}\n\n${enText.pleaseLink('http://localhost:5300')}\n${enText.tapToLink(claimUrl(first))}`,
+  );
+  expect(viText.tapToLink('URL')).toContain('10 phút');
+  expect(enText.tapToLink('URL')).toContain('10 minutes');
+
+  const rows = await LinkCode.find().lean();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    codeHash: sha256(first),
+    usedAt: null,
+    chat: { platform: 'telegram', platformUserId: String(CHAT_A), chatId: String(CHAT_A), displayName: 'Anh Nguyen' },
+  });
+  expect(rows[0]).not.toHaveProperty('userId');
+  expect(JSON.stringify(rows)).not.toContain(first); // only the hash is stored
+  expect(rows[0].expiresAt.getTime() - before).toBeGreaterThanOrEqual(10 * 60 * 1000);
+  expect(rows[0].expiresAt.getTime() - before).toBeLessThan(10 * 60 * 1000 + 5000);
+  expect(await Transaction.countDocuments()).toBe(0);
+
+  const second = await askClaimLink('phở 45k');
+  expect(second).not.toBe(first);
+  expect((await LinkCode.find().lean()).map((row) => row.codeHash)).toEqual([sha256(second)]);
+  const me = api((await registerUser()).accessToken);
+  expect(outcome(await preview(me, first))).toEqual([404, 'LINK_TOKEN_INVALID']);
+  expect((await preview(me, second)).status).toBe(200);
+});
+
+test('TC-F7-16 messages arriving at the same moment leave one live claim link per chat', async () => {
+  await say('hi', CHAT_B);
+  const chat = { platform: 'telegram', platformUserId: String(CHAT_A), chatId: String(CHAT_A), displayName: 'Anh Nguyen' };
+  const rowsOfChat = () => LinkCode.find({ 'chat.platformUserId': chat.platformUserId }).lean();
+  // createClaimToken itself, not the webhook: HTTP delivery staggers the writes. Only two inserts can make a second
+  // row, so every round starts with none. Without `unique: true` on the partial index this fails.
+  for (let round = 0; round < 10; round++) {
+    await LinkCode.deleteMany({ 'chat.platformUserId': chat.platformUserId });
+    const tokens = await Promise.all(Array.from({ length: 4 }, () => createClaimToken(chat)));
+    const rows = await rowsOfChat();
+    expect(rows).toHaveLength(1);
+    expect(tokens.map(sha256)).toContain(rows[0].codeHash);
+  }
+
+  // Through the webhook: every message is answered, and the one live token is among the links sent.
+  const from = calls.length;
+  await Promise.all(['một', 'hai', 'ba', 'bốn'].map((text) => deliver(textUpdate(text))));
+  const tokens = calls.slice(from).map((c) => claimTokenIn(textOf(c)));
+  expect(tokens).toHaveLength(4);
+  const rows = await rowsOfChat();
+  expect(rows).toHaveLength(1);
+  expect(tokens.map(sha256)).toContain(rows[0].codeHash);
+  expect(await LinkCode.countDocuments()).toBe(2); // the other chat's link is untouched
+});
+
+test('TC-F7-16 a linkCodes row has exactly one of userId and chat; without APP_URL no claim link is made', async () => {
+  const row = { codeHash: 'a-hash', expiresAt: new Date(Date.now() + 60_000) };
+  await expect(LinkCode.create(row)).rejects.toThrow(/exactly one of userId and chat/);
+  await expect(LinkCode.create({ ...row, userId: new mongoose.Types.ObjectId(), chat: someChat })).rejects.toThrow(/exactly one of userId and chat/);
+  expect(await LinkCode.countDocuments()).toBe(0);
+
+  // A link to nowhere would be useless, so nothing is stored for it either.
+  const saved = env.APP_URL;
+  env.APP_URL = undefined;
+  try {
+    const [reply] = await say('xin chào');
+    expect(textOf(reply)).toContain('Vui lòng liên kết');
+    expect(textOf(reply)).not.toContain('/link?t=');
+    expect(await LinkCode.countDocuments()).toBe(0);
+  } finally {
+    env.APP_URL = saved;
+  }
+});
+
+test("TC-F7-17 codes and claim links never work in each other's place; a wrong or expired code gets a claim link", async () => {
+  const { accessToken, user } = await registerUser({ name: 'Lan' });
+  const me = api(accessToken);
+  const { body: used } = await me.post('/chat-links/code');
+  await say(`/link ${used.code}`, CHAT_B);
+  const { body: expired } = await me.post('/chat-links/code');
+  await LinkCode.updateOne({ codeHash: sha256(expired.code) }, { expiresAt: new Date(Date.now() - 1000) });
+
+  let token = await askClaimLink();
+  for (const arg of ['WRONG2', used.code, expired.code, 'the live claim token']) {
+    const [reply] = await say(`/link ${arg === 'the live claim token' ? token : arg}`);
+    expect(textOf(reply), arg).toContain(viText.invalidCode);
+    expect(textOf(reply), arg).toContain(enText.invalidCode);
+    token = claimTokenIn(textOf(reply));
+    expect(token, arg).toHaveLength(32);
+  }
+  expect(await ChatLink.countDocuments({ platformUserId: String(CHAT_A) })).toBe(0);
+
+  // Even a claim row stored under exactly the hash "/link ABC234" looks up is not a code.
+  await LinkCode.create({ chat: someChat, codeHash: sha256('ABC234'), expiresAt: new Date(Date.now() + 60_000) });
+  expect(textOf((await say('/link ABC234'))[0])).toContain(viText.invalidCode);
+  expect((await ChatLink.find().lean()).map((link) => link.platformUserId)).toEqual([String(CHAT_B)]); // only the used code's chat
+  expect((await LinkCode.findOne({ codeHash: sha256('ABC234') })).usedAt).toBeNull();
+
+  // A website code links as before and makes no claim link; the linked chat gets its usual replies.
+  const { body: live } = await me.post('/chat-links/code');
+  const claimRowsBefore = (await LinkCode.find().lean()).filter((row) => row.chat).map((row) => row.codeHash).sort();
+  expect(textOf((await say(`/start ${live.code}`))[0])).toBe(viText.linked('Lan'));
+  expect(textOf((await say('xin chào'))[0])).toBe(viText.help);
+  expect((await LinkCode.find().lean()).filter((row) => row.chat).map((row) => row.codeHash).sort()).toEqual(claimRowsBefore);
+  expect(await ChatLink.findOne({ platformUserId: String(CHAT_A) }).lean()).toMatchObject({ userId: oid(user.id), viaClaim: false });
+});
+
+test('TC-F7-18 claim API: login, single use, 10 minutes, claim links only; the chat gets the /link success text', async () => {
+  const token = await askClaimLink();
+  for (const path of ['/api/chat-links/claim/preview', '/api/chat-links/claim']) {
+    expect(outcome(await request(app).post(path).send({ token }))).toEqual([401, 'UNAUTHENTICATED']);
+  }
+  const lan = await registerUser({ name: 'Lan' });
+  const me = api(lan.accessToken);
+  expect((await me.patch('/users/me', { language: 'en' })).status).toBe(200);
+  for (let i = 0; i < 2; i++) {
+    const res = await preview(me, token); // previewing does not spend the token
+    expect([res.status, res.body]).toEqual([200, { platform: 'telegram', displayName: 'Anh Nguyen' }]);
+  }
+
+  calls.length = 0;
+  const res = await claim(me, token);
+  expect(res.status).toBe(201);
+  expect(res.body).toEqual({ id: expect.any(String), platform: 'telegram', displayName: 'Anh Nguyen', createdAt: expect.any(String), viaClaim: true });
+  expect(await ChatLink.find().lean()).toMatchObject([
+    {
+      userId: oid(lan.user.id),
+      platform: 'telegram',
+      platformUserId: String(CHAT_A),
+      chatId: String(CHAT_A),
+      displayName: 'Anh Nguyen',
+      viaClaim: true,
+      claimNoticeDismissedAt: null,
+    },
+  ]);
+  expect((await LinkCode.findOne({ codeHash: sha256(token) })).usedAt).toBeInstanceOf(Date);
+  expect(calls).toEqual([{ method: 'sendMessage', body: { chat_id: String(CHAT_A), text: enText.linked('Lan') } }]);
+
+  // Spent, unknown, expired and website codes: 404 from both endpoints, and the website code is not spent.
+  const expired = await askClaimLink('hi', CHAT_B);
+  await LinkCode.updateOne({ codeHash: sha256(expired) }, { expiresAt: new Date(Date.now() - 1000) });
+  const { body: code } = await me.post('/chat-links/code');
+  calls.length = 0;
+  for (const bad of [token, 'A'.repeat(32), expired, code.code]) {
+    for (const call of [preview, claim]) {
+      expect(outcome(await call(me, bad)), `${call.name} ${bad.length}`).toEqual([404, 'LINK_TOKEN_INVALID']);
+    }
+  }
+  expect((await LinkCode.findOne({ codeHash: sha256(code.code) })).usedAt).toBeNull();
+  for (const body of [{}, { token: '' }, { token: { $ne: null } }, { token: 'x'.repeat(101) }]) {
+    for (const path of ['/chat-links/claim/preview', '/chat-links/claim']) {
+      expect(outcome(await me.post(path, body))).toEqual([400, 'VALIDATION_ERROR']);
+    }
+  }
+  expect(calls).toEqual([]);
+  expect(await ChatLink.countDocuments()).toBe(1);
+});
+
+test('TC-F7-18 a success message the chat app refuses does not undo the claim; the failure is logged', async () => {
+  const token = await askClaimLink();
+  const me = api((await registerUser()).accessToken);
+  outbound.use(http.post('https://api.telegram.org/:bot/sendMessage', () => HttpResponse.json({ ok: false, error_code: 403, description: 'bot was blocked' }, { status: 403 })));
+  errorLog.mockImplementation(() => {});
+  expect((await claim(me, token)).status).toBe(201);
+  expect(await ChatLink.countDocuments()).toBe(1);
+  expect(errorLog).toHaveBeenCalledTimes(1);
+  expect(String(errorLog.mock.calls[0])).not.toContain(token);
+  errorLog.mockClear();
+});
+
+test('TC-F7-19 a chat linked meanwhile answers 409 and spends the token; a token claimed twice at once links once', async () => {
+  const token = await askClaimLink();
+  const b = await registerUser();
+  const { body } = await api(b.accessToken).post('/chat-links/code');
+  await say(`/link ${body.code}`);
+  const a = api((await registerUser()).accessToken);
+
+  calls.length = 0;
+  expect(outcome(await claim(a, token))).toEqual([409, 'CHAT_ALREADY_LINKED']);
+  expect(await ChatLink.find().lean()).toMatchObject([{ userId: oid(b.user.id), viaClaim: false }]);
+  expect(outcome(await claim(a, token))).toEqual([404, 'LINK_TOKEN_INVALID']); // spent anyway
+  expect(calls).toEqual([]); // no "linked" message for a claim that did not link
+
+  const other = await askClaimLink('hi', CHAT_B);
+  const c = api((await registerUser()).accessToken);
+  calls.length = 0;
+  const results = await Promise.all([claim(a, other), claim(c, other)]);
+  expect(results.map((res) => res.status).sort()).toEqual([201, 404]);
+  expect(await ChatLink.countDocuments({ platformUserId: String(CHAT_B) })).toBe(1);
+  expect(calls).toHaveLength(1);
+});
+
+// A claim link for chat A, then chat A is linked to user B with a website code, which leaves that link unused.
+async function claimLinkThenCode() {
+  const token = await askClaimLink();
+  const b = api((await registerUser()).accessToken);
+  await say(`/link ${(await b.post('/chat-links/code')).body.code}`);
+  const [link] = (await b.get('/chat-links')).body;
+  const a = api((await registerUser()).accessToken);
+  return { token, a, unlink: (who = b) => who.delete(`/chat-links/${link.id}`) }; // unlinked by B unless told otherwise
+}
+
+test('TC-F7-19 unlinking a chat kills the claim link it got before it was linked', async () => {
+  const otherChats = await askClaimLink('hi', CHAT_B);
+  const { token, a, unlink } = await claimLinkThenCode();
+
+  expect((await unlink(a)).status).toBe(404); // not A's link: nothing is removed
+  expect(await LinkCode.countDocuments({ 'chat.platformUserId': String(CHAT_A) })).toBe(1);
+
+  expect((await unlink()).status).toBe(204);
+  calls.length = 0;
+  for (const call of [preview, claim]) expect(outcome(await call(a, token)), call.name).toEqual([404, 'LINK_TOKEN_INVALID']);
+  expect(await ChatLink.countDocuments()).toBe(0);
+  expect(calls).toEqual([]);
+  expect((await preview(a, otherChats)).status).toBe(200); // another chat's link is untouched
+});
+
+test('TC-F7-19 an unlink while Confirm is running wins: the claim links nothing', async () => {
+  const { token, a, unlink } = await claimLinkThenCode();
+  // Hold the claim after it has spent the token and before it writes the chatLinks row.
+  let resume;
+  const paused = new Promise((resolve) => {
+    resume = resolve;
+  });
+  const create = ChatLink.create.bind(ChatLink);
+  const spy = vi.spyOn(ChatLink, 'create').mockImplementationOnce(async (doc) => {
+    await paused;
+    return create(doc);
+  });
+  try {
+    calls.length = 0;
+    const claiming = claim(a, token);
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    expect((await unlink()).status).toBe(204);
+    resume();
+    expect(outcome(await claiming)).toEqual([404, 'LINK_TOKEN_INVALID']);
+    expect(await ChatLink.countDocuments()).toBe(0);
+    expect(calls).toEqual([]);
+  } finally {
+    resume();
+    spy.mockRestore();
+  }
+});
+
+test('TC-F7-21 only claim-made links carry the "Not you?" notice, and only their owner can dismiss it', async () => {
+  const lan = await linkedUser(CHAT_A); // by code
+  const me = lan.me;
+  const claimed = (await claim(me, await askClaimLink('hi', CHAT_B))).body;
+
+  const list = async () => (await me.get('/chat-links')).body;
+  expect(await list()).toMatchObject([
+    { viaClaim: false, claimNoticeDismissedAt: null },
+    { id: claimed.id, viaClaim: true, claimNoticeDismissedAt: null },
+  ]);
+
+  const other = api((await registerUser()).accessToken);
+  const path = `/chat-links/${claimed.id}/claim-notice`;
+  expect(outcome(await other.patch(path))).toEqual([404, 'NOT_FOUND']);
+  expect(outcome(await me.patch(`/chat-links/${new mongoose.Types.ObjectId()}/claim-notice`))).toEqual([404, 'NOT_FOUND']);
+  expect((await request(app).patch(`/api${path}`)).status).toBe(401);
+  expect((await me.patch('/chat-links/not-an-id/claim-notice')).status).toBe(400);
+  expect((await list())[1].claimNoticeDismissedAt).toBeNull();
+
+  expect((await me.patch(path)).status).toBe(204);
+  expect((await me.patch(path)).status).toBe(204); // twice is fine
+  const [byCode, byClaim] = await list();
+  expect(Date.parse(byClaim.claimNoticeDismissedAt)).toBeGreaterThan(0);
+  expect(byCode.claimNoticeDismissedAt).toBeNull();
 });
