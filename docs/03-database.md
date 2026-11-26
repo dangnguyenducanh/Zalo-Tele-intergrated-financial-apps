@@ -27,11 +27,11 @@ erDiagram
     USER |o--o| WALLET : "default wallet"
 ```
 
-8 collections. The slides require at least 3 with relations.
+8 collections in the diagram, plus `channelUsage` (T49, §3.7), which has no relation. The slides require at least 3 with relations.
 
 A `linkCodes` row belongs to one user (a code made on the website) or to none (a claim link made by the bot for a chat that is not linked yet).
 
-*Planned (§2.11, see §3.7):* ten new collections. `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`, `pendingActions` and `notices` belong to a user (`USER ||--o{ AGENT_TURN`, `USER ||--o{ AGENT_MEMORY`, `USER ||--o{ AGENT_CATEGORY_VECTOR`, `USER ||--o{ RECEIPT_READ`, `USER ||--o{ PENDING_ACTION`, `USER ||--o{ NOTICE`), and each category has at most one vector (`CATEGORY ||--o| AGENT_CATEGORY_VECTOR`). An `agentSkills` row belongs to one user or, for a system skill, to none (`USER |o--o{ AGENT_SKILL`). `agentTools`, `channelUsage` and `appSettings` belong to no user. `chatLinks.lastConfirmedId` adds `CHAT_LINK |o--o| TRANSACTION : "last confirmed"`.
+*Planned (§2.11, see §3.7):* nine new collections (`channelUsage`, the tenth of the plan, is built: §3.7). `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads`, `pendingActions` and `notices` belong to a user (`USER ||--o{ AGENT_TURN`, `USER ||--o{ AGENT_MEMORY`, `USER ||--o{ AGENT_CATEGORY_VECTOR`, `USER ||--o{ RECEIPT_READ`, `USER ||--o{ PENDING_ACTION`, `USER ||--o{ NOTICE`), and each category has at most one vector (`CATEGORY ||--o| AGENT_CATEGORY_VECTOR`). An `agentSkills` row belongs to one user or, for a system skill, to none (`USER |o--o{ AGENT_SKILL`). `agentTools` and `appSettings` belong to no user. `chatLinks.lastConfirmedId` adds `CHAT_LINK |o--o| TRANSACTION : "last confirmed"`.
 
 *Planned (§2.12, see §3.8):* one new collection, `emailCodes`, with no relation: a sign-up row is for an email that has no user yet, and a reset row finds its user by email.
 
@@ -269,7 +269,7 @@ Two rules shape every row below:
 | `receiptReads` | receipt photo read, by either reader | agent service (`receipt_graph`, and the receipt eval for KIE rows) | `{ userId: 1, createdAt: -1 }` | **TTL** 90 days on `createdAt` |
 | `pendingActions` | action card the agent proposed (C3, §2.11.4) | agent service inserts; Express flips the status | not named in §2.11 | **TTL** 10 minutes after `expiresAt` |
 | `notices` | proactive message sent (B tier, §2.11.2) | Express | `{ userId: 1, kind: 1, key: 1 }` **unique** | not stated |
-| `channelUsage` | platform and month | Express | not named in §2.11 | not stated |
+| `channelUsage` (built, T49) | platform and month | Express | `{ platform: 1, month: 1 }` **unique** | never (one row per platform per month) |
 | `appSettings` | — (a single row) | Express (admin) | `_id` only | never |
 
 The agent service creates the indexes of its own collections on start.
@@ -401,16 +401,17 @@ The candidate list always comes from the user's non-deleted `categories`, so a r
 - Indexes: `{ userId: 1, kind: 1, key: 1 }` **unique**. The cron inserts the row **before** it sends, so a second run of the same day hits E11000 and sends nothing twice.
 - §2.11 names no TTL, so rows build up (one per user per message sent); adding one is left to the builder.
 
-#### `channelUsage` (planned)
+#### `channelUsage` (built, T49: Zalo is counted; WhatsApp follows with T70)
 
 | Field | Type | Notes |
 |---|---|---|
-| `platform` | String | `zalo` \| `whatsapp` |
-| `month` | String | the counted month; its format is not stated (`budgets.month` uses `YYYY-MM`) |
-| `sent` | Number (int) | messages sent this month, increased on **every** Zalo and WhatsApp send (replies, captures and proactive messages alike) |
+| `platform` | String | `zalo` \| `whatsapp` (only `zalo` is counted until T70) |
+| `month` | String | `YYYY-MM` in Vietnam time (Asia/Ho_Chi_Minh), the format of `budgets.month`: a message sent at 23:59 on the last day belongs to that month, one at 00:00 on the 1st to the next |
+| `sent` | Number (int) ≥ 0 | messages the platform accepted this month, raised by 1 on **every** Zalo `sendMessage` (replies, drafts, the claim message and, later, proactive messages). No row means 0 |
 
-- Thresholds read from it (§2.11.2, §2.11.6): Zalo proactive sends stop at 2,000, the model turns off at 2,400, and from 2,850 only capture replies are sent. WhatsApp: the model turns off at 800, and at 950 every reply stops (captures still land in the Bot inbox).
-- §2.11 names no index. One row per `(platform, month)` makes a unique index on that pair the natural choice; left to the builder.
+- Index: `{ platform: 1, month: 1 }` **unique**. The first send of a month creates the row: every count is one atomic `$inc` upsert (`recordSend` in `services/channelUsage.js`), so two sends at once never make a second row and never lose a count. No TTL: one row per platform per month.
+- Thresholds read from it (§2.11.2, §2.11.6), Zalo: `proactive` messages stop at 2,000, **every assistant answer** (template or model, not only the model) at 2,400, and from 2,850 only capture and linking replies are sent (decision D20: linking replies stay on so a user can finish linking). WhatsApp (T70): assistant answers off at 800, and at 950 every reply stops (captures still land in the Bot inbox).
+- `maySend(platform, kind)` reads the row. When it cannot be read the message is sent and the failure is logged; a counting failure is logged and never fails a send.
 
 #### `appSettings` (planned)
 
