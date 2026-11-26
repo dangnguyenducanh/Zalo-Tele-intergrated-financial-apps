@@ -374,7 +374,7 @@ The reader is **Qwen** ([§2.6](02-features.md#26-receipt-photos-qwen-on-our-gpu
 | | **502** the model answered with an error or not with the asked JSON · **503** vLLM unreachable · **504** vLLM too slow (60 s a call, 90 s a photo) |
 | `GET /health` | **200** `{status: "ok"}` only when vLLM answers and serves `qwen3.5-2b`, else **503**. No key needed |
 
-- Files: `app.py` (HTTP: key, upload, errors; the photo is turned by its EXIF flag and shrunk to 2048 px only when needed), `reader.py` (the reads and the answer), `picker.py` (pure rules: the payable total, what is printed, the date), `vllm_client.py` (the four prompts and JSON schemas; each answer is validated with pydantic).
+- Files: `app.py` (HTTP: key, upload, errors; the photo is turned by its EXIF flag, without rewriting the EXIF block, so a damaged tag cannot cause a 500, and shrunk to 2048 px only when needed), `reader.py` (the reads and the answer), `picker.py` (pure rules: the payable total, what is printed, the date, which "items" are really the foot of the receipt), `vllm_client.py` (the four prompts and JSON schemas; each answer is validated with pydantic).
 - Calls to vLLM (`VLLM_URL`, default `http://127.0.0.1:8300/v1`): non-thinking (`chat_template_kwargs: {"enable_thinking": false}`), temperature 0, `response_format: {type: "json_schema"}`.
 - The upload is parsed in memory (Starlette would otherwise move a file over 1 MB to a temporary file) and the container's file system is read-only. The log holds timings and error kinds, never the key, the photo or anything read from it.
 

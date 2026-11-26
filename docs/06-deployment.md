@@ -193,8 +193,11 @@ Photos sent during the few seconds between the two commands get "the receipt rea
 docker update --restart=no kie-receipts && docker stop kie-receipts    # KIE stays stopped, also after a reboot
 ( set -a; . <(grep '^KIE_API_KEY=' server/.env); set +a
   docker compose -f agent/receipts/compose.yaml up -d --build --no-deps qwen-receipts )   # no QWEN_RECEIPTS_PORT: 8290
+docker update --restart=unless-stopped qwen-receipts    # always: after a rollback, `up` reuses the stopped container and its policy `no`
 curl -s -w ' %{http_code}\n' http://127.0.0.1:8290/health
 ```
+
+The `docker update` line matters on the second and later switches: the rollback below sets Qwen to `--restart=no`, and `up` starts that same container again without resetting it. Without the line, neither reader would come back after a reboot. Check with `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' qwen-receipts` (`unless-stopped`).
 
 Then check the public address, `curl -s -w ' %{http_code}\n' <KIE_PUBLIC_URL>/health` → 200, and send one receipt photo from the web or a chat: it becomes a draft in about 10 s.
 

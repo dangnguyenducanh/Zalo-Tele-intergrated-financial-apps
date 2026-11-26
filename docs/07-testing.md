@@ -37,17 +37,17 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**159 cases**: 151 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**179 cases**: 171 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
 | F1 Auth | 25 | TC-F1-01 passwords stored as bcrypt hashes; TC-F1-05 refresh rotation + stolen-token reuse detection; TC-F1-06 logout really revokes server-side; TC-F1-08 reload keeps you logged in (silent refresh) |
-| F2 Wallets | 8 | TC-F2-02 user B can't touch user A's wallet (404); TC-F2-04 balance excludes drafts and deleted items |
+| F2 Wallets | 12 | TC-F2-02 user B can't touch user A's wallet (404); TC-F2-04 balance excludes drafts and deleted items |
 | F3 Categories | 6 | TC-F3-01 defaults seeded on register; TC-F3-03 deleting a category moves its transactions to "Other" |
 | F4 Transactions | 13 | TC-F4-02 only positive integer VND accepted; TC-F4-07 month boundaries use Vietnam time |
 | F5 Budgets | 7 | TC-F5-01 one budget per category per month (409); TC-F5-03 80 %/100 % warnings on web and bot |
 | F6 Statistics | 7 | TC-F6-01 totals equal hand-computed fixture; TC-F6-03 daily grouping in VN time |
-| F7 Bot linking | 9 | TC-F7-02 link codes are single-use and expire; TC-F7-03 one chat account → one web account |
+| F7 Bot linking | 15 | TC-F7-02 link codes are single-use and expire; TC-F7-03 one chat account → one web account |
 | F8 Bot capture | 23 | TC-F8-01 parser table; TC-F8-03 bad webhook secret rejected; TC-F8-05 duplicate delivery → one draft; TC-F8-08 Zalo photo → KIE → draft |
 | F9 Bot inbox | 6 | TC-F9-01 edit + confirm a draft from the web |
 | F10 Receipt upload | 16 | TC-F10-01 real reader output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit; TC-F10-26 a torn receipt gives no total, never an invented one; TC-F10-32 the Qwen service live |
@@ -161,7 +161,7 @@ npm test                             # unit + API + webhook + component (Vitest)
 npm run test:e2e                     # Playwright, writes test-results/e2e.xml + videos
 python3 -m pytest agent/receipts --junitxml=test-results/receipts-pytest.xml   # receipt service, fake model (CI runs this)
 node --test tools/bot-e2e/bot-e2e.test.mjs   # TC-NF-15: the bot-e2e tool's --help and bad options (not part of npm test)
-npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml
+npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml --junit test-results/receipts-pytest.xml
 ```
 
 The report tool on its own:
