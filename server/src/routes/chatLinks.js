@@ -4,6 +4,7 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { sendLinked } from '../bot/core.js';
 import { telegram } from '../bot/telegram.js';
+import { whatsapp } from '../bot/whatsapp.js';
 import { zalo } from '../bot/zalo.js';
 import { requireAuth } from '../middleware/auth.js';
 import { claimChat, createLinkCode, deleteChatLink, dismissClaimNotice, listChatLinks, previewClaim } from '../services/chatLinks.js';
@@ -12,7 +13,7 @@ import { AppError } from '../utils/AppError.js';
 const router = Router();
 router.use(requireAuth);
 
-const ADAPTERS = { telegram, zalo }; // who tells the chat that a claim linked it
+const ADAPTERS = { telegram, whatsapp, zalo }; // who tells the chat that a claim linked it
 // A claim token travels in the body, never in a URL the request log would keep. Any short string is accepted:
 // a website code or garbage is simply not a live claim link (404).
 const claimBody = z.object({ token: z.string().min(1).max(100) });

@@ -37,7 +37,7 @@ const listQuery = z.object({
   walletId: objectId.optional(),
   categoryId: objectId.optional(),
   status: z.enum(['draft', 'confirmed']).optional(),
-  source: z.enum(['web', 'telegram', 'zalo', 'receipt']).optional(),
+  source: z.enum(['web', 'telegram', 'zalo', 'whatsapp', 'receipt']).optional(),
   q: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
