@@ -33,7 +33,7 @@ def start(env):
     ({'AGENT_SECRET': SECRET, 'MONGODB_URI_AGENT': 'hunter2-password is not a uri'}, ['MONGODB_URI_AGENT']),
 ])
 def test_refuses_to_start_without_its_secret_or_database(env, names):
-    """TC-F14-03 The service exits without AGENT_SECRET or MONGODB_URI_AGENT (or with a URI that is none), and listens on nothing"""
+    """TC-F14-06 The service exits without AGENT_SECRET or MONGODB_URI_AGENT (or with a URI that is none), and listens on nothing"""
     code, output, port = start(env)
     assert code != 0
     assert 'ConfigError' in output and all(name in output for name in names)
@@ -44,7 +44,7 @@ def test_refuses_to_start_without_its_secret_or_database(env, names):
 
 
 def test_refuses_to_start_while_a_model_is_not_pinned():
-    """TC-F14-03 With both variables set the service still exits while models.lock holds a placeholder, never an unpinned model"""
+    """TC-F14-06 With both variables set the service still exits while models.lock holds a placeholder, never an unpinned model"""
     lock = (ROOT / 'agent' / 'models.lock').read_text()
     if 'PIN_AT_SETUP' not in lock:
         pytest.skip('models.lock is pinned: the service would load bge-m3 here')

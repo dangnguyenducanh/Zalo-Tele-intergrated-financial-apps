@@ -31,7 +31,7 @@ def mongo_uri(user, password, host, database=''):
 
 def pytest_itemcollected(item):
     """JUnit test names must start with the case ID (tools/test-report matches on it, docs/07), and a Python function
-    name cannot hold "TC-F14-01". So a test whose docstring starts with a case ID is reported under that line."""
+    name cannot hold "TC-F14-04". So a test whose docstring starts with a case ID is reported under that line."""
     first = (getattr(item, 'obj', None).__doc__ or '').strip().split('\n')[0]
     if first.startswith('TC-'):
         callspec = getattr(item, 'callspec', None)

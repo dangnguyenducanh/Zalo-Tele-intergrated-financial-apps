@@ -35,7 +35,7 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**213 cases**: 205 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**216 cases**: 208 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
@@ -52,13 +52,13 @@ The full list (**213 cases**: 205 automated or semi-automated + 8 manual charter
 | F11 Admin | 9 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
 | F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
 | F13 Quick add | 7 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed |
-| F14 Assistant | 14 (built so far: the agent service scaffold, T44) | TC-F14-02 every agent path but `/health` needs the bearer; TC-F14-10 the agent's database role cannot change app data or create indexes; TC-F14-11 it cannot read `users`, sessions or link tokens; TC-F14-12 `usersForAgent` shows no e-mail or password hash |
+| F14 Assistant | 17 (built so far: the one comparison rule, T43, TC-F14-01…03; the agent service scaffold, T44, TC-F14-04…17) | TC-F14-01 `compareRange()` is one rule; TC-F14-05 every agent path but `/health` needs the bearer; TC-F14-13 the agent's database role cannot change app data or create indexes; TC-F14-14 it cannot read `users`, sessions or link tokens; TC-F14-15 `usersForAgent` shows no e-mail or password hash |
 | Non-functional | 18 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-15 the bot-e2e tool's `--help` and bad options |
 | Manual charters | 8 | MT-01…MT-08 below |
 
 **Planned for §2.10 (not in the counts above):** the three WhatsApp cases that need the owner's Meta setup (*one-tap on phones*, *real WhatsApp chat*, the WhatsApp charter, §7.8.5). They have no IDs yet: each takes the next free ID in `test-cases.json` at merge time. Linking from the chat (T33) is built and counted: TC-F7-16…23. The WhatsApp bot (T34) is built and in the catalogue: TC-F8-26…43 (TC-F8-24 is left free: it may be taken by another card in flight), TC-F4-14 and TC-F9-07. The counts in this table are as of T33 and are brought up to date by the next docs refresh, with the cases of T34, T77 and T78.
 
-**Planned for §2.11 and §2.12 (not in the counts above):** the assistant cases of §7.9 and the email-code cases of §7.10, named the same way and given IDs the same way. The first assistant cases are built (T43 #88, feature row F14 Assistant): **TC-F14-01…03**, the one comparison rule. They join the counts at the next docs refresh.
+**Planned for §2.11 and §2.12 (not in the counts above):** the assistant cases of §7.9 and the email-code cases of §7.10, named the same way and given IDs the same way. The assistant cases built so far are in the counts above (feature row F14 Assistant): **TC-F14-01…03**, the one comparison rule (T43 #88), and **TC-F14-04…17**, the agent service scaffold (T44 #89).
 
 ## 7.4 Manual testing in the browser (recorded)
 
@@ -168,7 +168,7 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (213 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (216 cases, last results from results.json)
 ```
 
 ## 7.8 One-tap linking and WhatsApp (§2.10)
@@ -353,7 +353,7 @@ One test per trigger path through the compiled graph. The fake chat model return
 
 **Agent API** (pytest + `TestClient`, P0): every `POST` without `Authorization: Bearer ${AGENT_SECRET}`, or with a wrong one, → 401; a body missing `userId`, `channel`, `requestId` or `today` → 422; `GET /health` needs no auth and returns only `{vllm, embedder, model, gpuFreeMb}`; the same `requestId` twice for one user → one `agentTurns` row (unique index), and the second request gets the first answer or 409 (docs/04 decides); with 16 requests waiting on a fake slow model, the 17th → 503 `AGENT_BUSY` at once. **DB role** (P0 since decision D15): the test `mongod` runs with auth and the `sochitieu_agent` custom role of docs/03 (built from `agent/role.json`); an `insert` into `transactions`, `budgets` or `categories` as that user → unauthorized; `find` on them and writes to `agent*` and `pendingActions` succeed; `find` on `users`, `sessions`, `chatLinks`, `linkCodes` and `emailCodes` is unauthorized; for a user that has an e-mail and a password hash, `usersForAgent` returns only `_id`, `language` and `assistantOn`.
 
-**Built by T44 (the agent service scaffold):** the health, bearer, startup-refusal, error-shape and log checks above are TC-F14-01 … TC-F14-05; the embedder interface TC-F14-06; the setup command TC-F14-07 … TC-F14-09 (collections, indexes, the view, a second run, `--help`); the DB role TC-F14-10 … TC-F14-12; the JUnit case-ID hook TC-F14-13 and the hermetic rules TC-F14-14. The duplicate-`requestId`, 17th-request and body-validation checks wait for `/v1/turn` (T45).
+**Built by T44 (the agent service scaffold):** the health, bearer, startup-refusal, error-shape and log checks above are TC-F14-04 … TC-F14-08; the embedder interface TC-F14-09; the setup command TC-F14-10 … TC-F14-12 (collections, indexes, the view, a second run, `--help`); the DB role TC-F14-13 … TC-F14-15; the JUnit case-ID hook TC-F14-16 and the hermetic rules TC-F14-17. The duplicate-`requestId`, 17th-request and body-validation checks wait for `/v1/turn` (T45).
 
 ### 7.9.4 Express tests: unit, API and webhook (Vitest, agent API stubbed)
 
@@ -458,7 +458,7 @@ cases:
 
 ### 7.9.8 Hermetic rules (no real GPU or model in CI)
 
-- **Python.** CI runs pytest with the fake chat model and fake embedder only. `HF_HUB_OFFLINE=1` and no `VLLM_BASE_URL`: a test that tries to download weights or reach vLLM fails. The evals and the load test are not part of CI. Built (T44, TC-F14-14): every agent test runs with `HF_HUB_OFFLINE=1` and `VLLM_BASE_URL` unset, and a connection or DNS lookup to any host but this machine raises.
+- **Python.** CI runs pytest with the fake chat model and fake embedder only. `HF_HUB_OFFLINE=1` and no `VLLM_BASE_URL`: a test that tries to download weights or reach vLLM fails. The evals and the load test are not part of CI. Built (T44, TC-F14-17): every agent test runs with `HF_HUB_OFFLINE=1` and `VLLM_BASE_URL` unset, and a connection or DNS lookup to any host but this machine raises.
 - **Express (Vitest).** The agent API is always the MSW stub on a dummy `AGENT_URL`; tests assert the exact number of calls. In *parse question* and the capture cases, the handler fails the test if it is called at all. `AGENT_SECRET` in tests is a dummy.
 - **E2E server.** `AGENT_URL` points at an agent stub inside the E2E server (next to `bot-api-stub.js`), which answers canned turns and can be switched to 503. Every other host stays blocked (TC-NF-11). `CRON_SECRET` has a test value, and E2E drives the cron through "Chạy ngay".
 - **No third party.** No test, eval or charter calls a hosted model API. The only model is ours.

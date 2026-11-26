@@ -11,7 +11,7 @@ import agent.app
 
 
 def test_health_needs_no_secret_and_shows_nothing_else(make_app, monkeypatch):
-    """TC-F14-01 GET /health answers without a secret with only vllm, embedder, model and gpuFreeMb"""
+    """TC-F14-04 GET /health answers without a secret with only vllm, embedder, model and gpuFreeMb"""
     client = TestClient(make_app())
     response = client.get('/health')
     assert response.status_code == 200
@@ -44,7 +44,7 @@ def bad_headers(secret):
     ('GET', '/docs'), ('GET', '/openapi.json'), ('GET', '/'),
 ])
 def test_every_path_but_health_needs_the_bearer(make_app, auth, settings, method, path):
-    """TC-F14-02 A missing or wrong bearer is 401 on /v1/* and on every other path except /health"""
+    """TC-F14-05 A missing or wrong bearer is 401 on /v1/* and on every other path except /health"""
     client = TestClient(make_app())
     for headers in bad_headers(settings.agent_secret):
         response = client.request(method, path, headers=headers, content=b'not json')  # 401 comes before the body
@@ -56,7 +56,7 @@ def test_every_path_but_health_needs_the_bearer(make_app, auth, settings, method
 
 
 def test_the_secret_is_compared_in_constant_time(make_app, auth, monkeypatch):
-    """TC-F14-02 The comparison uses hmac.compare_digest on equal-length digests, so length and content do not leak"""
+    """TC-F14-05 The comparison uses hmac.compare_digest on equal-length digests, so length and content do not leak"""
     seen, real = [], agent.app.compare_digest
     monkeypatch.setattr(agent.app, 'compare_digest', lambda a, b: seen.append((len(a), len(b))) or real(a, b))
     client = TestClient(make_app())
@@ -67,7 +67,7 @@ def test_the_secret_is_compared_in_constant_time(make_app, auth, monkeypatch):
 
 
 def test_errors_use_express_shape(make_app, auth):
-    """TC-F14-04 404, 405, 422 and 500 answer { error: { code, message, details? } } and a 500 hides the cause"""
+    """TC-F14-07 404, 405, 422 and 500 answer { error: { code, message, details? } } and a 500 hides the cause"""
 
     class Body(BaseModel):
         amount: int
@@ -99,7 +99,7 @@ def test_errors_use_express_shape(make_app, auth):
 
 
 def test_logs_hold_ids_and_error_classes_only(make_app, auth, settings, caplog):
-    """TC-F14-05 A log line holds the request id, the node and an error class, never text, figures or the secret"""
+    """TC-F14-08 A log line holds the request id, the node and an error class, never text, figures or the secret"""
     app = make_app()
 
     @app.post('/v1/test-boom')

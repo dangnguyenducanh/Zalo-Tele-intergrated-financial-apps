@@ -31,7 +31,7 @@ def indexes(db, collection):
 
 
 def test_setup_creates_collections_indexes_and_the_view(mongo, db):
-    """TC-F14-07 agent.setup creates the agent collections, pendingActions, their unique and TTL indexes and the usersForAgent view"""
+    """TC-F14-10 agent.setup creates the agent collections, pendingActions, their unique and TTL indexes and the usersForAgent view"""
     assert main([], {'MONGODB_URI': mongo.app_uri}) == 0
     assert set(EXPECTED) <= set(db.list_collection_names())
     for collection, expected in EXPECTED.items():
@@ -42,7 +42,7 @@ def test_setup_creates_collections_indexes_and_the_view(mongo, db):
 
 
 def test_setup_runs_again_without_change_and_heals_a_wider_view(mongo, db):
-    """TC-F14-08 A second setup run succeeds and changes nothing, and puts back a usersForAgent view that shows too much"""
+    """TC-F14-11 A second setup run succeeds and changes nothing, and puts back a usersForAgent view that shows too much"""
     assert main([], {'MONGODB_URI': mongo.app_uri}) == 0
     db['agentTurns'].insert_one({'userId': 1, 'requestId': 'r1', 'createdAt': 1})
     before = {c: db[c].index_information() for c in EXPECTED}
@@ -65,7 +65,7 @@ def test_setup_runs_again_without_change_and_heals_a_wider_view(mongo, db):
 
 
 def test_setup_command_line(mongo, db, capsys):
-    """TC-F14-09 agent.setup answers --help and a bad option with the usage, and a missing or wrong user with one line"""
+    """TC-F14-12 agent.setup answers --help and a bad option with the usage, and a missing or wrong user with one line"""
     with pytest.raises(SystemExit) as exit_:
         main(['--help'])
     assert exit_.value.code == 0 and 'usage: python -m agent.setup' in capsys.readouterr().out

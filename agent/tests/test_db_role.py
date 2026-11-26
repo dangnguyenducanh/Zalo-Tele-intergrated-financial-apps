@@ -34,7 +34,7 @@ def refused(action):
 
 @pytest.mark.parametrize('name', APP_DATA)
 def test_agent_reads_app_data_but_cannot_change_it(ready, db, agent_db, name):
-    """TC-F14-10 sochitieu_agent can find in categories, wallets, transactions and budgets, and every insert, update, delete, index or drop is refused"""
+    """TC-F14-13 sochitieu_agent can find in categories, wallets, transactions and budgets, and every insert, update, delete, index or drop is refused"""
     assert agent_db[name].find_one({'_id': 'row'})['name'] == 'secret row'
     assert agent_db[name].count_documents({}) == 1
     assert list(agent_db[name].aggregate([{'$match': {'userId': USER['_id']}}]))  # the tools aggregate
@@ -50,7 +50,7 @@ def test_agent_reads_app_data_but_cannot_change_it(ready, db, agent_db, name):
 
 @pytest.mark.parametrize('name', OWN + ['pendingActions'])
 def test_agent_writes_only_its_own_collections(ready, db, agent_db, name):
-    """TC-F14-10 sochitieu_agent can insert, find and update in agent* collections and pendingActions, but cannot create an index or drop one"""
+    """TC-F14-13 sochitieu_agent can insert, find and update in agent* collections and pendingActions, but cannot create an index or drop one"""
     row = {'userId': USER['_id'], 'requestId': 'r1', 'createdAt': datetime.now(), 'expiresAt': datetime.now(), 'name': 'x'}
     agent_db[name].insert_one(row | {'_id': 'mine'})
     agent_db[name].update_one({'_id': 'mine'}, {'$set': {'name': 'y'}})
@@ -72,7 +72,7 @@ def test_agent_writes_only_its_own_collections(ready, db, agent_db, name):
 
 @pytest.mark.parametrize('name', HIDDEN)
 def test_agent_cannot_touch_users_sessions_or_any_other_express_collection(ready, agent_db, name):
-    """TC-F14-11 find on users, sessions, chatLinks, linkCodes, emailCodes, notices, channelUsage and appSettings is unauthorized"""
+    """TC-F14-14 find on users, sessions, chatLinks, linkCodes, emailCodes, notices, channelUsage and appSettings is unauthorized"""
     refused(lambda: agent_db[name].find_one())
     refused(lambda: agent_db[name].count_documents({}))
     refused(lambda: list(agent_db[name].aggregate([{'$match': {}}])))
@@ -82,7 +82,7 @@ def test_agent_cannot_touch_users_sessions_or_any_other_express_collection(ready
 
 
 def test_no_way_round_the_view_to_the_users_collection(ready, agent_db):
-    """TC-F14-11 A $lookup or a $unionWith into users, from an allowed collection or from the view, is unauthorized too"""
+    """TC-F14-14 A $lookup or a $unionWith into users, from an allowed collection or from the view, is unauthorized too"""
     into_users = [{'$lookup': {'from': 'users', 'localField': 'userId', 'foreignField': '_id', 'as': 'u'}}]
     union_users = [{'$unionWith': 'users'}]
     for source in ('transactions', 'categories', USERS_VIEW, 'agentTurns'):
@@ -93,7 +93,7 @@ def test_no_way_round_the_view_to_the_users_collection(ready, agent_db):
 
 
 def test_users_for_agent_shows_only_id_language_and_assistant_switch(ready, db, agent_db):
-    """TC-F14-12 For a user with an e-mail and a password hash, usersForAgent returns only _id, language and assistantOn"""
+    """TC-F14-15 For a user with an e-mail and a password hash, usersForAgent returns only _id, language and assistantOn"""
     db['users'].insert_one({'_id': 'plain', 'email': 'b@example.com', 'passwordHash': 'x', 'language': 'en'})
     seen = {row['_id']: row for row in agent_db[USERS_VIEW].find()}
     assert seen[USER['_id']] == {'_id': USER['_id'], 'language': 'vi', 'assistantOn': True}

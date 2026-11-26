@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_a_test_cannot_reach_another_host_or_download_weights():
-    """TC-F14-14 With HF_HUB_OFFLINE=1 and no VLLM_BASE_URL, a test that connects or looks up another host fails"""
+    """TC-F14-17 With HF_HUB_OFFLINE=1 and no VLLM_BASE_URL, a test that connects or looks up another host fails"""
     assert os.environ['HF_HUB_OFFLINE'] == '1' and 'VLLM_BASE_URL' not in os.environ
     with socket.socket() as other, pytest.raises(OSError, match='may not reach 1.1.1.1'):
         other.connect(('1.1.1.1', 80))
@@ -25,7 +25,7 @@ def test_a_test_cannot_reach_another_host_or_download_weights():
 
 
 def test_junit_name_starts_with_the_case_id(tmp_path):
-    """TC-F14-13 pytest's JUnit file names a test by the case ID in its docstring, which tools/test-report matches on"""
+    """TC-F14-16 pytest's JUnit file names a test by the case ID in its docstring, which tools/test-report matches on"""
     report = tmp_path / 'junit.xml'
     done = subprocess.run(
         [sys.executable, '-m', 'pytest', 'agent/tests/junit_sample.py', '-c', 'agent/pytest.ini', f'--junitxml={report}'],

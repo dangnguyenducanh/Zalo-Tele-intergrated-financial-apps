@@ -512,7 +512,7 @@ Every turn passes the same graph, so every skill also reads `users` (through the
 | `agentSkills`, `agentTools`, `agentTurns`, `agentMemory`, `agentCategoryVectors`, `receiptReads` | `find`, `insert`, `update`, `remove` | the agent service only. No `createIndex`: `python -m agent.setup` makes the indexes (D14) |
 | anything else (`users` itself, `sessions`, `chatLinks`, `linkCodes`, `emailCodes`, `notices`, `channelUsage`, `appSettings`) | none | Express only |
 
-The role is created in Atlas (Database Access → Custom Roles); the steps are in [06-deployment.md](06-deployment.md), and **`agent/role.json` is the one committed definition** of it: the pytest suite builds the role from that file on a `mongod` with authentication and checks every row of this table (TC-F14-10 … TC-F14-12). With the role scoped like this, a bug or a prompt injection in the agent service cannot change money data, read password hashes, sessions or tokens, or write outside its own collections, and it cannot create or drop an index or a collection.
+The role is created in Atlas (Database Access → Custom Roles); the steps are in [06-deployment.md](06-deployment.md), and **`agent/role.json` is the one committed definition** of it: the pytest suite builds the role from that file on a `mongod` with authentication and checks every row of this table (TC-F14-13 … TC-F14-15). With the role scoped like this, a bug or a prompt injection in the agent service cannot change money data, read password hashes, sessions or tokens, or write outside its own collections, and it cannot create or drop an index or a collection.
 
 ### Changed collections (planned)
 

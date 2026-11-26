@@ -14,7 +14,7 @@ HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
 
 
 def test_fake_embedder_gives_fixed_unit_vectors():
-    """TC-F14-06 The fake embedder maps a text to the same 1024-number unit vector every time"""
+    """TC-F14-09 The fake embedder maps a text to the same 1024-number unit vector every time"""
     fake = FakeEmbedder()
     a, b = fake.encode(['cà phê', 'phở'])
     assert len(a) == DIMENSIONS == 1024 and math.isclose(sum(x * x for x in a), 1.0, rel_tol=1e-9)
@@ -23,7 +23,7 @@ def test_fake_embedder_gives_fixed_unit_vectors():
 
 
 def test_bge_loader_is_lazy_pinned_and_normalised(monkeypatch, tmp_path):
-    """TC-F14-06 The bge-m3 loader imports sentence-transformers only when it loads, at the models.lock hash"""
+    """TC-F14-09 The bge-m3 loader imports sentence-transformers only when it loads, at the models.lock hash"""
     # Importing the module must not import the package: CI never installs it.
     script = 'import sys, agent.embedder; assert "sentence_transformers" not in sys.modules; assert "torch" not in sys.modules'
     assert subprocess.run([sys.executable, '-c', script], cwd=Path(__file__).resolve().parents[2]).returncode == 0
@@ -52,7 +52,7 @@ def test_bge_loader_is_lazy_pinned_and_normalised(monkeypatch, tmp_path):
 
 
 def test_committed_models_lock_lists_both_models():
-    """TC-F14-06 models.lock has a line for each model, a placeholder until go-live and a 40-character hash after"""
+    """TC-F14-09 models.lock has a line for each model, a placeholder until go-live and a 40-character hash after"""
     values = dict(line.split('=', 1) for line in LOCK.read_text().splitlines() if line.strip() and not line.startswith('#'))
     assert set(values) == {'BAAI/bge-m3', 'Qwen/Qwen3.5-2B'}
     assert all(v == 'PIN_AT_SETUP' or re.fullmatch(r'[0-9a-f]{40}', v) for v in values.values())
