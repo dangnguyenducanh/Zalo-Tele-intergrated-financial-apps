@@ -1,0 +1,16 @@
+{
+  "title": "Link a chat",
+  "loading": "Checking the link…",
+  "question": "Link <chat/> to <account/>?",
+  "warning": "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account.",
+  "confirm": "Confirm",
+  "retry": "Retry",
+  "expired": "This link has expired or was already used. Send any message to the bot to get a new one.",
+  "alreadyLinked": "This chat is already linked to an account.",
+  "toInbox": "Go to Bot inbox",
+  "notice": {
+    "text": "New chat linked from a chat link: <chat/>. Not you?",
+    "unlink": "Unlink",
+    "dismiss": "Dismiss notice for {{name}}"
+  }
+}

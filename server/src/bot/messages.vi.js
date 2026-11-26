@@ -3,6 +3,7 @@
 export default {
   locale: 'vi-VN',
   pleaseLink: (appUrl) => `Vui lòng liên kết tài khoản: mở ${appUrl}/bot rồi gửi /link MÃ`,
+  tapToLink: (url) => `Hoặc bấm để liên kết: ${url} (hiệu lực 10 phút)`,
   invalidCode: 'Mã liên kết không đúng hoặc đã hết hạn. Hãy tạo mã mới trên trang Bot.',
   linked: (name) => `✅ Đã liên kết với tài khoản ${name}. Thử gửi: phở 45k`,
   alreadyLinked: 'Tài khoản chat này đã liên kết với một tài khoản web. Huỷ liên kết trên trang Bot trước khi dùng mã khác.',

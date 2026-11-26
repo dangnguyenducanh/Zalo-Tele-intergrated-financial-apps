@@ -2,6 +2,7 @@
 export default {
   locale: 'en-US',
   pleaseLink: (appUrl) => `Please link your account: open ${appUrl}/bot and send /link CODE`,
+  tapToLink: (url) => `Or tap to link: ${url} (valid 10 minutes)`,
   invalidCode: 'This link code is wrong or has expired. Create a new one on the Bot page.',
   linked: (name) => `✅ Linked to the account of ${name}. Try sending: coffee 30k`,
   alreadyLinked: 'This chat account is already linked to a web account. Unlink it on the Bot page before using another code.',

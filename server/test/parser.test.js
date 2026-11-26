@@ -164,3 +164,52 @@ describe('TC-F8-23 an amount over the 10^13 ₫ ceiling is not an amount (BUG-03
     expect(parseText('cafe 20000000000000\ncafe 45k', ctx).map((d) => d?.amount ?? null)).toEqual([null, 45_000]);
   });
 });
+
+describe('TC-F8-25 a year or month typed before the amount is a date, not the amount (BUG-039)', () => {
+  test.each([
+    ['thuê nhà năm 2026 36tr', 36_000_000, 'thuê nhà năm 2026'],
+    ['thue nha nam 2026 36tr', 36_000_000, 'thue nha nam 2026'],
+    ['học phí năm 2025 12.000.000', 12_000_000, 'học phí năm 2025'],
+    ['hoc phi nam 2025 12.000.000', 12_000_000, 'hoc phi nam 2025'],
+    ['bảo hiểm năm 2026 1500000', 1_500_000, 'bảo hiểm năm 2026'],
+    ['bao hiem nam 2026 1500000', 1_500_000, 'bao hiem nam 2026'],
+    ['ăn tối tháng 10 50', 50_000, 'ăn tối tháng 10'],
+    ['an toi thang 10 50', 50_000, 'an toi thang 10'],
+  ])('TC-F8-25 "%s" → %i, the year or month stays in the note', (text, amount, note) => {
+    expect(parse(text)).toMatchObject({ amount, note });
+  });
+
+  test('TC-F8-25 the same lines written the other way round were already right', () => {
+    expect(parse('thuê nhà 36tr năm 2026')).toMatchObject({ amount: 36_000_000, categoryId: 'housing' });
+    expect(parse('tiền nhà tháng 11 5tr').amount).toBe(5_000_000);
+    expect(parse('ăn tối tháng 10 50k').amount).toBe(50_000);
+  });
+
+  test.each([
+    ['cắt tóc nam 50k', 50_000], // "nam" is also "male"
+    ['cắt tóc nam 50000', 50_000],
+    ['áo nam 2000k', 2_000_000],
+    ['gửi xe tháng 100k', 100_000],
+    ['gửi xe tháng 100', 100_000], // 100 is no month
+    ['thuê nhà tháng 13', 13_000], // neither is 13
+    ['ăn tối tháng 10k', 10_000], // a money unit makes it money
+    ['ăn tối tháng 10 k', 10_000],
+    ['ăn tối tháng 10 nghìn', 10_000],
+    ['thuê nhà năm 2.026', 2_026], // so do thousands separators
+    ['học phí năm 1899', 1_899], // 1900–2099 are years, nothing else
+    ['học phí năm 2100', 2_100],
+  ])('TC-F8-25 "%s" is still money → %i', (text, amount) => {
+    expect(parse(text)?.amount).toBe(amount);
+  });
+
+  test.each(['tiền nhà tháng 10', 'tien nha thang 10', 'năm 2025', 'nam 2025', 'tháng 12', 'thuê nhà năm 1900', 'thuê nhà năm 2099'])(
+    'TC-F8-25 "%s" has only a date → no amount',
+    (text) => {
+      expect(parse(text)).toBeNull();
+    },
+  );
+
+  test('TC-F8-25 one result per line: a date-only line is null, its neighbours are read', () => {
+    expect(parseText('tiền nhà tháng 10\nthuê nhà năm 2026 36tr', ctx).map((d) => d?.amount ?? null)).toEqual([null, 36_000_000]);
+  });
+});

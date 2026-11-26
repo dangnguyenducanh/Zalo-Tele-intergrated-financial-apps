@@ -8,7 +8,7 @@ import { ChatLink } from '../models/ChatLink.js';
 import { MAX_MONEY, Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
-import { redeemLinkCode } from '../services/chatLinks.js';
+import { createClaimToken, redeemLinkCode } from '../services/chatLinks.js';
 import { listBudgets } from '../services/budgets.js';
 import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
@@ -22,8 +22,17 @@ import vi from './messages.vi.js';
 
 export const messagesFor = (language) => (language === 'en' ? en : vi);
 
-// A chat that is not linked has no language yet, so it gets both.
-const pleaseLink = () => `${vi.pleaseLink(env.APP_URL ?? '')}\n\n${en.pleaseLink(env.APP_URL ?? '')}`;
+// A chat that is not linked has no language yet, so it gets both. `lines(m)` is one language's lines.
+const inBothLanguages = (lines) => [vi, en].map((m) => lines(m).filter(Boolean).join('\n')).join('\n\n');
+const pleaseLink = (m) => m.pleaseLink(env.APP_URL ?? '');
+
+// What a chat that is not linked gets for any message: how to link, plus a one-time link that opens the website's
+// /link screen for this very chat (docs/02 §2.10.3). A wrong or expired code is said first. Without APP_URL
+// there is no address to link to, so no token is made.
+async function linkInstructions(platform, { platformUserId, chatId, displayName }, { wrongCode = false } = {}) {
+  const claimUrl = env.APP_URL && `${env.APP_URL}/link?t=${await createClaimToken({ platform, platformUserId, chatId, displayName })}`;
+  return inBothLanguages((m) => [wrongCode && m.invalidCode, pleaseLink(m), claimUrl && m.tapToLink(claimUrl)]);
+}
 
 const money = (amount, m) => new Intl.NumberFormat(m.locale, { style: 'currency', currency: 'VND' }).format(amount);
 const dateText = (date, m) =>
@@ -54,12 +63,13 @@ function readCommand(text) {
 
 // Every incoming chat message, mapped by the adapter to { platformUserId, chatId, messageId, displayName, text, photo? }.
 // `photo` is the platform's reference to a photo in the message (Telegram file_id, Zalo photo_url).
-// Without a link, only "/start CODE" and "/link CODE" do something; nothing is ever stored for an unlinked chat.
+// Without a link, a valid "/start CODE" or "/link CODE" links the chat; anything else gets a claim link, the only
+// thing ever stored for an unlinked chat (no message text, no transaction).
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
   const [command, arg] = readCommand(message.text);
   if ((command === 'start' || command === 'link') && arg) return adapter.sendText(message.chatId, await linkChat(adapter.platform, message, arg, link));
-  if (!link) return adapter.sendText(message.chatId, pleaseLink());
+  if (!link) return adapter.sendText(message.chatId, await linkInstructions(adapter.platform, message));
 
   const user = await User.findById(link.userId).lean();
   if (user.status === 'locked') return adapter.sendText(message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
@@ -73,19 +83,30 @@ export async function handleMessage(adapter, message) {
 // A button press (Telegram ✅ / ❌) → { ok, text }. Only the presser's own drafts can be touched.
 export async function handleButton(platform, platformUserId, action, transactionId) {
   const link = await ChatLink.findOne({ platform, platformUserId });
-  if (!link) return { ok: false, text: pleaseLink() };
+  if (!link) return { ok: false, text: inBothLanguages((m) => [pleaseLink(m)]) }; // a button's short notice can't be tapped
   const user = await User.findById(link.userId).lean();
   if (user.status === 'locked') return { ok: false, text: messagesFor(user.language).locked };
   return action === 'confirm' ? confirm(link, transactionId) : discard(link, transactionId);
 }
 
 // "/start CODE" or "/link CODE" → the reply text. A chat account stays linked to its first web account.
-async function linkChat(platform, { platformUserId, chatId, displayName }, code, link) {
+async function linkChat(platform, message, code, link) {
   if (link) return (await messagesOf(link)).alreadyLinked;
+  const { platformUserId, chatId, displayName } = message;
   const created = await redeemLinkCode(code, { platform, platformUserId, chatId, displayName });
-  if (!created) return `${vi.invalidCode}\n\n${en.invalidCode}`;
-  const user = await User.findById(created.userId).lean();
+  if (!created) return linkInstructions(platform, message, { wrongCode: true });
+  return linkedText(created.userId);
+}
+
+// "Linked to the account of <name>", in that user's language: the reply to "/link CODE" and the message after a claim.
+async function linkedText(userId) {
+  const user = await User.findById(userId).lean();
   return messagesFor(user.language).linked(user.name);
+}
+
+// After a claim on the website (docs/02 §2.10.3 step 7) the bot tells the chat that it is linked.
+export async function sendLinked(adapter, chatId, userId) {
+  await adapter.sendText(chatId, await linkedText(userId));
 }
 
 // /today, /month, /lang vi|en; anything else (/start, /help, unknown) gets the help text.
