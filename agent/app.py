@@ -1,5 +1,6 @@
 # The agent service's HTTP shell (docs/04 §4.11 "Agent service API"): /health without auth, a bearer check on
-# every other path (so on all of /v1/), Express's error shape, and a log line that holds ids and error classes only.
+# every other path (so on all of /v1/), for http and websocket alike, Express's error shape, and a log line that holds
+# ids and error classes only.
 # The question engine (/v1/turn, /v1/receipt, /v1/categorize) arrives with the next cards and inherits all of this.
 import hashlib
 import http
@@ -13,7 +14,9 @@ from hmac import compare_digest
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
+from starlette.websockets import WebSocketClose
 
 from .config import Settings
 from .embedder import load_embedder
@@ -37,9 +40,29 @@ def same_secret(received, expected):
     return compare_digest(hashlib.sha256(received.encode()).digest(), hashlib.sha256(expected.encode()).digest())
 
 
-def bearer_token(request):
-    scheme, _, token = request.headers.get('authorization', '').partition(' ')
+def bearer_token(headers):
+    scheme, _, token = headers.get('authorization', '').partition(' ')
     return token if scheme == 'Bearer' else None
+
+
+class RequireSecret:
+    """Only /health is open. Everything else needs the secret, also a path no route owns yet, so a route added later
+    cannot be forgotten and the tunnel never shows a 404 to a stranger. Pure ASGI, not @app.middleware('http'), because
+    that one never sees a websocket: a websocket route would otherwise be open."""
+
+    def __init__(self, app, secret):
+        self.app, self.secret = app, secret
+
+    async def __call__(self, scope, receive, send):
+        # A "lifespan" scope (start and stop of the server) is neither: it has no path and goes straight through.
+        guarded = scope['type'] in ('http', 'websocket') and scope['path'] != '/health'
+        if guarded and not same_secret(bearer_token(Headers(scope=scope)), self.secret):
+            if scope['type'] == 'websocket':
+                await WebSocketClose(1008)(scope, receive, send)  # refused before the handshake: the client sees a 403
+            else:
+                await error_response(401, 'UNAUTHENTICATED', 'Bad or missing agent secret')(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
 
 
 def gpu_free_mb():
@@ -59,21 +82,19 @@ def create_app(settings=None, embedder=None):
     app.state.settings = settings
     app.state.embedder = embedder
 
+    # Added first, so it sits inside the logger below (the last one added is the outermost): a 401 is logged too.
+    app.add_middleware(RequireSecret, secret=settings.agent_secret)
+
     @app.middleware('http')
-    async def guard_and_log(request: Request, call_next):
+    async def log_and_hide_errors(request: Request, call_next):
         request_id = request.headers.get('x-request-id', '')
         request_id = request_id if REQUEST_ID.fullmatch(request_id) else uuid.uuid4().hex
         started = time.perf_counter()
-        # Only /health is open. Everything else needs the secret, also a path no route owns yet, so a route added
-        # under /v1/ later cannot be forgotten and the tunnel never shows a 404 to a stranger.
-        if request.scope['path'] != '/health' and not same_secret(bearer_token(request), settings.agent_secret):
-            response = error_response(401, 'UNAUTHENTICATED', 'Bad or missing agent secret')
-        else:
-            try:
-                response = await call_next(request)
-            except Exception as exc:  # a bug: say nothing about it to the caller, log the class only
-                log.error('request=%s node=http error=%s', request_id, type(exc).__name__)
-                response = error_response(500, 'INTERNAL', 'Internal server error')
+        try:
+            response = await call_next(request)
+        except Exception as exc:  # a bug: say nothing about it to the caller, log the class only
+            log.error('request=%s node=http error=%s', request_id, type(exc).__name__)
+            response = error_response(500, 'INTERNAL', 'Internal server error')
         response.headers['X-Request-Id'] = request_id
         log.info('request=%s node=http status=%s ms=%d', request_id, response.status_code,
                  (time.perf_counter() - started) * 1000)

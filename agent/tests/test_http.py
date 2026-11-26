@@ -4,8 +4,10 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from fastapi import WebSocket
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
+from starlette.websockets import WebSocketDisconnect
 
 import agent.app
 
@@ -53,6 +55,31 @@ def test_every_path_but_health_needs_the_bearer(make_app, auth, settings, method
     # With the secret the check passes. No route is there yet (the next cards add them), and the API docs are off.
     response = client.request(method, path, headers=auth)
     assert response.status_code in (404, 405) and response.json()['error']['code'] in ('NOT_FOUND', 'METHOD_NOT_ALLOWED')
+
+
+def test_a_websocket_route_needs_the_bearer_too(make_app, auth, settings):
+    """TC-F14-05 A websocket route is refused without the bearer, as an http route is: the guard sees both kinds of connection"""
+    app = make_app()
+    reached = []
+
+    @app.websocket('/v1/test-socket')
+    async def socket(websocket: WebSocket):
+        reached.append('connected')
+        await websocket.accept()
+        await websocket.send_text('hello')
+        await websocket.close()
+
+    client = TestClient(app)
+    for headers in ({}, {'Authorization': 'Bearer wrong'}, {'Authorization': 'Basic ' + settings.agent_secret},
+                    {'Authorization': 'Bearer ' + settings.agent_secret + 'x'}):
+        with pytest.raises(WebSocketDisconnect) as refused:
+            with client.websocket_connect('/v1/test-socket', headers=headers):
+                pass
+        assert refused.value.code == 1008, headers  # refused before the handshake: the route never ran
+        assert reached == [], headers
+    with client.websocket_connect('/v1/test-socket', headers=auth) as socket_with_secret:  # the secret opens it
+        assert socket_with_secret.receive_text() == 'hello'
+    assert reached == ['connected']
 
 
 def test_the_secret_is_compared_in_constant_time(make_app, auth, monkeypatch):
