@@ -76,8 +76,9 @@ test('TC-F6-04 dashboard cards and charts, with text summaries, update after a q
   await expect(pie.getByRole('listitem')).toHaveText([/^Ăn uống: 450\.000\s₫ \(75%\)$/, /^Đi lại: 150\.000\s₫ \(25%\)$/]); // … and summed up in text
   const compare = page.getByRole('figure', { name: 'Chi tiêu tháng này' }); // weekly columns, this month vs last
   await expect(compare.locator('.recharts-bar-rectangle').first()).toBeVisible();
-  await expect(compare).toContainText(/Tháng này chi 600\.000\s₫, nhiều hơn tháng trước 300\.000\s₫\. Tuần cao nhất: tuần \d, 600\.000\s₫\./);
+  await expect(compare).toContainText(/Tháng này chi 600\.000\s₫, nhiều hơn cùng kỳ tháng trước 300\.000\s₫\. Tuần cao nhất: tuần \d, 600\.000\s₫\./);
   await page.screenshot({ path: testInfo.outputPath('dashboard.png'), fullPage: true, animations: 'disabled' });
+  await compare.screenshot({ path: testInfo.outputPath('compare-sentence.png'), animations: 'disabled' }); // the sentence for the PR (TC-F14-03)
 
   // A quick add on the dashboard refreshes the cards by itself (RTK Query tags).
   const box = page.getByRole('textbox', { name: 'Thêm nhanh' });
@@ -92,7 +93,7 @@ test('TC-F6-04 dashboard cards and charts, with text summaries, update after a q
   await expect(page.getByRole('article', { name: 'Thu nhập' })).toContainText(/^Thu nhập0\s₫$/);
   await expect(page.getByRole('article', { name: 'Ngân sách còn lại' })).toContainText('Chưa đặt ngân sách tổng');
   await expect(pie.getByRole('listitem')).toHaveText([/^Mua sắm: 300\.000\s₫ \(100%\)$/]);
-  await expect(compare).toContainText(/Tháng này chi 300\.000\s₫, nhiều hơn tháng trước 300\.000\s₫\./); // the month before has nothing
+  await expect(compare).toContainText(/Tháng này chi 300\.000\s₫, nhiều hơn cùng kỳ tháng trước 300\.000\s₫\./); // the month before has nothing
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.getByRole('navigation', { name: 'Điều hướng chính' })).toBeVisible(); // the phone's bottom navigation

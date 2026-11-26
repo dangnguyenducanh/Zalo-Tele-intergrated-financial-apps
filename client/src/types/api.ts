@@ -21,6 +21,9 @@ export type RegisterInput = { name: string; email: string; password: string; lan
 
 export type UpdateMeInput = Partial<Pick<User, 'name' | 'language' | 'theme' | 'defaultWalletId'>>;
 
+// POST /chat-links/claim/preview: the chat a claim token ("tap to link" in a chat) would link.
+export type ClaimPreview = { platform: 'telegram' | 'zalo' | 'whatsapp'; displayName: string };
+
 // Every API error has this shape (docs/04 §4.5).
 export type ApiError = { error: { code: string; message: string; details?: unknown } };
 

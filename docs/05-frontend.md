@@ -19,6 +19,7 @@ client/src/
 │   ├── useAuth.ts         # AuthContext + useAuth()
 │   ├── session.ts         # in-memory access token, shared refresh, postAuth()
 │   ├── usersApi.ts        # PATCH /users/me (theme, language, profile)
+│   ├── claimToken.ts      # keeps a chat claim token (/link?t=…) out of the address bar until it is used (§5.9.2)
 │   ├── ProtectedRoute.tsx # redirect to /login (remembering the requested URL) if not authenticated
 │   └── AdminRoute.tsx     # 403 message if role !== 'admin'
 ├── components/            # AppLayout, NavDrawer, NavList, navItems, BottomNav, UserMenu, BrandMark, Splash, RouteError,
@@ -29,10 +30,11 @@ client/src/
 │   ├── auth/       # LoginPage, RegisterPage, AuthLayout, PasswordField, useAuthForm, validation.ts
 │   ├── dashboard/  transactions/  wallets/  categories/  budgets/
 │   ├── bot/        # BotInboxPage, LinkCard, LinkedAccounts, DraftList, DraftCard, ReceiptUpload, resizeImage.ts, qrCode.ts
+│   ├── link/       # LinkPage: confirm a link that started in the chat (/link)
 │   ├── settings/   # SettingsPage, ProfileForm, PasswordForm, SessionsList, PreferencesForm
 │   ├── admin/      # AdminUsersPage, AdminCategoriesPage, TemplateDialog
 │   └── notFound/   # NotFoundPage
-├── types/api.ts           # shared types: User, Language, ThemeMode, AuthResponse, RegisterInput, UpdateMeInput, ApiError + isApiError()
+├── types/api.ts           # shared types: User, Language, ThemeMode, AuthResponse, RegisterInput, UpdateMeInput, ClaimPreview, ApiError + isApiError()
 ├── i18n/                  # index.ts, errors.ts, format.ts, {vi,en}/<namespace>.json
 └── theme/                 # theme.ts (getTheme for light and dark), AppThemeProvider.tsx
 ```
@@ -50,7 +52,7 @@ client/src/
 
 ```jsx
 /login, /register                      → public (logged in: /login goes to the remembered URL or /, /register to /)
-/link                                  → (planned, §2.10) Link a chat: outside <ProtectedRoute>, logs in by itself (§5.9.2)
+/link                                  → Link a chat: outside <ProtectedRoute>, logs in by itself (§5.9.2)
 /verify-email, /forgot-password        → (planned, §2.12) public, beside /login: enter the emailed code (§5.11.2, §5.11.4)
 <ProtectedRoute> + <AppLayout>
   /                → DashboardPage
@@ -72,6 +74,7 @@ Pages are lazy-loaded with the route `lazy` option (each feature's `routes.tsx`)
 - An explicit logout (avatar menu) goes to a plain `/login`, so the next person on that browser starts at `/`.
 - If the session ended because an admin locked the account (the refresh answered `ACCOUNT_LOCKED`), the login page shows that message.
 - `/register` sends an already logged-in user to `/`.
+- `/link` sends a logged-out visitor to `/login` with `state.from: '/link'` (no query string: the claim token waits in `sessionStorage`, §5.9.2). An explicit logout forgets a waiting token.
 - *Planned (§2.12):* `/register` lands on `/` after a 201 (as today) or on `/verify-email` after a 202 (§5.11.1). `/verify-email` and `/forgot-password` send a logged-in user to `/`, as `/register` does. The assistant drawer (§2.11) adds no route.
 
 ## 5.3 State management (slide requirement 2)
@@ -83,7 +86,7 @@ Pages are lazy-loaded with the route `lazy` option (each feature's `routes.tsx`)
 | UI state (theme mode, language, selected month, snackbar) | **Redux Toolkit – `uiSlice`** | Shared across pages; theme and language are mirrored to localStorage. The month is shared by Dashboard and Budgets |
 | Transaction filters and page | URL query string (`useSearchParams`) | Shareable, survive reload and the login redirect |
 | Form input | Local `useState` in the form component | Keeps forms simple |
-| *(planned, §2.10)* Claim token from `/link?t=` | Memory or `sessionStorage` (builder's choice), never the URL or `state.from` | It is a one-time credential: it leaves the address bar as soon as the page reads it (§5.9.2) |
+| Claim token from `/link?t=` | `sessionStorage`, with a copy in memory in case storage is blocked (`auth/claimToken.ts`); never the URL or `state.from` | It is a one-time credential: it leaves the address bar as the app starts. It survives a reload of the login page, in this tab only; it is forgotten once used, cancelled or dead, and on logout (§5.9.2) |
 | *(planned, §2.12)* Email of a pending sign-up (plus the masked address and the name, for "Change it") | `sessionStorage`, **never the password** | `/verify-email` survives a reload in this tab; the password lives only on the server, as a bcrypt hash (§2.12.2 step 4) |
 | *(planned, §2.11)* Assistant drawer open or closed, the text being typed | Local `useState` where the drawer is mounted | The thread itself is server data: RTK Query, tag `AssistantThread` (§5.10.6) |
 
@@ -115,7 +118,7 @@ Pages are lazy-loaded with the route `lazy` option (each feature's `routes.tsx`)
 ## 5.6 Internationalisation (vi / en)
 
 - `i18next` + `react-i18next` + language detector. Detector order: localStorage → browser; the user's profile language is applied at login and when the session is restored at start-up (`AuthContext`), not on later token refreshes. Fallback `vi`.
-- Files: `i18n/<lang>/<namespace>.json`, one namespace per feature, picked up automatically by `import.meta.glob`. 12 namespaces: `common` (the default), `auth`, `dashboard`, `transactions`, `wallets`, `categories`, `budgets`, `bot`, `settings`, `admin`, `notFound`, `errors`. Counts use i18next plurals (`key_one` / `key_other`). *Planned:* an `assistant` namespace (§5.10.7); the email-code screens use `auth` (§5.11.5).
+- Files: `i18n/<lang>/<namespace>.json`, one namespace per feature, picked up automatically by `import.meta.glob`. 13 namespaces: `common` (the default), `auth`, `dashboard`, `transactions`, `wallets`, `categories`, `budgets`, `bot`, `link`, `settings`, `admin`, `notFound`, `errors`. Counts use i18next plurals (`key_one` / `key_other`). *Planned:* an `assistant` namespace (§5.10.7); the email-code screens use `auth` (§5.11.5).
 - **API errors:** `errorMessage(code)` in `i18n/errors.ts` looks up `errors:<CODE>`, falling back to `errors:GENERIC`.
 - **Money:** `formatMoney()` in `i18n/format.ts` (used by `MoneyText`) uses `new Intl.NumberFormat(lang === 'vi' ? 'vi-VN' : 'en-US', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 })`.
 - **Dates:** `Intl.DateTimeFormat` with `timeZone: 'Asia/Ho_Chi_Minh'`.
@@ -129,13 +132,13 @@ Pages are lazy-loaded with the route `lazy` option (each feature's `routes.tsx`)
 |---|---|
 | **Login / Register** | Split layout: the form on the left; from `md` up, a dark panel on the right with what the app does and a preview built from the app's own components (month figure, budget bar, Telegram chat), hidden from screen readers because the text beside it says the same; hand-written checks before sending (no zod on the client): email with the same pattern as the server, name 1–60 characters, password ≥ 8 characters and ≤ 72 bytes (a Vietnamese letter takes 2–3), confirm matches; focus moves to the first wrong field; a `VALIDATION_ERROR` from the API marks the fields named in its `details`; show/hide password; language and theme switch in the corner; server errors shown with translated codes. *Planned (§5.11):* Register handles a 201 (logged in, as today) or a 202 (go to `/verify-email`); Login gets a "Quên mật khẩu? / Forgot password?" link under the password field |
 | **QuickAdd (component)** | One text field: "Bạn vừa chi gì? — e.g. phở 45k". After a 300 ms pause it calls `POST /api/transactions/parse` and shows preview chips (amount · category · wallet · date) that can be clicked to change. **Enter** (or Save) saves via `POST /api/transactions`; **Shift+Enter** or the **Open full form** button opens the full form pre-filled. Several lines save several transactions, at most 10: with more, nothing is saved and the box says so. Lines the parser cannot read (no amount, or above 10¹³ ₫) are named by line number and nothing is saved until they are fixed. A preview line with no wallet or category blocks saving too. Errors show inline in the user's language. *Planned (§5.10.2):* when the text is a question, the chip "Đây là câu hỏi · Hỏi Sổ chi tiêu ›" replaces the preview and Enter saves nothing; a Khác/Other line gets a category suggestion chip (§5.10.10) |
-| **Dashboard** | `QuickAdd` at the top; `MonthPicker`; a gradient total-balance card (active wallets, month in/out) beside the month's 4 figure cards; this month vs last month in weekly columns with a Chi tiêu / Thu nhập switch and a computed sentence (TC-NF-14); ranked category breakdown; "Drafts waiting" banner linking to Bot inbox; "Budgets to watch" banner listing category budgets past 80 % / 100 % (same thresholds as Budgets) linking to Budgets; latest 5 transactions; one error banner with Retry covers every query whose figures it shows, so a failed request never shows as 0 ₫. *Planned (§5.10.1, §5.10.3):* a "✨ Hỏi Sổ chi tiêu" button beside `MonthPicker` (icon only on phones) that opens the assistant drawer; the compare sentence compares the same days ("cùng kỳ tháng trước") |
+| **Dashboard** | `QuickAdd` at the top; `MonthPicker`; a gradient total-balance card (active wallets, month in/out) beside the month's 4 figure cards; this month vs last month in weekly columns with a Chi tiêu / Thu nhập switch and a computed sentence that compares the same days ("cùng kỳ tháng trước", §5.10.3; TC-NF-14, TC-F14-03); ranked category breakdown; "Drafts waiting" banner linking to Bot inbox; "Budgets to watch" banner listing category budgets past 80 % / 100 % (same thresholds as Budgets) linking to Budgets; latest 5 transactions; one error banner with Retry covers every query whose figures it shows, so a failed request never shows as 0 ₫. *Planned (§5.10.1, §5.10.3):* a "✨ Hỏi Sổ chi tiêu" button beside `MonthPicker` (icon only on phones) that opens the assistant drawer |
 | **Transactions** | `QuickAdd`; filter bar (date range, type, wallet, category, status, search) synced to the URL query string; paginated table or cards; add/edit dialog (amount input with thousand separators, `k`/`tr` shortcuts like the bot, at most `MAX_MONEY` = 10¹³ ₫ with an "At most …" message); delete → snackbar with **Undo** (`/restore`). *Planned (§5.9.5, §5.10.10):* a WhatsApp source icon (no source is shown today); a category suggestion chip on a Khác/Other draft |
 | **Wallets** | Card per wallet with computed balance; add/edit dialog (type cash / bank / e-wallet / credit card, opening balance from −10¹³ to 10¹³ ₫ so a credit card can start negative, aliases for the bot); archive toggle; delete blocked with an explanation when in use. Archiving or deleting the default wallet clears it (server), and the signed-in user is updated so forms stop offering it |
 | **Categories** | Tabs Expense / Income; list with icon, colour, keyword chips; add/edit dialog with a keyword chip input (normalised to no-diacritics) |
 | **Budgets** | `MonthPicker`; progress bar per category (green < 80 %, amber 80–100 %, red > 100 %); add/edit/delete (limit at most 10¹³ ₫); "Copy from last month". *Planned (§5.10.3):* from day 5, a pace chip per budget (the daily limit from A2) |
-| **Bot inbox** | **Link card** (docs/02 §2.10.2), titled "Link Telegram / WhatsApp / Zalo": "Create link code" → shows the 6-character code and its 10-minute countdown (focus moves to it; after 5 codes in 10 minutes the 429 message shows), an app picker (Telegram \| WhatsApp \| Zalo, only the apps whose `links` entry is not `null`; it starts on the first app not linked yet, else the first shown; one app needs no picker), the picked app's instruction line, its button and a black-on-white QR code (`qrCode.ts`) of the same link, and `/link CODE` to send by hand. The links are used as the API gives them. **Open Telegram** and **Open WhatsApp** open the link in a new tab; **Copy & open Zalo** copies `/link CODE` (`navigator.clipboard.writeText`) and opens `ZALO_BOT_URL` (a real link, so no pop-up blocker stops it; its QR only opens the bot, so the large code stays on screen); a status line says "Copied" or, if copying fails, to copy the command by hand. Every 5 s while the code is live it reloads the linked accounts; a link made while the code was valid (its `createdAt` between the code's `expiresAt` minus the 10-minute lifetime and `expiresAt` plus 5 s, because the bot checks the expiry just before it saves the link; both server times, so any copy of the list can be judged and one failed request loses nothing) replaces the code with "Linked ✓ <app> · <name>" (the same name as under Linked accounts) and stops the checks. The list is also reloaded right after the code arrives, to pick the starting app; the code does not wait for it, and a list request still running is awaited first, so the new one is read after the click. A `role="status"` region announces that message, which takes focus from nothing that stays on the page; only if focus was on something in the code block it replaces does it move to the message. An expired code never claims a link made more than those 5 s after it expired; one last `GET /chat-links` runs when the code expires (after any list request still running), for a code redeemed after the last 5 s check; "Linked ✓" goes away when that account is unlinked. The Generate button stays busy until the new code is back; a failed request's message is translated when shown, so it follows a language switch. With three apps the picker wraps inside the card when the column beside the side drawer is narrow. **Linked accounts** with unlink. **Drafts list** (refetched every time the inbox opens, since drafts also change in the chats): source icon (Telegram/Zalo/receipt), parsed fields editable inline (amount at most 10¹³ ₫), receipt line items expandable, Confirm / Discard. Confirm sends the edits together with the confirm in one request (`POST /transactions/:id/confirm`); a 409 (already confirmed in the chat) or 404 (deleted) removes the card; a budget warning from the server shows as a warning snackbar. **Upload receipt**: resize in the browser (canvas → JPEG ≤ 1600 px) → `POST /api/receipts` with a progress spinner (~20–40 s). *Planned (§5.9.3, §5.9.5):* the "New chat linked from a chat link: … Not you? [Unlink]" notice for a link made by a claim link, until dismissed; and a WhatsApp source icon |
-| **Link a chat** *(planned, §2.10)* | `/link` screen opened from the bot's "tap to link" message: preview, then Confirm / Cancel (§5.9.2) |
+| **Bot inbox** | **Link card** (docs/02 §2.10.2), titled "Link Telegram / WhatsApp / Zalo": "Create link code" → shows the 6-character code and its 10-minute countdown (focus moves to it; after 5 codes in 10 minutes the 429 message shows), an app picker (Telegram \| WhatsApp \| Zalo, only the apps whose `links` entry is not `null`; it starts on the first app not linked yet, else the first shown; one app needs no picker), the picked app's instruction line, its button and a black-on-white QR code (`qrCode.ts`) of the same link, and `/link CODE` to send by hand. The links are used as the API gives them. **Open Telegram** and **Open WhatsApp** open the link in a new tab; **Copy & open Zalo** copies `/link CODE` (`navigator.clipboard.writeText`) and opens `ZALO_BOT_URL` (a real link, so no pop-up blocker stops it; its QR only opens the bot, so the large code stays on screen); a status line says "Copied" or, if copying fails, to copy the command by hand. Every 5 s while the code is live it reloads the linked accounts; a link made while the code was valid (its `createdAt` between the code's `expiresAt` minus the 10-minute lifetime and `expiresAt` plus 5 s, because the bot checks the expiry just before it saves the link; both server times, so any copy of the list can be judged and one failed request loses nothing) replaces the code with "Linked ✓ <app> · <name>" (the same name as under Linked accounts) and stops the checks. The list is also reloaded right after the code arrives, to pick the starting app; the code does not wait for it, and a list request still running is awaited first, so the new one is read after the click. A `role="status"` region announces that message, which takes focus from nothing that stays on the page; only if focus was on something in the code block it replaces does it move to the message. An expired code never claims a link made more than those 5 s after it expired; one last `GET /chat-links` runs when the code expires (after any list request still running), for a code redeemed after the last 5 s check; "Linked ✓" goes away when that account is unlinked. The Generate button stays busy until the new code is back; a failed request's message is translated when shown, so it follows a language switch. With three apps the picker wraps inside the card when the column beside the side drawer is narrow. **Linked accounts** with unlink (reloaded every time the inbox opens, since chats are also linked outside this page). A link made from a chat's claim link also has the notice "New chat linked from a chat link: <app> · <name>. Not you? [Unlink]" in that section until it is dismissed (§5.9.3). **Drafts list** (refetched every time the inbox opens, since drafts also change in the chats): source icon (Telegram/Zalo/receipt), parsed fields editable inline (amount at most 10¹³ ₫), receipt line items expandable, Confirm / Discard. Confirm sends the edits together with the confirm in one request (`POST /transactions/:id/confirm`); a 409 (already confirmed in the chat) or 404 (deleted) removes the card; a budget warning from the server shows as a warning snackbar. **Upload receipt**: resize in the browser (canvas → JPEG ≤ 1600 px) → `POST /api/receipts` with a progress spinner (~20–40 s). *Planned (§5.9.5):* a WhatsApp source icon |
+| **Link a chat** | `/link`, opened from the bot's "tap to link" message: a page of its own (brand, language and theme switches, no app navigation) that shows which chat would be linked to which account, a warning, and Confirm / Cancel; error screens for a dead link and a chat already linked (§5.9.2) |
 | **Verify email** *(planned, §2.12)* | `/verify-email` after a 202 from Register: one 6-digit code box, Resend with a 60 s countdown, "Wrong email? Change it" (§5.11.2) |
 | **Forgot password** *(planned, §2.12)* | `/forgot-password` from the Login link: email, then code + new password on the same screen; ends on `/login` (§5.11.4) |
 | **Settings** | Profile (name, default wallet), password change, preferences (language, theme), sessions list (device, last used, "this device") with revoke and "Log out other devices". *Planned (§5.10.4):* a "Trợ lý" switch (on by default) and the evening reminder choice |
@@ -152,7 +155,7 @@ A failed load of a page's main data (Dashboard, Transactions, Wallets, Categorie
 
 ## 5.9 One-tap linking and WhatsApp (planned, §2.10)
 
-> **Partly built.** The link card (§5.9.1, card T32 #72) is built; the rest of this section is not built yet. §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). As each part is built it moves into §5.2–§5.7 (§2.10.5). Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
+> **Built.** The link card (§5.9.1, card T32 #72), the `/link` screen and the claim notice (§5.9.2–§5.9.3, card T33 #73) and the WhatsApp source icon, admin stats and texts (§5.9.5–§5.9.6, card T34 #74) are built. §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). As each part is built it moves into §5.2–§5.7 (§2.10.5). Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
 
 <a id="591-link-card-on-bot-planned-2102"></a>
 
@@ -160,76 +163,84 @@ A failed load of a page's main data (Dashboard, Transactions, Wallets, Categorie
 
 Built by card T32 (#72): the **Bot inbox** row of §5.7 describes it, and §5.9.8 items 1–3 record the choices it made.
 
-### 5.9.2 `/link` screen (planned, §2.10.3)
+<a id="592-link-screen-planned-2103"></a>
 
-The bot's "tap to link" message opens `<APP_URL>/link?t=<token>`, a 32-character claim token.
+### 5.9.2 `/link` screen (built, §2.10.3)
 
-**Route.** `ProtectedRoute` copies the query string into `state.from` and redirects before the page's code runs, so behind it `?t=` would ride through the login page and back into the address bar. `/link` therefore sits outside `<ProtectedRoute>`, beside `/login` (§5.2), and sends a logged-out visitor to log in itself, after removing `t`. §2.10 leaves layout to the builder; this placement is what §2.10.3 step 4 (token out of the address bar before the login redirect) needs with today's `ProtectedRoute`. Whether it is wrapped in `AppLayout` is left to the builder.
+Built by card T33 (#73): `features/link/` (`LinkPage.tsx`, `linkApi.ts`, `routes.tsx`) and `auth/claimToken.ts`. The bot's "tap to link" message opens `<APP_URL>/link?t=<token>`, a 32-character claim token.
 
-**Flow.** The router mounts only after the session is restored (`App` shows `<Splash />` until then), so the page knows at once whether the user is logged in.
+**Route.** `ProtectedRoute` copies the query string into `state.from` and redirects before the page's code runs, so behind it `?t=` would ride through the login page and back into the address bar. `/link` therefore sits outside `<ProtectedRoute>`, beside `/login` (§5.2), and sends a logged-out visitor to log in itself. It is not wrapped in `AppLayout`: one decision on a page of its own.
 
-1. Read `t` from the query string and remove it from the address bar with `history.replaceState` (React Router's `navigate('/link', { replace: true })` does that and keeps the router's location in step). This comes before any request or redirect.
-2. Keep the token in memory or `sessionStorage`, never in the URL or `state.from`. Builder's choice: memory is lost if the login page is reloaded; `sessionStorage` survives that and stays in this tab.
-3. Logged out: `<Navigate to="/login" replace state={{ from: '/link' }} />`. `LoginPage` already returns to `state.from` after login, so the user comes back to `/link` and the token is read from where step 2 kept it.
-4. Logged in: `POST /api/chat-links/claim/preview { token }`. The server answers with the chat's `platform` and `displayName` from `linkCodes.chat`.
-5. **Confirm:** the confirm screen shows §2.10.3's warning above the buttons (see the table). `POST /api/chat-links/claim { token }`. On 201 the page goes to `/bot` with `Linked ✓ <App> · <displayName>` (how that shows, e.g. the existing `showSnackbar`, is left to the builder), and the Bot inbox shows the claim notice (§5.9.3). The success message in the chat is sent by the server.
-6. **Cancel:** goes to `/bot` with no request; the token expires by itself.
+**Flow.**
+
+1. As the app starts, before the first request (`takeClaimTokenFromAddressBar`, called by `features/link/routes.tsx`), `/link?t=…` is moved into `sessionStorage` and `history.replaceState` rewrites the address to `/link`. Doing it this early keeps the token out of the `Referer` of the session-restoring request. A `?t=` reached by navigating inside the app is handled by the page itself, with a `replace` navigation.
+2. The router mounts only after the session is restored, so the page knows at once whether the user is logged in. Logged out: `<Navigate to="/login" replace state={{ from: '/link' }} />`; `LoginPage` returns to `state.from`.
+3. Logged in: `POST /api/chat-links/claim/preview { token }` answers with the chat's `platform` and `displayName`. The result is not cached (`keepUnusedDataFor: 0`), since a token can die at any moment.
+4. **Confirm:** `POST /api/chat-links/claim { token }`. On 201 the page goes to `/bot`, the app snackbar says `Linked ✓ <App> · <displayName>`, and the Bot inbox shows the claim notice (§5.9.3). The success message in the chat is sent by the server.
+5. **Cancel:** goes to `/bot` with no request; the token expires by itself. Cancel is disabled while a claim is running, because it could no longer be called off.
+6. The token is forgotten after Confirm or Cancel, when the server says it is dead (404 or 409), and on an explicit logout.
 
 | State | When | Shows | Buttons |
 |---|---|---|---|
 | Loading | The preview request is running | A progress indicator | – |
-| Confirm | Preview 200 `{ platform, displayName }` | "Link **`<App> · <displayName>`** to **`<user.name> (<user.email>)`**?" The app name is `sources.<platform>`; the name and email come from `useAuth().user`. Above the buttons, a warning: "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account." (the display name comes from the chat app and is not proof, §2.10.3) | **Confirm** (shows loading while the claim runs), **Cancel** |
+| Confirm | Preview 200 `{ platform, displayName }` | "Link **`<App> · <displayName>`** to **`<user.name> (<user.email>)`**?" Above the buttons, a warning: "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account." (the display name comes from the chat app and is not proof, §2.10.3) | **Confirm** (shows loading while the claim runs), **Cancel** |
 | Done | Claim 201 `{ id, platform, displayName, createdAt, viaClaim: true }` | Redirect to `/bot` with `Linked ✓ <App> · <displayName>`; the claim notice (§5.9.3) shows there | – |
-| Expired or used | Preview or claim 404 `LINK_TOKEN_INVALID` | "This link has expired or was already used. Send any message to the bot to get a new one." | **Go to Bot inbox** |
+| Expired or used | Preview or claim 404 `LINK_TOKEN_INVALID`, or no token (opened bare) | "This link has expired or was already used. Send any message to the bot to get a new one." | **Go to Bot inbox** |
 | Already linked | Claim 409 `CHAT_ALREADY_LINKED` (the token is spent anyway) | "This chat is already linked to an account." | **Go to Bot inbox** |
+| Preview failed | Network or 5xx error on preview | The translated error | **Retry** (`refetch()`) |
+| Claim failed | Network or 5xx error on claim | The confirm screen with the translated error above the buttons; the token is kept | **Confirm** again, **Cancel** |
 
-`<App> · <displayName>` uses the same format as Linked accounts (`nameOf()` in `LinkedAccounts.tsx`).
+`<App> · <displayName>` is the same format as Linked accounts (`nameOf()` in `features/bot/botApi.ts`). The chat and account names are rendered as elements inside the translated sentence (`<Trans>`), so a chat name is never read as markup, and long names wrap.
 
-### 5.9.3 "Not you? [Unlink]" notice in the Bot inbox (planned, §2.10.3, §2.10.5)
+<a id="593-not-you-unlink-notice-in-the-bot-inbox-planned-2103-2105"></a>
 
-The phishing guard after a link made from a chat (§2.10.3): someone may have confirmed a claim link that an attacker sent them, so the inbox says so until the user dismisses it.
+### 5.9.3 "Not you? [Unlink]" notice in the Bot inbox (built, §2.10.3, §2.10.5)
 
-- **When:** for every item of `GET /api/chat-links` (the list `LinkedAccounts.tsx` and the link card already load) with `viaClaim && !claimNoticeDismissedAt`. A link made with a code from the website has `viaClaim: false` and never shows it.
-- **What:** one notice per such link: "New chat linked from a chat link: **`<App> · <displayName>`**. Not you? [Unlink]", with a dismiss button. Where it sits on `/bot` is left to the builder; above the two columns, under the intro, is seen first, and the linked accounts list keeps its own unlink button either way (§2.10.3).
+The phishing guard after a link made from a chat (§2.10.3): someone may have confirmed a claim link that an attacker sent them, so the inbox says so until the user dismisses it. Built by card T33 (#73) in `features/bot/LinkedAccounts.tsx`.
+
+- **When:** for every item of `GET /api/chat-links` with `viaClaim && !claimNoticeDismissedAt`. A link made with a code from the website has `viaClaim: false` and never shows it. The list is reloaded every time the inbox opens, so a chat linked on another device shows up.
+- **What:** one warning per such link at the top of the Linked accounts section: "New chat linked from a chat link: **`<App> · <displayName>`**. Not you? [Unlink]", with a dismiss button. The list below keeps its own unlink button.
 - **Unlink:** the existing unlink of Linked accounts (its `ConfirmDialog`, then `DELETE /api/chat-links/:id`); the link goes, and its notice with it.
-- **Dismiss:** `PATCH /api/chat-links/:id/claim-notice` (no body) → 204; the `ChatLink` tag is invalidated, the list refetches with `claimNoticeDismissedAt` set, and the notice is gone for good, on every device. A 404 (the link was unlinked meanwhile) also just refetches.
+- **Dismiss:** `PATCH /api/chat-links/:id/claim-notice` (no body) → 204; the `ChatLink` tag is invalidated, the list refetches with `claimNoticeDismissedAt` set, and the notice is gone for good, on every device. A 404 (the link was unlinked meanwhile) also just refetches; any other failure is shown in the snackbar and the notice stays.
 
-### 5.9.4 API types and RTK Query endpoints (planned)
+### 5.9.4 API types and RTK Query endpoints
 
-In `features/bot/botApi.ts`, or with the `/link` screen's files; hook names are the builder's.
+The link card's endpoints are in `features/bot/botApi.ts`; the claim ones are in `features/link/linkApi.ts`.
 
 | Endpoint | RTK Query | Types | Tags |
 |---|---|---|---|
 | `POST /api/chat-links/code` (existing `createLinkCode`), *built (T32)* | mutation, unchanged | Result `LinkCode = { code: string; expiresAt: string; links: { telegram: string \| null; whatsapp: string \| null; zalo: string \| null } }`; `telegramDeepLink` goes. Client and server change in the same PR (§2.10.2) | None, as today |
-| `POST /api/chat-links/claim/preview` (new) | mutation, or a query with `method: 'POST'` and `body` | Arg `{ token: string }` → `{ platform: ChatLink['platform']; displayName: string }` | None |
-| `POST /api/chat-links/claim` (new) | mutation | Arg `{ token: string }` → 201 `{ id, platform, displayName, createdAt, viaClaim: true }` (a `ChatLink` without `claimNoticeDismissedAt`) | Invalidates `ChatLink`, so Linked accounts, the link card and the claim notice refetch |
-| `GET /api/chat-links` (existing `getChatLinks`) | query, unchanged | `ChatLink` gains `viaClaim: boolean` and `claimNoticeDismissedAt: string \| null` | Provides `ChatLink`, as today |
-| `PATCH /api/chat-links/:id/claim-notice` (new) | mutation | Arg the link `id` → `void` (204) | Invalidates `ChatLink`, so the notice disappears |
+| `POST /api/chat-links/claim/preview`, *built (T33)* | query with `method: 'POST'` and `body`, not cached | Arg the token → `ClaimPreview = { platform: ChatLink['platform']; displayName: string }` (`types/api.ts`) | None |
+| `POST /api/chat-links/claim`, *built (T33)* | mutation | Arg the token → 201 `{ id, platform, displayName, createdAt, viaClaim: true }` (a `ChatLink` without `claimNoticeDismissedAt`) | Invalidates `ChatLink`, so Linked accounts, the link card and the claim notice refetch |
+| `GET /api/chat-links` (existing `getChatLinks`), *fields built (T33)* | query, unchanged | `ChatLink` has `viaClaim` and `claimNoticeDismissedAt` | Provides `ChatLink`, as today |
+| `PATCH /api/chat-links/:id/claim-notice`, *built (T33)* | mutation | Arg the link `id` → `void` (204) | Invalidates `ChatLink`, also after an error, so the notice of a link unlinked meanwhile leaves |
 
 - The token goes in the request body only, never in `params` (§2.10.3: tokens never travel in a URL).
 - Type unions gain `'whatsapp'`: `ChatLink['platform']` in `botApi.ts` (`chatLinks.platform`), `Transaction['source']` in `transactionsApi.ts` (`transactions.source`, the §5.1 example), and the admin stats' `chatLinks` and `transactionsBySource` in `adminApi.ts` (§2.10.5; both gain `whatsapp` in [04-backend.md](04-backend.md)).
 - No new RTK Query tag.
 
-### 5.9.5 WhatsApp source icon (planned, §2.10.5)
+### 5.9.5 WhatsApp source icon (built, §2.10.5)
 
-- `sourceIcon()` in `features/bot/sourceIcon.tsx` gains `whatsapp` → `WhatsAppIcon` from `@mui/icons-material/WhatsApp` (already a dependency; unlike Zalo, Material has this mark). The Bot inbox's draft chips and Linked accounts pick it up with no other change; the label beside it is `sources.whatsapp`, and the icon stays decorative.
-- **Transactions:** the table and cards show no source today (`TransactionList.tsx`). §2.10.5 asks for a WhatsApp source icon there; reusing `sourceIcon()` is the smallest change. Where it sits, and whether the other sources get theirs too, is left to the builder (§5.9.8).
-- **Admin · Users:** the chat-links card adds `chatLinks.telegram + chatLinks.zalo` by name today, so WhatsApp joins the sum and the detail line. The transactions card already sums every key; only its detail line needs WhatsApp.
+Built by card T34 (#74).
 
-### 5.9.6 Translations (planned)
+- `sourceIcon()` in `features/bot/sourceIcon.tsx` has `whatsapp` → `WhatsAppIcon` from `@mui/icons-material/WhatsApp` (already a dependency; unlike Zalo, Material has this mark). The Bot inbox's draft chips and Linked accounts pick it up with no other change; the label beside it is `sources.whatsapp`, and the icon stays decorative (TC-F9-07).
+- **Transactions:** the table and cards show no source for any platform (`TransactionList.tsx`), so no source icon appears there for Telegram or Zalo either; the Bot inbox is where "the WhatsApp icon shows where Telegram's and Zalo's do". Showing a source in Transactions (for all sources, with `sourceIcon()`) is a separate change to `TransactionList.tsx`, outside card T34's Scope; the `?source=whatsapp` filter works on the API (TC-F4-14).
+- **Admin · Users:** both cards sum every key of their counts (`chatLinks`, `transactionsBySource`), so WhatsApp joins the totals; their detail lines (`stats.chatLinksDetail`, `stats.transactionsDetail`) name WhatsApp (TC-F11-08).
+
+### 5.9.6 Translations (built)
 
 Keys and wording are left to the builder (§2.10), in vi and en. What needs text:
 
 | Where | Strings |
 |---|---|
-| `bot`, link card (*built, T32*, except the page `intro`: it says what the bots record, so it changes with the WhatsApp bot, T34) | Card title and description naming all three apps; the picker's group label; `sources.whatsapp`; **Open WhatsApp** and **Copy & open Zalo** (**Open Telegram** exists); one instruction line per app (replacing `link.telegram` and `link.zalo`); one QR label per app; "Copy it yourself"; `Linked ✓ <App> · <name>`; the page `intro`, which names Telegram and Zalo only |
-| `/link` screen (in `bot`, or a new namespace: `import.meta.glob` picks it up, making 13) | Page `<title>`; loading; the confirm question (app · chat name, user name, email, with bold parts); the warning (vi + en of "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account."); **Confirm**; **Cancel**; the done message (may reuse the card's); the expired-or-used text; the already-linked text; **Go to Bot inbox** |
-| `bot`, claim notice | "New chat linked from a chat link: **`<App> · <name>`**. Not you?" (with the bold part); **Unlink** (the dialog's texts exist in `accounts`); the dismiss button's label |
-| `admin` | `stats.chatLinksDetail` and `stats.transactionsDetail` with WhatsApp |
+| `bot`, link card (*built, T32*, except the page `intro`: it says what the bots record, so it changes with the WhatsApp bot, T34) | Card title and description naming all three apps; the picker's group label; `sources.whatsapp`; **Open WhatsApp** and **Copy & open Zalo** (**Open Telegram** exists); one instruction line per app (replacing `link.telegram` and `link.zalo`); one QR label per app; "Copy it yourself"; `Linked ✓ <App> · <name>`; the page `intro`, which names Telegram, WhatsApp and Zalo (T34) |
+| `link` namespace, the `/link` screen (*built, T33*) | Page `<title>`; loading; the confirm question (app · chat name, user name, email, with bold parts); the warning (vi + en of "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account."); **Confirm**; **Cancel**; the done message (may reuse the card's); the expired-or-used text; the already-linked text; **Go to Bot inbox** |
+| `link`, claim notice (*built, T33*) | "New chat linked from a chat link: **`<App> · <name>`**. Not you?" (with the bold part); **Unlink** (the dialog's texts exist in `accounts`); the dismiss button's label |
+| `admin` | `stats.chatLinksDetail` and `stats.transactionsDetail` with WhatsApp (*built, T34*) |
 
-### 5.9.7 Accessibility (planned)
+### 5.9.7 Accessibility
 
-*Built (T32): the link card's three button names, the picker, its focus and announcement rules, its QR label and the `/link CODE` text. The `/link` screen and the claim notice are planned.*
+*Built: the link card's three button names, the picker, its focus and announcement rules, its QR label and the `/link CODE` text (T32); the `/link` screen and the claim notice (T33).*
 
 - **Button names** are their visible text: "Open Telegram", "Open WhatsApp", "Copy & open Zalo", "Confirm", "Cancel", "Go to Bot inbox". App icons are decorative (MUI icons are `aria-hidden`).
 - **Picker:** one labelled single-choice group (e.g. MUI `ToggleButtonGroup exclusive` with an `aria-label`, which marks the selected app with `aria-pressed`); each option is named by its app.
@@ -244,10 +255,10 @@ Keys and wording are left to the builder (§2.10), in vi and en. What needs text
 1. **Zalo, copy fails:** does the tab still open? A real link always opens it and no pop-up blocker can stop it; opening only after a successful copy needs `window.open` after an `await`, which some browsers block. *T32: yes, the button is a real link; the card says that copying failed.*
 2. **Link card after "Linked ✓":** does the code stay (and polling go on) until it expires, or does the card reset? The code is single use either way. *T32: it resets. "Linked ✓" replaces the code, the checks stop and "Create a new code" is offered.*
 3. **Picker edge case:** what the card shows when all three links are `null`. *T32: no picker, button or QR; the code and `/link CODE` stay.*
-4. **`/link` gaps:** no token (opened bare, or `sessionStorage` empty) and network or 5xx errors on preview or claim have no state in §2.10.3. The §5.7 rule (error banner with **Retry**) is the obvious candidate for the second.
-5. **New users:** `/login` links to `/register`, and `RegisterPage` always lands on `/`, so someone who registers on the way loses the return to `/link`. Should `RegisterPage` honour `state.from` too?
-6. **Clearing the token:** after Confirm, Cancel or an error, so a spent token does not stay in `sessionStorage`.
-7. **Transactions:** a source icon for WhatsApp only, or for every source (§5.9.5)?
+4. **`/link` gaps:** no token (opened bare, or `sessionStorage` empty) and network or 5xx errors on preview or claim have no state in §2.10.3. The §5.7 rule (error banner with **Retry**) is the obvious candidate for the second. *T33: yes. No token shows the expired-or-used screen; a failed preview has **Retry**; a failed claim keeps **Confirm** and the token.*
+5. **New users:** `/login` links to `/register`, and `RegisterPage` always lands on `/`, so someone who registers on the way loses the return to `/link`. Should `RegisterPage` honour `state.from` too? *T33: not changed (`features/auth/` is outside that card's scope). Someone who registers on the way lands on `/`; the link in the chat works until it expires, so they tap it again.*
+6. **Clearing the token:** after Confirm, Cancel or an error, so a spent token does not stay in `sessionStorage`. *T33: after Confirm, Cancel, a 404 or 409, and on logout; kept after a network or 5xx error.*
+7. **Transactions:** a source icon for WhatsApp only, or for every source (§5.9.5)? *T34: neither: the list shows no source today and `TransactionList.tsx` is outside its Scope, so it is left for a follow-up that gives every source its icon.*
 
 ## 5.10 Assistant and agent features (planned, §2.11)
 
@@ -304,9 +315,9 @@ No new route. A button opens an MUI `Drawer` (e.g. `AssistantButton` and `Assist
 - Pressing the chip opens the drawer and sends the QuickAdd text as its first message.
 - QuickAdd is on Dashboard and Transactions, but the header button is on Dashboard only. Where the drawer is mounted so that the chip works on Transactions too is open (§5.10.9).
 
-### 5.10.3 Dashboard compare sentence and Budgets pace chip (planned, §2.11.2, §2.11.3)
+### 5.10.3 Dashboard compare sentence (built, T43) and Budgets pace chip (planned) (§2.11.2, §2.11.3)
 
-- **MonthCompare** (`features/dashboard/Charts.tsx`): today `totalBefore` adds every day of last month. It changes to the same days, as the agent's `compare_periods` tool does: for the current month, days 1..today in both months, capped at the shorter month's last day; for a past month, the whole month against the whole previous month. The sentence says "cùng kỳ tháng trước". The weekly columns stay as they are.
+- **MonthCompare** (`features/dashboard/Charts.tsx`, built in T43) compares the same days, as the agent's `compare_periods` tool does. `sameDays(month, today)` in `features/dashboard/sameDays.ts` returns the two ranges and `sumDays()` adds the selected flow over each: for the current month, days 1..N in both months, N = today's day (Vietnam time) capped at the last day of the month before (28/02 meets 01–28/01, 30/04 meets 01–30/03, 30/11 meets 01–30/10, 31/03 stops at 28/02 on both sides); for any other month, past or still to come, the whole month against the whole month before (so a past February meets all of January). The figure and the sentence follow these ranges and say "cùng kỳ tháng trước" ("the same days last month"); the weekly columns still show both whole months, and a bill dated after today is in the columns but not in the sentence. The "no transactions in these two months" text is shown only when both whole months have nothing for the chosen flow; when just the same days add up to 0 the sentence says 0 ₫. `sameDays()` is the browser's side of the rule that `compareRange()` has in Express (docs/02 §2.11.3) and builds the previous range itself, because `compareRange()` sees only dates and takes 01–28/02 for a whole February; the two agree on every fixture row except the last day of the current month when the month before is longer (marked `compareRangeAgrees: false`). Both are tested on `shared/fixtures/compare-range.json` (TC-F14-02), and the component on the same file (TC-F14-03). The component takes `month` and `today` as props, so a test fixes the day; "today in Vietnam" comes from `utils/vnToday.ts`, the same function that picks the month the app opens on.
 - **Budgets:** A2's `pace()` is added to every budget by `listBudgets()` in Express, so `GET /api/budgets` items carry it. From day 5 of the month the Budgets page shows it as a chip (e.g. "tối đa 150.000 ₫/ngày"). The client shows the server's numbers and computes none, so the chip, `/month`, the bot's confirm warning and the agent's `get_budget_pace` answer say the same thing. The field's shape is in docs/04.
 
 ### 5.10.4 Settings (planned, §2.11.5)
@@ -350,7 +361,7 @@ Keys and wording are left to the builder, in vi and en. Answers, facts, sources 
 |---|---|
 | `assistant` (new namespace; `import.meta.glob` picks it up) | The button's text and its `aria-label`; the drawer title; the 4 starter chips; the input's label and placeholder ("Hỏi về chi tiêu của bạn…"); Send; **Dừng**; **Xoá**; **Thử lại**; the badges "Theo mẫu" and "AI" and the badge's description ("Trả lời bởi mô hình chạy trên máy chủ của Sổ chi tiêu"); the "Số liệu" heading; "Còn N câu hỏi hôm nay" (plural); the model-off, cap, unavailable and busy texts of §5.10.1; the action card's **Đồng ý** / **Thôi** with full labels, and its done, expired and already-done texts; the capture card's save button |
 | QuickAdd (`common` or `transactions`, where QuickAdd's texts are) | "Đây là câu hỏi · Hỏi Sổ chi tiêu ›"; "Gợi ý: {{category}} ›" and its full label |
-| `dashboard` | The compare sentence with "cùng kỳ tháng trước" |
+| `dashboard` | The compare sentence with "cùng kỳ tháng trước" (built, T43: `compare.versus`, `compare.more`, `compare.less`, `compare.same`) |
 | `budgets` | The pace chip ("tối đa … ₫/ngày") |
 | `bot` | The engine-neutral receipt status text, if it changes (§5.10.11) |
 | `settings` | "Trợ lý", its line ("Câu hỏi được trả lời trên máy chủ của Sổ chi tiêu, không gửi cho bên thứ ba."), the reminder choice and its three options, and where reminders arrive |
@@ -377,7 +388,7 @@ Keys and wording are left to the builder, in vi and en. Answers, facts, sources 
 5. **"Vì sao? ›" under the compare sentence:** §2.11 does not list it, so it is left out here.
 6. **Runtime switch with `ASSISTANT_ENABLED` false or `AGENT_URL` unset:** should the admin switch show as disabled, with the reason? Should the admin page show the agent service's `/health` (model up, GPU free) too?
 7. **Shift+Enter or "Open full form" on a question:** open an empty form, or do nothing?
-8. **`compare_periods` and MonthCompare:** the agent (Python) and the client (TypeScript) each implement the same-days rule. One shared JSON fixture tested on both sides is the plan (docs/07 §7.9).
+8. **`compare_periods` and MonthCompare:** the agent (Python) and the client (TypeScript) each implement the same-days rule. The shared JSON fixture `shared/fixtures/compare-range.json` is read by the client and Express tests (T43); the agent's pytest joins it when that service exists (docs/07 §7.9).
 9. **Category chip and A7:** how the save tells the server that the category came from the suggestion (a field on the request, or a separate call), so A7 learns the keyword only then. Also: should the suggestion be stored on a bot draft, so the Transactions row and the Bot inbox show it without a second call?
 10. **Facts list:** always shown, or only behind "Số liệu" on every screen size?
 

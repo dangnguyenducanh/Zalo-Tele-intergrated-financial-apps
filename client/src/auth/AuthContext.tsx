@@ -3,6 +3,7 @@ import { api } from '@/app/api';
 import { useAppDispatch } from '@/app/hooks';
 import { applyLanguage, applyThemeMode } from '@/app/uiSlice';
 import type { AuthResponse, RegisterInput, User } from '@/types/api';
+import { forgetClaimToken } from './claimToken';
 import { onSessionChange, postAuth, refreshSession, setSession } from './session';
 import { AuthContext, type AuthContextValue, type AuthStatus } from './useAuth';
 
@@ -45,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register: async (input: RegisterInput) => setSession(await postAuth<AuthResponse>('register', input)),
       logout: async () => {
         await postAuth('logout').catch(() => undefined); // log out locally even if the server is unreachable
+        forgetClaimToken(); // the next person on this browser must not get a chat link this one left waiting
         setSession(null);
       },
       refresh: async () => (await refreshSession()) !== null,

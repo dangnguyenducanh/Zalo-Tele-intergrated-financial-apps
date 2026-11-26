@@ -10,6 +10,7 @@ import { botRoutes } from './features/bot/routes';
 import { budgetsRoutes } from './features/budgets/routes';
 import { categoriesRoutes } from './features/categories/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
+import { linkRoutes } from './features/link/routes';
 import { notFoundRoutes } from './features/notFound/routes';
 import { settingsRoutes } from './features/settings/routes';
 import { transactionsRoutes } from './features/transactions/routes';
@@ -24,6 +25,7 @@ export const routes: RouteObject[] = [
     errorElement: <RouteError />, // a page failed to load or crashed
     children: [
       ...authRoutes, // /login, /register
+      ...linkRoutes, // /link (logs in by itself)
       {
         element: <ProtectedRoute />,
         children: [

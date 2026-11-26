@@ -10,7 +10,8 @@ export default function AppSnackbar() {
   return (
     <Snackbar open={snackbar !== null} autoHideDuration={6000} onClose={close} sx={{ bottom: { xs: 80, md: 24 } }}>
       {snackbar ? (
-        <Alert severity={snackbar.severity} onClose={close} variant="filled">
+        // Messages can name a chat or a category, user text with no spaces: wrap it, never run off the screen (BUG-030).
+        <Alert severity={snackbar.severity} onClose={close} variant="filled" sx={{ '& .MuiAlert-message': { overflowWrap: 'anywhere' } }}>
           {snackbar.message}
         </Alert>
       ) : undefined}

@@ -64,7 +64,7 @@ sequenceDiagram
 
 **Labels** (created once): `status:ready`, `status:in-progress`, `status:in-review`, `status:changes-requested`, `review:approved`, `review:changes-requested`, `needs-update`, `auto-merge`, `revert`, `bug`.
 
-**Required checks on `main`** (branch protection, set once): PR required, no direct pushes or force-pushes, status checks `ci` (GitHub Actions) and `agent-review` (set by the reviewer) must pass on the head commit, and the branch must be up to date.
+**Required checks on `main`** (branch protection, set once): PR required, no direct pushes or force-pushes, status checks `ci` (GitHub Actions) and `agent-review` (set by the reviewer) must pass on the head commit, and the branch must be up to date. The `ci` job also runs the agent service's pytest (`npm run test:agent`, from T44), so the one required `ci` check covers both the npm gates and the Python gate. A card that changes `agent/` runs it locally too (Python 3.12 in `agent/.venv`, see [06-deployment.md §6.10](06-deployment.md#610-ci)).
 
 ## 8.4 Orchestrator procedure (main session)
 
@@ -115,7 +115,7 @@ Closes #<issue>
 |---|---|---|
 | TC-F2-01 | API | ✅ |
 
-Gates: typecheck ✅ · lint ✅ · unit/API ✅ (n/n) · e2e (scoped) ✅
+Gates: typecheck ✅ · lint ✅ · unit/API ✅ (n/n) · agent pytest ✅ (n/n, cards that change `agent/`) · e2e (scoped) ✅
 
 ## modern-web-guidance
 - `<guide-id>`: what it changed (UI tasks only)

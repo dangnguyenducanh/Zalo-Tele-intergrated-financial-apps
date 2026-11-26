@@ -15,6 +15,7 @@ import { useGetTransactionsQuery, type Transaction } from '@/features/transactio
 import { useGetWalletsQuery, type Wallet } from '@/features/wallets/walletsApi';
 import { formatDate, formatMoney } from '@/i18n/format';
 import { GRADIENT, moneySx } from '@/theme/theme';
+import { vnToday } from '@/utils/vnToday';
 import { CategoryBreakdown, MonthCompare } from './Charts';
 import { useGetByCategoryQuery, useGetDailyQuery, useGetSummaryQuery, type MonthSummary } from './statsApi';
 import { previousMonth } from './weekly';
@@ -88,7 +89,7 @@ export default function DashboardPage() {
         )}
         {daily.currentData && previousDaily.currentData && ( // never compare against a month that has not loaded
           <Grid size={{ xs: 12, md: 7 }}>
-            <MonthCompare days={daily.currentData} previousDays={previousDaily.currentData} />
+            <MonthCompare month={month} today={vnToday()} days={daily.currentData} previousDays={previousDaily.currentData} />
           </Grid>
         )}
         {byCategory.currentData && (

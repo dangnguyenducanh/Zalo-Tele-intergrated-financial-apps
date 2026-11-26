@@ -379,6 +379,18 @@ test('TC-F13-07 POST /transactions/parse names a line over the 10^13 ₫ ceiling
   expect([only.status, only.body.error.code]).toEqual([422, 'NO_AMOUNT_FOUND']);
 });
 
+test('TC-F8-25 POST /transactions/parse reads the amount, not a year or month typed before it; a date-only line has no amount (BUG-039)', async () => {
+  const { me } = await newUser();
+
+  const res = await me.post('/transactions/parse', { text: 'thuê nhà năm 2026 36tr\nhọc phí năm 2025 12.000.000\nbảo hiểm năm 2026 1500000\nan toi thang 10 50\ntiền nhà tháng 10' });
+  expect(res.status).toBe(200);
+  expect(res.body.drafts.map((d) => d.amount)).toEqual([36_000_000, 12_000_000, 1_500_000, 50_000]);
+  expect(res.body.noAmountLines).toEqual([5]);
+  const only = await me.post('/transactions/parse', { text: 'năm 2025' });
+  expect([only.status, only.body.error.code]).toEqual([422, 'NO_AMOUNT_FOUND']);
+  expect(await Transaction.countDocuments()).toBe(0);
+});
+
 test('TC-F4-12 one money value is at most 10^13 ₫, so wallet and month totals stay exact integers', async () => {
   const { me, walletId, food } = await newUser();
   const MAX = 10_000_000_000_000;
@@ -397,4 +409,21 @@ test('TC-F4-12 one money value is at most 10^13 ₫, so wallet and month totals 
   expect((await me.post('/wallets', { name: 'Big', type: 'credit', initialBalance: -MAX })).status).toBe(201);
   expect((await me.post('/budgets', { month: '2026-10', categoryId: null, limit: MAX })).status).toBe(201);
   await expect(Transaction.create({ ...body, userId: tx.userId, amount: MAX + 1 })).rejects.toThrow(/amount/); // the model agrees
+});
+
+test('TC-F4-14 GET /transactions?source=whatsapp lists only WhatsApp transactions, not a validation error', async () => {
+  const { me, walletId, food } = await newUser();
+  const base = { userId: (await User.findOne())._id, walletId, categoryId: food, type: 'expense', amount: 45_000, occurredAt: new Date() };
+  await Transaction.create([
+    { ...base, note: 'web', source: 'web' },
+    { ...base, note: 'telegram', source: 'telegram', status: 'draft', chatRef: { platform: 'telegram', chatId: '1', messageId: '1:1' } },
+    { ...base, note: 'whatsapp draft', source: 'whatsapp', status: 'draft', chatRef: { platform: 'whatsapp', chatId: 'VN.13491208655302741918', messageId: 'wamid.1:1' } },
+    { ...base, note: 'whatsapp saved', source: 'whatsapp', chatRef: { platform: 'whatsapp', chatId: 'VN.13491208655302741918', messageId: 'wamid.2:1' } },
+  ]);
+
+  const res = await me.get('/transactions?source=whatsapp');
+  expect(res.status).toBe(200);
+  expect(res.body.items.map((t) => t.note).sort()).toEqual(['whatsapp draft', 'whatsapp saved']);
+  expect(res.body.items.every((t) => t.source === 'whatsapp' && t.chatRef.platform === 'whatsapp')).toBe(true);
+  expect((await me.get('/transactions?source=sms')).status).toBe(400); // the list stays closed
 });

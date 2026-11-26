@@ -108,7 +108,7 @@ export async function systemStats() {
   return {
     users,
     activeUsers7d: activeUserIds.length,
-    chatLinks: countsByKey(links, ['telegram', 'zalo']),
-    transactionsBySource: countsByKey(transactions, ['web', 'telegram', 'zalo', 'receipt']),
+    chatLinks: countsByKey(links, ['telegram', 'zalo', 'whatsapp']),
+    transactionsBySource: countsByKey(transactions, ['web', 'telegram', 'zalo', 'whatsapp', 'receipt']),
   };
 }

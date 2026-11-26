@@ -18,6 +18,8 @@
   "BUDGET_EXISTS": "This category already has a budget for the selected month.",
   "ALREADY_CONFIRMED": "This transaction is already confirmed.",
   "LAST_ADMIN": "The last administrator cannot be locked or demoted.",
+  "LINK_TOKEN_INVALID": "This link has expired or was already used. Send any message to the bot to get a new one.",
+  "CHAT_ALREADY_LINKED": "This chat is already linked to an account.",
   "PAYLOAD_TOO_LARGE": "The file is too large.",
   "UNSUPPORTED_MEDIA_TYPE": "Only JPEG or PNG images are supported.",
   "NO_AMOUNT_FOUND": "No amount found. Example: \"phở 45k\".",

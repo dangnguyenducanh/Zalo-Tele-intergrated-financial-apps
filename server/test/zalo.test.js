@@ -6,10 +6,12 @@ import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import app from '../src/app.js';
 import viText from '../src/bot/messages.vi.js';
+import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
 import { User } from '../src/models/User.js';
+import { monthKey } from '../src/utils/vnTime.js';
 import recorded from './fixtures/kie-analyze.json' with { type: 'json' };
 import fixtures from './fixtures/zalo-events.json' with { type: 'json' };
 import { registerUser, resetLoginLimit } from './helpers/auth.js';
@@ -46,7 +48,7 @@ const outbound = setupServer(
 
 beforeAll(async () => {
   await startTestDb();
-  await Promise.all([User.init(), ChatLink.init(), LinkCode.init(), Transaction.init()]); // unique indexes first
+  await Promise.all([User.init(), ChatLink.init(), LinkCode.init(), Transaction.init(), ChannelUsage.init()]); // unique indexes first
   // Supertest talks to the app on 127.0.0.1; any other unmocked host is a test bug.
   outbound.listen({
     onUnhandledFrame: ({ frame }) => {
@@ -127,6 +129,23 @@ test('TC-F8-03 the Zalo webhook rejects a missing or wrong secret header with 40
   expect(background).toEqual([]); // nothing was started
   expect(calls).toEqual([]); // no message sent
   expect(await Transaction.countDocuments()).toBe(0);
+});
+
+// docs/02 §2.10.3: the only way to link Zalo without typing anything.
+test('TC-F7-16 TC-F7-18 an unlinked Zalo chat gets a claim link; claiming it links the chat and Zalo gets the success text', async () => {
+  const replies = await say('xin chào');
+  expect(replies.map((c) => c.method)).toEqual(['sendMessage']);
+  const [, token] = /http:\/\/localhost:5300\/link\?t=([A-Za-z0-9_-]{32})/.exec(textOf(replies[0]));
+  expect(await LinkCode.find().lean()).toMatchObject([{ chat: { platform: 'zalo', platformUserId: USER_A, chatId: USER_A, displayName: 'Anh Nguyen' } }]);
+
+  const { accessToken, user } = await registerUser({ name: 'Lan' });
+  const post = (path) => request(app).post(`/api/chat-links/${path}`).set('Authorization', `Bearer ${accessToken}`).send({ token });
+  expect((await post('claim/preview')).body).toEqual({ platform: 'zalo', displayName: 'Anh Nguyen' });
+  calls.length = 0;
+  expect((await post('claim')).status).toBe(201);
+  await Promise.all(background.splice(0));
+  expect(calls).toEqual([{ bot: 'bottest-zalo-token', method: 'sendMessage', body: { chat_id: USER_A, text: viText.linked('Lan') } }]);
+  expect(await ChatLink.find().lean()).toMatchObject([{ userId: oid(user.id), platform: 'zalo', viaClaim: true }]);
 });
 
 test('TC-F8-07 Zalo "grab 32k" → reply "ok" saves the draft; a second draft → "huy" discards it', async () => {
@@ -286,4 +305,167 @@ test('TC-F8-21 Zalo: after a multi-line message, each "ok"/"huy" reaches the nex
   expect(second).toMatch(/^❌ Đã huỷ: .*30\.000[^\n]*$/); // nothing else waits
   expect(textOf((await say('ok'))[0])).toBe(viText.nothingPending);
   expect(await Transaction.find({ deletedAt: null }).lean()).toMatchObject([{ amount: 40_000, status: 'confirmed' }]);
+});
+
+// ---- Zalo's monthly quota (docs/02 §2.11.6, card T49): every send is counted, and from 2,850 only capture and linking replies go out ----
+
+const thisMonth = () => monthKey(new Date());
+const zaloSent = async (month = thisMonth()) => (await ChannelUsage.findOne({ platform: 'zalo', month }))?.sent ?? 0;
+const setZaloSent = (sent, month = thisMonth()) => ChannelUsage.updateOne({ platform: 'zalo', month }, { sent }, { upsert: true });
+const kieDown = () => outbound.use(http.post('http://kie.test/analyze', () => new HttpResponse(null, { status: 503 })));
+
+test('TC-F14-20 every Zalo message the platform accepts adds 1 to channelUsage, once; a refused one adds nothing', async () => {
+  await linkedUser(); // the "linked" reply is the first message
+  expect(await zaloSent()).toBe(calls.length);
+
+  // Replies, drafts and notes: each step's count equals the messages Zalo accepted so far.
+  for (const text of ['grab 32k', 'ok', '/today', 'xin chào', 'cafe 21k\nbánh mì 22k\nxyz', '/lang en', '/lang vi']) {
+    await say(text);
+    expect(await zaloSent()).toBe(calls.length);
+  }
+  await send(event('image')); // "Reading receipt…", then the draft
+  expect(await zaloSent()).toBe(calls.length);
+
+  // The claim success message of the website is a send as well.
+  const [, token] = /\/link\?t=([A-Za-z0-9_-]{32})/.exec(textOf((await say('hi', USER_B))[0]));
+  const { accessToken } = await registerUser({ name: 'Lan' });
+  await request(app).post('/api/chat-links/claim').set('Authorization', `Bearer ${accessToken}`).send({ token });
+  await Promise.all(background.splice(0));
+  expect(textOf(calls.at(-1))).toBe(viText.linked('Lan'));
+  expect(await zaloSent()).toBe(calls.length);
+  expect(await ChannelUsage.find().lean()).toMatchObject([{ platform: 'zalo', month: thisMonth(), sent: calls.length }]); // one row
+});
+
+test('TC-F14-20 a message Zalo refuses is not counted; a counter that fails loses neither the drafts nor the replies', async () => {
+  await linkedUser();
+  const before = await zaloSent();
+  // Zalo accepts every reply except the one that mentions 22.000.
+  outbound.use(
+    http.post('https://bot-api.zaloplatforms.com/:bot/sendMessage', async ({ params, request }) => {
+      const body = await request.json();
+      if (body.text.includes('22.000')) return HttpResponse.json({ ok: false, error_code: 403, description: 'Forbidden' });
+      calls.push({ bot: params.bot, method: 'sendMessage', body });
+      return HttpResponse.json({ ok: true, result: { message_id: 'x' } });
+    }),
+  );
+  errorLog.mockImplementation(() => {});
+  await say('cafe 21k\nbánh mì 22k\ntaxi 23k');
+  expect(await Transaction.countDocuments({ status: 'draft' })).toBe(3);
+  expect(calls.length - 1).toBe(2); // the link reply, then the 21.000 and 23.000 drafts
+  expect(await zaloSent()).toBe(before + 2);
+  expect(errorLog).toHaveBeenCalledTimes(1); // the refused reply, logged by the webhook
+  errorLog.mockClear();
+  outbound.resetHandlers();
+
+  // The counter itself fails: both replies still go out, every draft is saved, each failed count is logged.
+  const count = vi.spyOn(ChannelUsage, 'updateOne').mockRejectedValue(new Error('db down'));
+  const sent = await say('phở 45k\nbún 40k');
+  count.mockRestore();
+  expect(sent.map(textOf)).toEqual([expect.stringContaining('45.000'), expect.stringContaining('40.000')]);
+  expect(await Transaction.countDocuments({ status: 'draft' })).toBe(5);
+  expect(errorLog).toHaveBeenCalledTimes(2);
+  expect(await zaloSent()).toBe(before + 2); // those two were not counted
+  errorLog.mockClear();
+  expect(textOf((await say('ok'))[0])).toMatch(/Đã lưu/); // and the next message is counted again
+  expect(await zaloSent()).toBe(before + 3);
+});
+
+test('TC-F14-21 from 2,850 Zalo messages only capture and linking replies are sent; a command still does its work', async () => {
+  const owner = await linkedUser();
+  await say('grab 32k'); // a draft is waiting
+
+  // The 2,850th message is still sent: /today at 2,849.
+  await setZaloSent(2849);
+  expect(textOf((await say('/today'))[0])).toMatch(/^📅 Hôm nay/);
+  expect(await zaloSent()).toBe(2850);
+
+  // Commands, help and a message with no amount are not sent, and nothing is counted. /lang still switches the language.
+  for (const text of ['/today', '/month', '/help', '/start', '/hoi gì đó', 'xin chào', 'cảm ơn bot']) expect(await say(text)).toEqual([]);
+  expect(await say('/lang en')).toEqual([]);
+  expect((await User.findById(owner.id)).language).toBe('en');
+  expect(await say('/lang vi')).toEqual([]);
+  expect((await User.findById(owner.id)).language).toBe('vi');
+  expect(await zaloSent()).toBe(2850);
+
+  // Capture replies keep going: an amount correction, drafts, a note about a line with no amount, ok and huy.
+  let expected = 2850;
+  const corrected = await say('55k');
+  expect(textOf(corrected[0])).toMatch(/55\.000.*Đi lại.*grab/);
+  const drafts = await say('cafe 21k\nbánh mì 22k');
+  expect(drafts.map(textOf)).toEqual([expect.stringContaining('21.000'), expect.stringContaining('22.000')]);
+  const note = await say('taxi 23k\nxyz');
+  expect(note.map(textOf)).toEqual([expect.stringContaining('23.000'), expect.stringContaining('Chưa ghi dòng 2')]);
+  expect(textOf((await say('ok'))[0])).toMatch(/^✅ Đã lưu: .*23\.000/);
+  expect(textOf((await say('huy'))[0])).toMatch(/^❌ Đã huỷ: .*22\.000/);
+  expected += corrected.length + drafts.length + note.length + 2;
+  expect(await zaloSent()).toBe(expected);
+  expect(await Transaction.countDocuments({ status: 'confirmed' })).toBe(1);
+
+  // A receipt: "Reading receipt…" and the draft, and when the reader is down its failure message.
+  const receipt = await send(event('image'));
+  expect(receipt.map(textOf)).toEqual([viText.readingReceipt, expect.stringContaining('116.000')]);
+  kieDown();
+  const failed = await send(event('image'));
+  expect(failed.map(textOf)).toEqual([viText.readingReceipt, viText.receiptUnavailable]);
+  expect(await zaloSent()).toBe(expected + receipt.length + failed.length);
+});
+
+test('TC-F14-21 from 2,850 the linking replies are still sent: the link prompt, /link and /start answers, the claim message (D20)', async () => {
+  await setZaloSent(2850);
+  const before = await zaloSent();
+
+  // A chat that is not linked: the please-link prompt with its claim link, for any message, even a command.
+  const [prompt] = await say('/help', USER_B);
+  expect(textOf(prompt)).toMatch(/Vui lòng liên kết.*\/link\?t=[A-Za-z0-9_-]{32}/s);
+  expect(textOf((await say('/link ZZZZZZ', USER_B))[0])).toContain(viText.invalidCode);
+  expect(textOf((await say('/start ZZZZZZ', USER_B))[0])).toContain(viText.invalidCode);
+
+  // The right code links the chat; the same chat sending another code is told it is linked already.
+  const { accessToken, user } = await registerUser({ name: 'Lan' });
+  const code = async () => (await request(app).post('/api/chat-links/code').set('Authorization', `Bearer ${accessToken}`)).body.code;
+  expect(textOf((await say(`/link ${await code()}`, USER_B))[0])).toBe(viText.linked('Lan'));
+  expect(textOf((await say(`/start ${await code()}`, USER_B))[0])).toBe(viText.alreadyLinked);
+  expect(await ChatLink.countDocuments({ userId: oid(user.id) })).toBe(1);
+
+  // A claim made on the website tells the chat that it is linked (another, unlinked chat).
+  const claimToken = /\/link\?t=([A-Za-z0-9_-]{32})/.exec(textOf((await say('hi', 'c3d4e5f6a7b8c9d0a1b2'))[0]))[1];
+  const other = await registerUser({ name: 'Minh' });
+  const from = calls.length;
+  await request(app).post('/api/chat-links/claim').set('Authorization', `Bearer ${other.accessToken}`).send({ token: claimToken });
+  await Promise.all(background.splice(0));
+  expect(calls.slice(from).map(textOf)).toEqual([viText.linked('Minh')]);
+  expect(await zaloSent()).toBe(before + calls.length);
+
+  // The linked chat, now over the line, gets a draft but no help.
+  expect(await say('/help', USER_B)).toEqual([]);
+  expect(textOf((await say('grab 32k', USER_B))[0])).toMatch(/32\.000/);
+});
+
+test('TC-F14-21 a locked account is told so only below 2,850 (its reply is not capture or linking)', async () => {
+  const owner = await linkedUser();
+  await User.updateOne({ _id: owner.id }, { status: 'locked' });
+  await setZaloSent(2849);
+  expect(textOf((await say('grab 32k'))[0])).toBe(viText.locked);
+  expect(await say('grab 32k')).toEqual([]);
+  expect(await Transaction.countDocuments()).toBe(0); // locked: nothing is recorded either way
+});
+
+test('TC-F14-22 the Zalo count is per Vietnam month: 23:59 on the 30th is November, 00:00 on the 1st starts December', async () => {
+  await linkedUser();
+  await ChannelUsage.deleteMany({});
+  vi.useFakeTimers({ toFake: ['Date'] }); // only the clock: the database and the mocked network keep working
+  try {
+    vi.setSystemTime(new Date('2026-11-30T16:59:30Z')); // Mon 30/11 23:59:30 +07
+    await setZaloSent(2849, '2026-11');
+    expect(await say('/help')).toHaveLength(1); // the 2,850th of November
+    expect(await say('/help')).toEqual([]);
+    expect(await zaloSent('2026-11')).toBe(2850);
+
+    vi.setSystemTime(new Date('2026-11-30T17:00:00Z')); // Tue 01/12 00:00:00 +07
+    expect(await say('/help')).toHaveLength(1); // December has its own count, from 0
+    expect(await zaloSent('2026-11')).toBe(2850);
+    expect(await zaloSent('2026-12')).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
 });

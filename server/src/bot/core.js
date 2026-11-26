@@ -1,6 +1,6 @@
-// Bot core (docs/04 §4.6): everything the Telegram and Zalo bots do, written once. An adapter maps its
+// Bot core (docs/04 §4.6): everything the Telegram, Zalo and WhatsApp bots do, written once. An adapter maps its
 // platform's JSON to the calls below and gives the core a way to talk back:
-//   { platform: 'telegram' | 'zalo', sendText(chatId, text), sendDraft(chatId, { id, text }, language),
+//   { platform: 'telegram' | 'zalo' | 'whatsapp', sendText(chatId, text), sendDraft(chatId, { id, text }, language),
 //     downloadPhoto(photo) → Buffer }
 import { env } from '../config/env.js';
 import { Category } from '../models/Category.js';
@@ -8,7 +8,8 @@ import { ChatLink } from '../models/ChatLink.js';
 import { MAX_MONEY, Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
-import { redeemLinkCode } from '../services/chatLinks.js';
+import { maySend } from '../services/channelUsage.js';
+import { createClaimToken, redeemLinkCode } from '../services/chatLinks.js';
 import { listBudgets } from '../services/budgets.js';
 import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
@@ -22,8 +23,25 @@ import vi from './messages.vi.js';
 
 export const messagesFor = (language) => (language === 'en' ? en : vi);
 
-// A chat that is not linked has no language yet, so it gets both.
-const pleaseLink = () => `${vi.pleaseLink(env.APP_URL ?? '')}\n\n${en.pleaseLink(env.APP_URL ?? '')}`;
+// Every text reply goes out through here with its kind (docs/02 §2.11.6): 'capture' (drafts, receipts, ok/huy, corrections)
+// and 'link' (linking a chat) always go out; anything else is 'other' and stops when the platform's monthly quota is
+// nearly used up. By then the reply's effect (a saved draft, a switched language) has already happened. A draft
+// itself goes out through adapter.sendDraft: it is capture, so it is never held back.
+async function reply(adapter, chatId, text, kind = 'other') {
+  if (await maySend(adapter.platform, kind)) return adapter.sendText(chatId, text);
+}
+
+// A chat that is not linked has no language yet, so it gets both. `lines(m)` is one language's lines.
+const inBothLanguages = (lines) => [vi, en].map((m) => lines(m).filter(Boolean).join('\n')).join('\n\n');
+const pleaseLink = (m) => m.pleaseLink(env.APP_URL ?? '');
+
+// What a chat that is not linked gets for any message: how to link, plus a one-time link that opens the website's
+// /link screen for this very chat (docs/02 §2.10.3). A wrong or expired code is said first. Without APP_URL
+// there is no address to link to, so no token is made.
+async function linkInstructions(platform, { platformUserId, chatId, displayName }, { wrongCode = false } = {}) {
+  const claimUrl = env.APP_URL && `${env.APP_URL}/link?t=${await createClaimToken({ platform, platformUserId, chatId, displayName })}`;
+  return inBothLanguages((m) => [wrongCode && m.invalidCode, pleaseLink(m), claimUrl && m.tapToLink(claimUrl)]);
+}
 
 const money = (amount, m) => new Intl.NumberFormat(m.locale, { style: 'currency', currency: 'VND' }).format(amount);
 const dateText = (date, m) =>
@@ -54,38 +72,50 @@ function readCommand(text) {
 
 // Every incoming chat message, mapped by the adapter to { platformUserId, chatId, messageId, displayName, text, photo? }.
 // `photo` is the platform's reference to a photo in the message (Telegram file_id, Zalo photo_url).
-// Without a link, only "/start CODE" and "/link CODE" do something; nothing is ever stored for an unlinked chat.
+// Without a link, a valid "/start CODE" or "/link CODE" links the chat; anything else gets a claim link, the only
+// thing ever stored for an unlinked chat (no message text, no transaction).
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
   const [command, arg] = readCommand(message.text);
-  if ((command === 'start' || command === 'link') && arg) return adapter.sendText(message.chatId, await linkChat(adapter.platform, message, arg, link));
-  if (!link) return adapter.sendText(message.chatId, pleaseLink());
+  if ((command === 'start' || command === 'link') && arg) return reply(adapter, message.chatId, await linkChat(adapter.platform, message, arg, link), 'link');
+  if (!link) return reply(adapter, message.chatId, await linkInstructions(adapter.platform, message), 'link');
 
   const user = await User.findById(link.userId).lean();
-  if (user.status === 'locked') return adapter.sendText(message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
+  if (user.status === 'locked') return reply(adapter, message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
   if (message.photo) return readReceipt(adapter, link, user.language, message);
-  if (command) return adapter.sendText(message.chatId, await runCommand(link, user, command, arg));
+  if (command) return reply(adapter, message.chatId, await runCommand(link, user, command, arg));
   const word = normalize(message.text);
-  if (word === 'ok' || word === 'huy') return adapter.sendText(message.chatId, await answerPending(link, word));
+  if (word === 'ok' || word === 'huy') return reply(adapter, message.chatId, await answerPending(link, word), 'capture');
   return createDrafts(adapter, link, user.language, message);
 }
 
-// A button press (Telegram ✅ / ❌) → { ok, text }. Only the presser's own drafts can be touched.
+// A button press (Telegram and WhatsApp ✅ / ❌) → { ok, text }. Only the presser's own drafts can be touched.
 export async function handleButton(platform, platformUserId, action, transactionId) {
   const link = await ChatLink.findOne({ platform, platformUserId });
-  if (!link) return { ok: false, text: pleaseLink() };
+  if (!link) return { ok: false, text: inBothLanguages((m) => [pleaseLink(m)]) }; // a button's short notice can't be tapped
   const user = await User.findById(link.userId).lean();
   if (user.status === 'locked') return { ok: false, text: messagesFor(user.language).locked };
   return action === 'confirm' ? confirm(link, transactionId) : discard(link, transactionId);
 }
 
 // "/start CODE" or "/link CODE" → the reply text. A chat account stays linked to its first web account.
-async function linkChat(platform, { platformUserId, chatId, displayName }, code, link) {
+async function linkChat(platform, message, code, link) {
   if (link) return (await messagesOf(link)).alreadyLinked;
+  const { platformUserId, chatId, displayName } = message;
   const created = await redeemLinkCode(code, { platform, platformUserId, chatId, displayName });
-  if (!created) return `${vi.invalidCode}\n\n${en.invalidCode}`;
-  const user = await User.findById(created.userId).lean();
+  if (!created) return linkInstructions(platform, message, { wrongCode: true });
+  return linkedText(created.userId);
+}
+
+// "Linked to the account of <name>", in that user's language: the reply to "/link CODE" and the message after a claim.
+async function linkedText(userId) {
+  const user = await User.findById(userId).lean();
   return messagesFor(user.language).linked(user.name);
+}
+
+// After a claim on the website (docs/02 §2.10.3 step 7) the bot tells the chat that it is linked.
+export async function sendLinked(adapter, chatId, userId) {
+  await reply(adapter, chatId, await linkedText(userId), 'link');
 }
 
 // /today, /month, /lang vi|en; anything else (/start, /help, unknown) gets the help text.
@@ -150,7 +180,7 @@ async function createDrafts(adapter, link, language, message) {
   try {
     ({ drafts, noAmountLines } = await parseTransactions(link.userId, message.text));
   } catch (err) {
-    if (err instanceof AppError && err.code === 'NO_AMOUNT_FOUND') return adapter.sendText(message.chatId, m.help);
+    if (err instanceof AppError && err.code === 'NO_AMOUNT_FOUND') return reply(adapter, message.chatId, m.help);
     throw err;
   }
   // Zalo has no ✏️ button, so a reply that is only an amount ("55k") corrects the waiting draft (docs/02 §2.4).
@@ -179,7 +209,7 @@ async function createDrafts(adapter, link, language, message) {
   }
   // Lines with no amount, or one over the ceiling, are named so the user knows they were not recorded (BUG-033).
   if (noAmountLines.length > 0) {
-    await adapter.sendText(message.chatId, m.noAmountLines({ lines: noAmountLines.join(', '), max: money(MAX_MONEY, m) })).catch((err) => {
+    await reply(adapter, message.chatId, m.noAmountLines({ lines: noAmountLines.join(', '), max: money(MAX_MONEY, m) }), 'capture').catch((err) => {
       failed ??= err;
     });
   }
@@ -204,7 +234,7 @@ async function readReceipt(adapter, link, language, message) {
   const seen = { 'chatRef.platform': chatRef.platform, 'chatRef.chatId': chatRef.chatId, 'chatRef.messageId': chatRef.messageId };
   if (await Transaction.exists(seen)) return; // delivered again: this photo was read already
 
-  await adapter.sendText(message.chatId, m.readingReceipt);
+  await reply(adapter, message.chatId, m.readingReceipt, 'capture');
   let transaction;
   try {
     const image = await adapter.downloadPhoto(message.photo);
@@ -212,7 +242,7 @@ async function readReceipt(adapter, link, language, message) {
   } catch (err) {
     if (err.code === 11000) return; // the same photo delivered twice at once: the other delivery answers
     const unreadable = err.status === 422 || err.status === 415; // no total found, or not a JPEG/PNG
-    await adapter.sendText(message.chatId, unreadable ? m.receiptUnreadable : m.receiptUnavailable);
+    await reply(adapter, message.chatId, unreadable ? m.receiptUnreadable : m.receiptUnavailable, 'capture');
     if (err instanceof AppError) return; // KIE down, too slow, not configured, or nothing to read
     throw err; // anything else (a failed download, a bug) is logged by the webhook
   }
