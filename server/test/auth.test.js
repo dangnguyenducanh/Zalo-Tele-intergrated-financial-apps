@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
@@ -161,6 +162,77 @@ describe('login', () => {
     const res = await refresh(cookie);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('ACCOUNT_LOCKED');
+  });
+
+  // BUG-040: login reads the user, then checks the password with bcrypt (slow), then opens its session. A password
+  // change or an admin lock that lands in that gap revoked every session before this one existed, so only a re-check
+  // after the session is created can catch it. The first bcrypt.compare (this login's) is held until `resume()`,
+  // so the interleaving happens on every run. It returns the login's response once the compare has finished.
+  async function startLoginPausedAtBcrypt({ email, password }) {
+    const realCompare = bcrypt.compare.bind(bcrypt);
+    let resume;
+    let reached;
+    const gate = new Promise((resolve) => (resume = resolve));
+    const waiting = new Promise((resolve) => (reached = resolve));
+    const spy = vi.spyOn(bcrypt, 'compare').mockImplementationOnce(async (...args) => {
+      reached();
+      await gate;
+      return realCompare(...args);
+    });
+    const response = request(app).post('/api/auth/login').set('User-Agent', 'device-3').send({ email, password }).then((res) => res);
+    await waiting;
+    return async () => {
+      resume();
+      const res = await response;
+      spy.mockRestore();
+      return res;
+    };
+  }
+  const activeSessionIds = async (userId) => (await Session.find({ userId, revokedAt: null })).map((s) => String(s._id));
+
+  test('TC-F1-26 a login that overlaps a password change gets 401 and no session, and the device that changed it stays signed in (BUG-040)', async () => {
+    const a = await registerUser();
+    const finishLogin = await startLoginPausedAtBcrypt(a); // device C is checking the old password...
+    const change = await request(app)
+      .patch('/api/users/me/password')
+      .set('Authorization', `Bearer ${a.accessToken}`)
+      .send({ currentPassword: a.password, newPassword: 'new-password-2' });
+    const login = await finishLogin(); // ...and finishes after the change
+
+    expect(change.status).toBe(204);
+    expect([login.status, login.body.error?.code]).toEqual([401, 'INVALID_CREDENTIALS']);
+    expect(login.headers['set-cookie']).toBeUndefined();
+    expect(await activeSessionIds(a.user.id)).toEqual([claimsOf(a.accessToken).sid]);
+    expect((await refresh(a.cookie)).status).toBe(200);
+    // A login with the old password started after the change is refused the same way; the new password works.
+    expect((await request(app).post('/api/auth/login').send(a)).status).toBe(401);
+    expect((await loginAs({ email: a.email, password: 'new-password-2' })).accessToken).toBeTruthy();
+  });
+
+  test('TC-F1-26 a login that overlaps an admin lock gets 403 ACCOUNT_LOCKED and no usable session (BUG-040)', async () => {
+    const a = await registerUser();
+    const finishLogin = await startLoginPausedAtBcrypt(a);
+    await User.updateOne({ _id: a.user.id }, { status: 'locked' }); // what PATCH /admin/users/:id does (services/admin.js)
+    await revokeAllSessions(a.user.id);
+    const login = await finishLogin();
+
+    expect([login.status, login.body.error?.code]).toEqual([403, 'ACCOUNT_LOCKED']);
+    expect(login.headers['set-cookie']).toBeUndefined();
+    expect(await activeSessionIds(a.user.id)).toEqual([]);
+  });
+
+  // Out of scope for the fix, pinned so it is not "fixed" by accident: after "log out other devices" the password is
+  // still right, so a login that overlaps it is a valid login and keeps its session.
+  test('TC-F1-26 a login that overlaps "log out other devices" is still a valid login (BUG-040)', async () => {
+    const a = await registerUser();
+    const finishLogin = await startLoginPausedAtBcrypt(a);
+    const others = await request(app).delete('/api/sessions?others=true').set('Authorization', `Bearer ${a.accessToken}`);
+    const login = await finishLogin();
+
+    expect(others.status).toBe(204);
+    expect(login.status).toBe(200);
+    expect(await activeSessionIds(a.user.id)).toEqual([claimsOf(a.accessToken).sid, claimsOf(login.body.accessToken).sid].sort());
+    expect((await refresh(refreshCookie(login))).status).toBe(200);
   });
 });
 

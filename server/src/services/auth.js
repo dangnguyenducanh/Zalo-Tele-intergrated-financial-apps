@@ -71,7 +71,20 @@ export async function login({ email, password }, client) {
   const passwordOk = await checkPassword(password, user?.passwordHash);
   if (!user || !passwordOk) throw invalidCredentials();
   if (user.status === 'locked') throw accountLocked();
-  return openSession(user, client);
+  const opened = await openSession(user, client);
+
+  // BUG-040: the bcrypt check above takes a while, so a password change or an admin lock may have revoked every
+  // session before this one existed, and its updateMany could not see it. Both write to the user first, so read the
+  // user again now that the session exists: a changed hash means the password just checked is no longer valid (the
+  // answer of a fresh login, 401), and a lock means 403. Either way the new session dies with the login.
+  // "Log out other devices" leaves the hash alone, so a login overlapping it stays valid: its password is still right.
+  const now = await User.findById(user._id).select('+passwordHash status').lean();
+  const passwordChanged = !now || now.passwordHash !== user.passwordHash;
+  if (passwordChanged || now.status === 'locked') {
+    await Session.updateOne({ _id: opened.session._id }, { revokedAt: new Date() });
+    throw passwordChanged ? invalidCredentials() : accountLocked();
+  }
+  return opened;
 }
 
 // How long after its rotation a refresh token may come back because its answer was lost (BUG-003).
