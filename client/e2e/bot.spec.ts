@@ -1,6 +1,7 @@
 /// <reference lib="dom" /> // page.evaluate below runs in the browser (canvas, FileReader)
 import { readFile } from 'node:fs/promises';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { registerByApi } from './helpers';
 
 // Bot inbox in a real browser against the real API (in-memory MongoDB, see playwright.config.ts).
 // The Telegram draft comes in through the real webhook; the receipt is read by the real KIE service.
@@ -16,10 +17,7 @@ const CARD = 'Liên kết Telegram / WhatsApp / Zalo';
 test.use({ locale: 'vi-VN' });
 
 async function createAccount(request: APIRequestContext) {
-  const email = `bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const res = await request.post('/api/auth/register', { data: { name: 'Lan', email, password: PASSWORD, language: 'vi' } });
-  expect(res.status()).toBe(201);
-  const { accessToken } = (await res.json()) as { accessToken: string };
+  const { email, accessToken } = await registerByApi(request);
   return { email, headers: { Authorization: `Bearer ${accessToken}` } };
 }
 
