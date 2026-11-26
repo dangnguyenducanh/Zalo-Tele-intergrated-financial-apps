@@ -22,11 +22,15 @@ const thousandsUpTo = (day: number) => (day * (day + 1)) / 2;
 const dayOf = (date: string) => Number(date.slice(8));
 const spaced = (text: string) => text.replace(/\s/g, ' '); // jest-dom collapses the no-break space of "1.000 ₫" to a plain one
 
-function renderCompare(month: string, today: string) {
+// A month in which only the listed days (day of the month → money) have a transaction.
+const sparseDays = (month: string, rows: Record<number, Partial<DayTotal>>): DayTotal[] =>
+  monthDays(month).map((day, i) => ({ ...day, expense: 0, ...rows[i + 1] }));
+
+function renderCompare(month: string, today: string, days = monthDays(month), previousDays = monthDays(previousMonth(month))) {
   return render(
     <Provider store={makeStore()}>
       <AppThemeProvider>
-        <MonthCompare month={month} today={today} days={monthDays(month)} previousDays={monthDays(previousMonth(month))} />
+        <MonthCompare month={month} today={today} days={days} previousDays={previousDays} />
       </AppThemeProvider>
     </Provider>,
   );
@@ -72,4 +76,33 @@ test('TC-F14-03 the English sentence says "the same days last month"', async () 
   const [now, before] = [thousandsUpTo(30) * 1000, thousandsUpTo(28) * 1000];
   expect(figure).toHaveTextContent(`This month you spent ${money(now)}, ${money(now - before)} more than the same days last month.`);
   expect(figure).toHaveTextContent('Compared with the same days last month');
+});
+
+// "Empty" is about the two whole months, the ones the columns draw. When only the same days add up to 0 the sentence still
+// says so with 0 ₫ and the numbers; it must not say there is nothing next to columns that show something.
+test('TC-F14-03 income only on 29/10 and none this month: the sentence says 0 ₫, not "no transactions" (vi)', async () => {
+  renderCompare('2026-11', '2026-11-26', sparseDays('2026-11', {}), sparseDays('2026-10', { 29: { income: 15_000_000 } }));
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Thu nhập' }));
+
+  const figure = screen.getByRole('figure', { name: 'Thu nhập tháng này' });
+  expect(figure).toHaveTextContent(`Tháng này thu ${spaced(formatMoney(0, 'vi'))}, bằng cùng kỳ tháng trước.`);
+  expect(figure).not.toHaveTextContent('chưa có giao dịch');
+});
+
+test('TC-F14-03 income only on 29/10 and none this month: the sentence says 0 ₫, not "no transactions" (en)', async () => {
+  await i18n.changeLanguage('en');
+  renderCompare('2026-11', '2026-11-26', sparseDays('2026-11', {}), sparseDays('2026-10', { 29: { income: 15_000_000 } }));
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Income' }));
+
+  const figure = screen.getByRole('figure', { name: 'Income this month' });
+  expect(figure).toHaveTextContent(`This month you earned ${spaced(formatMoney(0, 'en'))}, equal to the same days last month.`);
+  expect(figure).not.toHaveTextContent('No transactions');
+});
+
+test('TC-F14-03 spending only after the same days this month, none last month: the sentence says 0 ₫, not "no transactions"', () => {
+  renderCompare('2026-11', '2026-11-05', sparseDays('2026-11', { 20: { expense: 400_000 } }), sparseDays('2026-10', {}));
+
+  const figure = screen.getByRole('figure', { name: 'Chi tiêu tháng này' });
+  expect(figure).toHaveTextContent(`Tháng này chi ${spaced(formatMoney(0, 'vi'))}, bằng cùng kỳ tháng trước.`);
+  expect(figure).not.toHaveTextContent('chưa có giao dịch');
 });

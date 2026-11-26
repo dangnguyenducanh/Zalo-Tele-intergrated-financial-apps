@@ -37,6 +37,19 @@ test('TC-F14-01 compareRange takes only real dates, in order, and a known unit',
   expect(compareRange(day, null)).toEqual({ from: '2026-11-24', to: '2026-11-24' }); // null means "no unit", like undefined
 });
 
-test.each(fixture.monthCompare)('TC-F14-02 the Dashboard range is compareRange with the unit month: $name', ({ current, previous }) => {
+// The Dashboard's previous range is compareRange(current, 'month') whenever the dates say all there is to say.
+const datesAreEnough = fixture.monthCompare.filter((row) => row.compareRangeAgrees !== false);
+const datesAreNot = fixture.monthCompare.filter((row) => row.compareRangeAgrees === false);
+
+test.each(datesAreEnough)('TC-F14-02 the Dashboard range is compareRange with the unit month: $name', ({ current, previous }) => {
   expect(compareRange(current, 'month')).toEqual(previous);
+});
+
+// compareRange sees only dates, so 01-28/02 is a whole February to it (docs/05 asks for whole against whole in a past month)
+// and its answer is all of January. On the last day of the current month the Dashboard knows better and builds the range itself.
+test.each(datesAreNot)('TC-F14-02 compareRange cannot tell the month to date from the whole month, so the Dashboard differs: $name', ({ current, previous }) => {
+  const whole = compareRange(current, 'month');
+  expect(whole).not.toEqual(previous);
+  expect(whole.from).toBe(previous.from);
+  expect(Number(whole.to.slice(8))).toBeGreaterThan(Number(previous.to.slice(8))); // the whole month before, longer than the same days
 });
