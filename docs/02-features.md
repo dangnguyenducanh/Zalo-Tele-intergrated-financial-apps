@@ -374,7 +374,7 @@ None of these needs the LLM; they work with vLLM stopped. A1 and the B-tier repo
 
 **Same numbers in JS and Python.** `pace()`, `compareRange()`, the period rules and `money()` exist in Express and in the agent service. ⚑ One shared fixture file of cases is run by both vitest and pytest, so the Dashboard, `/month` and the assistant never disagree. `shared/fixtures/compare-range.json` exists (T43: vitest on the server and the client read it; the agent service's pytest reads it when that service is built).
 
-**Cron engine (B tier).** `vercel.json` gets one cron `0 13 * * *` (20:00–20:59 Vietnam time; Hobby runs it once a day, production only, no retry) calling `GET /api/cron/daily` with `Authorization: Bearer ${CRON_SECRET}`, checked with the existing `sameSecret()`. One sequential loop over opted-in users: Express calls the agent service with `trigger: schedule` and the skill (`ban_tin_toi`, `tong_ket_tuan`, `tong_ket_thang`) and sends the reply. A `notices` collection, unique on `(userId, kind, key)`, gets a row *before* each send, so a double fire sends nothing twice. Every Zalo and WhatsApp send adds to `channelUsage {platform, month, sent}`; proactive Zalo sends stop at 2,000 a month. A user linked on several apps gets proactive messages on Telegram only. Admins get `POST /api/admin/cron/daily` ("Chạy ngay") for the demo, because crons don't fire locally.
+**Cron engine (B tier).** `vercel.json` gets one cron `0 13 * * *` (20:00–20:59 Vietnam time; Hobby runs it once a day, production only, no retry) calling `GET /api/cron/daily` with `Authorization: Bearer ${CRON_SECRET}`, checked with the existing `sameSecret()`. One sequential loop over opted-in users: Express calls the agent service with `trigger: schedule` and the skill (`ban_tin_toi`, `tong_ket_tuan`, `tong_ket_thang`) and sends the reply. A `notices` collection, unique on `(userId, kind, key)`, gets a row *before* each send, so a double fire sends nothing twice. Every Zalo and WhatsApp send adds to `channelUsage {platform, month, sent}` (Zalo built in T49, WhatsApp with T70); proactive Zalo sends stop at 2,000 a month. A user linked on several apps gets proactive messages on Telegram only. Admins get `POST /api/admin/cron/daily` ("Chạy ngay") for the demo, because crons don't fire locally.
 
 ### 2.11.3 The question engine (skills, rules first)
 
@@ -522,8 +522,22 @@ Vectors live in MongoDB documents and are searched in memory (a few dozen skills
 | Assistant | on | on | on once §2.10 ships | on |
 | Questions per user per day | 20 | 10 | 5 | 30 |
 | Reply | one message, ≤ 1,500 chars, "typing" every 4 s | one message, ≤ 1,500 chars, never split | one message, ≤ 1,500 chars; cards as reply buttons | JSON |
-| Quota guard | — | assistant answers off at 2,400 messages a month; from 2,850 only capture replies | assistant answers off at 800; at 950 all replies stop, captures still land in the Bot inbox | — |
+| Quota guard | — | *built (T49, below):* proactive off at 2,000 messages a month, assistant answers off at 2,400; from 2,850 only capture and linking replies | assistant answers off at 800; at 950 all replies stop, captures still land in the Bot inbox | — |
 | Proactive (B tier) | sent directly | rides on the next reply | only within 24 h of the user's last message | banner on the next visit |
+
+**Zalo send counter and quota guard (built, card T49).** `channelUsage {platform, month, sent}` has one row per platform and month, unique on `(platform, month)`; the month is the Vietnam `YYYY-MM`. Every `sendMessage` Zalo accepts adds 1 (one atomic `$inc` upsert), counted in one place, the Zalo adapter's send function, so replies, drafts, the claim success message and any later send all count, once each. A send Zalo refuses adds nothing, and a counting failure is logged and never loses a message or a draft (the draft is saved first, the message is already gone). Telegram has no quota and is not counted; WhatsApp counting arrives with its card (T70).
+
+One helper, `maySend(platform, kind)` in `services/channelUsage.js`, answers whether a kind of message may go out now:
+
+| Kind | What it is | Off from (Zalo, messages this month) |
+|---|---|---|
+| `proactive` | a message the bot starts: digest, early warning, reports (no caller yet) | 2,000 |
+| `assistant` | every answer to a question, template or model (no caller yet) | 2,400 |
+| `other` | commands and help (including the help text for a message with no amount), the locked-account notice, and any send not named here | 2,850 |
+| `capture` | the reply to money the user sent: draft messages (text and receipt), the receipt reading and failure messages, the note about lines with no amount, and the results of `ok`, `huy` and an amount correction | never |
+| `link` | linking a chat: the please-link prompt with its tap-to-link URL, every reply to `/start CODE` and `/link CODE` (linked, already linked, invalid code), and the claim success message | never |
+
+From 2,850 only `capture` and `link` replies are sent. A command's effect still happens (`/lang` still switches the language); only its reply is not sent. ⚑ **Linking replies stay on past 2,850** (decision D20, the default of 2026-11-25; the owner may change it), so a user can still finish linking; the help replies stop. The core sends every text reply through one function that names its kind (an unnamed send is `other`, so a new send is guarded unless it says otherwise). If the count cannot be read, the message is sent and the failure is logged. The check reads the count and then sends, so two replies at 2,849 can both go out; the 150 messages between 2,850 and Zalo's 3,000 absorb that.
 
 **New commands** (vi, with English aliases where natural): `/hoi`, `/dubao`, `/visao`, `/sua`, `/ngansach <danh mục> <số tiền>`, `/tuan`, `/thang`, `/dinhky`, `/nhac toi|tuan|tat`, `/tongket`, `/chep`, `/dunggoiy`, `/dongy`, `/thoi`; reserved words `hoàn tác`, `khôi phục`; the parser rule `chia N`. `/help` lists them.
 
