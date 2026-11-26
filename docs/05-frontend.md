@@ -155,7 +155,7 @@ A failed load of a page's main data (Dashboard, Transactions, Wallets, Categorie
 
 ## 5.9 One-tap linking and WhatsApp (planned, §2.10)
 
-> **Partly built.** The link card (§5.9.1, card T32 #72), the `/link` screen and the claim notice (§5.9.2–§5.9.3, card T33 #73) are built; the WhatsApp parts are not built yet. §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). As each part is built it moves into §5.2–§5.7 (§2.10.5). Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
+> **Built.** The link card (§5.9.1, card T32 #72), the `/link` screen and the claim notice (§5.9.2–§5.9.3, card T33 #73) and the WhatsApp source icon, admin stats and texts (§5.9.5–§5.9.6, card T34 #74) are built. §5.1–§5.8 describe the client as it is today. This section lists what changes on the client when [02-features.md §2.10](02-features.md#210-one-tap-linking-and-whatsapp-planned) is built; the endpoints and error codes are in [04-backend.md](04-backend.md). As each part is built it moves into §5.2–§5.7 (§2.10.5). Each build PR updates the planned sections in the docs its card's Scope lists; where a card's Scope doesn't list them (T32), the orchestrator opens a docs-only follow-up PR after the merge. Left to the builder throughout: component and file layout, i18n keys and the exact wording (vi + en).
 
 <a id="591-link-card-on-bot-planned-2102"></a>
 
@@ -219,22 +219,24 @@ The link card's endpoints are in `features/bot/botApi.ts`; the claim ones are in
 - Type unions gain `'whatsapp'`: `ChatLink['platform']` in `botApi.ts` (`chatLinks.platform`), `Transaction['source']` in `transactionsApi.ts` (`transactions.source`, the §5.1 example), and the admin stats' `chatLinks` and `transactionsBySource` in `adminApi.ts` (§2.10.5; both gain `whatsapp` in [04-backend.md](04-backend.md)).
 - No new RTK Query tag.
 
-### 5.9.5 WhatsApp source icon (planned, §2.10.5)
+### 5.9.5 WhatsApp source icon (built, §2.10.5)
 
-- `sourceIcon()` in `features/bot/sourceIcon.tsx` gains `whatsapp` → `WhatsAppIcon` from `@mui/icons-material/WhatsApp` (already a dependency; unlike Zalo, Material has this mark). The Bot inbox's draft chips and Linked accounts pick it up with no other change; the label beside it is `sources.whatsapp`, and the icon stays decorative.
-- **Transactions:** the table and cards show no source today (`TransactionList.tsx`). §2.10.5 asks for a WhatsApp source icon there; reusing `sourceIcon()` is the smallest change. Where it sits, and whether the other sources get theirs too, is left to the builder (§5.9.8).
-- **Admin · Users:** the chat-links card adds `chatLinks.telegram + chatLinks.zalo` by name today, so WhatsApp joins the sum and the detail line. The transactions card already sums every key; only its detail line needs WhatsApp.
+Built by card T34 (#74).
 
-### 5.9.6 Translations (planned)
+- `sourceIcon()` in `features/bot/sourceIcon.tsx` has `whatsapp` → `WhatsAppIcon` from `@mui/icons-material/WhatsApp` (already a dependency; unlike Zalo, Material has this mark). The Bot inbox's draft chips and Linked accounts pick it up with no other change; the label beside it is `sources.whatsapp`, and the icon stays decorative (TC-F9-07).
+- **Transactions:** the table and cards show no source for any platform (`TransactionList.tsx`), so no source icon appears there for Telegram or Zalo either; the Bot inbox is where "the WhatsApp icon shows where Telegram's and Zalo's do". Showing a source in Transactions (for all sources, with `sourceIcon()`) is a separate change to `TransactionList.tsx`, outside card T34's Scope; the `?source=whatsapp` filter works on the API (TC-F4-14).
+- **Admin · Users:** both cards sum every key of their counts (`chatLinks`, `transactionsBySource`), so WhatsApp joins the totals; their detail lines (`stats.chatLinksDetail`, `stats.transactionsDetail`) name WhatsApp (TC-F11-08).
+
+### 5.9.6 Translations (built)
 
 Keys and wording are left to the builder (§2.10), in vi and en. What needs text:
 
 | Where | Strings |
 |---|---|
-| `bot`, link card (*built, T32*, except the page `intro`: it says what the bots record, so it changes with the WhatsApp bot, T34) | Card title and description naming all three apps; the picker's group label; `sources.whatsapp`; **Open WhatsApp** and **Copy & open Zalo** (**Open Telegram** exists); one instruction line per app (replacing `link.telegram` and `link.zalo`); one QR label per app; "Copy it yourself"; `Linked ✓ <App> · <name>`; the page `intro`, which names Telegram and Zalo only |
+| `bot`, link card (*built, T32*, except the page `intro`: it says what the bots record, so it changes with the WhatsApp bot, T34) | Card title and description naming all three apps; the picker's group label; `sources.whatsapp`; **Open WhatsApp** and **Copy & open Zalo** (**Open Telegram** exists); one instruction line per app (replacing `link.telegram` and `link.zalo`); one QR label per app; "Copy it yourself"; `Linked ✓ <App> · <name>`; the page `intro`, which names Telegram, WhatsApp and Zalo (T34) |
 | `link` namespace, the `/link` screen (*built, T33*) | Page `<title>`; loading; the confirm question (app · chat name, user name, email, with bold parts); the warning (vi + en of "Only confirm if you just messaged the bot yourself. The chat you link can see your spending and record money in this account."); **Confirm**; **Cancel**; the done message (may reuse the card's); the expired-or-used text; the already-linked text; **Go to Bot inbox** |
 | `link`, claim notice (*built, T33*) | "New chat linked from a chat link: **`<App> · <name>`**. Not you?" (with the bold part); **Unlink** (the dialog's texts exist in `accounts`); the dismiss button's label |
-| `admin` | `stats.chatLinksDetail` and `stats.transactionsDetail` with WhatsApp |
+| `admin` | `stats.chatLinksDetail` and `stats.transactionsDetail` with WhatsApp (*built, T34*) |
 
 ### 5.9.7 Accessibility
 
@@ -256,7 +258,7 @@ Keys and wording are left to the builder (§2.10), in vi and en. What needs text
 4. **`/link` gaps:** no token (opened bare, or `sessionStorage` empty) and network or 5xx errors on preview or claim have no state in §2.10.3. The §5.7 rule (error banner with **Retry**) is the obvious candidate for the second. *T33: yes. No token shows the expired-or-used screen; a failed preview has **Retry**; a failed claim keeps **Confirm** and the token.*
 5. **New users:** `/login` links to `/register`, and `RegisterPage` always lands on `/`, so someone who registers on the way loses the return to `/link`. Should `RegisterPage` honour `state.from` too? *T33: not changed (`features/auth/` is outside that card's scope). Someone who registers on the way lands on `/`; the link in the chat works until it expires, so they tap it again.*
 6. **Clearing the token:** after Confirm, Cancel or an error, so a spent token does not stay in `sessionStorage`. *T33: after Confirm, Cancel, a 404 or 409, and on logout; kept after a network or 5xx error.*
-7. **Transactions:** a source icon for WhatsApp only, or for every source (§5.9.5)?
+7. **Transactions:** a source icon for WhatsApp only, or for every source (§5.9.5)? *T34: neither: the list shows no source today and `TransactionList.tsx` is outside its Scope, so it is left for a follow-up that gives every source its icon.*
 
 ## 5.10 Assistant and agent features (planned, §2.11)
 
