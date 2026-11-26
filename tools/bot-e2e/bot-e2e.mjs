@@ -4,7 +4,7 @@
 // or a person on a phone); after each step this tool checks the bot's replies, as read off the screen, and the
 // server state of a dedicated e2e web user through the public API. No dependencies, Node 20+.
 //
-//   node tools/bot-e2e/bot-e2e.mjs setup              create the e2e user once, then empty it: no transactions, no chat links
+//   node tools/bot-e2e/bot-e2e.mjs setup              empty the e2e user: no transactions, no budgets this month, no chat links
 //   node tools/bot-e2e/bot-e2e.mjs code               a fresh link code (and the Telegram deep link) for TG-01 / ZL-01
 //   node tools/bot-e2e/bot-e2e.mjs list               every step: what to do, the expected replies and state
 //   node tools/bot-e2e/bot-e2e.mjs step <ID> --reply "<text>" [--reply "<text>"]… [--button "<label>"]…
@@ -15,9 +15,11 @@
 //   node tools/bot-e2e/bot-e2e.mjs reset              delete the e2e user's transactions and this month's budgets, unlink its chats
 // Options: -h/--help this usage, --target prod|staging|<https URL> (default prod), --out <dir> for results.jsonl
 //          (default charter-runs/<VN date>/bot-e2e/ in the repo, which git ignores).
-// The e2e user's login is generated on first use and kept in ~/.config/bot-e2e/<host>.json (0600), never in the repo.
-import { randomBytes } from 'node:crypto';
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+//          Every command but list and help needs the e2e login in ~/.config/bot-e2e/<host>.json; without it the tool says how to create it.
+// The e2e user is made by hand once (register on the website with a real inbox) and its login kept in
+// ~/.config/bot-e2e/<host>.json (0600) as {"email","password"}, never in the repo. Without that file a command that
+// needs a login prints how to create it and exits 1; the tool never signs up.
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,25 +74,28 @@ async function api(method, path, { token, body } = {}) {
     headers: { ...(body && { 'content-type': 'application/json' }), ...(token && { authorization: `Bearer ${token}` }) },
     body: body && JSON.stringify(body),
     signal: AbortSignal.timeout(20_000),
-  });
+  }).catch(() => fail(`Cannot reach ${base}: is the site up and --target right?`));
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   return { status: res.status, data };
 }
 
-// The e2e user's login for this host, created (and registered) the first time.
+// The e2e user's login for this host. The tool never signs up: with e-mail codes on, a sign-up would send to an
+// address that bounces, so the file is made once by hand (docs/testing/bot-e2e.md).
 const credsFile = join(homedir(), '.config', 'bot-e2e', `${new URL(base).host}.json`);
 async function login() {
   if (!existsSync(credsFile)) {
-    const creds = { email: `bot-e2e-${randomBytes(4).toString('hex')}@example.com`, password: randomBytes(18).toString('base64url') };
-    const { status, data } = await api('POST', '/auth/register', { body: { name: 'Bot E2E', ...creds, language: 'vi' } });
-    if (status !== 201) fail(`register failed: ${status} ${data?.error?.code ?? ''}`);
-    mkdirSync(dirname(credsFile), { recursive: true, mode: 0o700 });
-    writeFileSync(credsFile, JSON.stringify(creds), { mode: 0o600 });
-    chmodSync(credsFile, 0o600);
-    console.log(`Created the e2e user ${creds.email} (login saved to ${credsFile})`);
-    return data.accessToken;
+    fail(
+      `No login for ${new URL(base).host}. Register on the website (${base}/register) with an inbox you can read, then save\n` +
+        `{"email":"<that email>","password":"<that password>"} to ${credsFile}\nand run: chmod 600 ${credsFile}`,
+    );
   }
-  const { status, data } = await api('POST', '/auth/login', { body: JSON.parse(readFileSync(credsFile, 'utf8')) });
+  let creds;
+  try {
+    creds = JSON.parse(readFileSync(credsFile, 'utf8'));
+  } catch {
+    fail(`${credsFile} is not valid JSON: it must hold {"email":"<that email>","password":"<that password>"}`);
+  }
+  const { status, data } = await api('POST', '/auth/login', { body: creds });
   if (status !== 200) fail(`login failed: ${status} ${data?.error?.code ?? ''}`);
   return data.accessToken;
 }
