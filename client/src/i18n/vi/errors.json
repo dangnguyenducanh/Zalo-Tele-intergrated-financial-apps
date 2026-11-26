@@ -18,6 +18,8 @@
   "BUDGET_EXISTS": "Danh mục này đã có ngân sách cho tháng đã chọn.",
   "ALREADY_CONFIRMED": "Giao dịch này đã được xác nhận.",
   "LAST_ADMIN": "Không thể khoá hoặc hạ quyền quản trị viên cuối cùng.",
+  "LINK_TOKEN_INVALID": "Đường link đã hết hạn hoặc đã được dùng. Gửi một tin nhắn bất kỳ cho bot để nhận link mới.",
+  "CHAT_ALREADY_LINKED": "Cuộc chat này đã được liên kết với một tài khoản.",
   "PAYLOAD_TOO_LARGE": "Tệp quá lớn.",
   "UNSUPPORTED_MEDIA_TYPE": "Chỉ hỗ trợ ảnh JPEG hoặc PNG.",
   "NO_AMOUNT_FOUND": "Không tìm thấy số tiền. Ví dụ: \"phở 45k\".",
