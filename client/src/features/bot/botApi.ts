@@ -3,11 +3,19 @@ import { api } from '@/app/api';
 import type { Transaction, TransactionInput } from '@/features/transactions/transactionsApi';
 
 // Response shapes of /api/chat-links and /api/receipts, and of drafts (docs/04 §4.4, server/src/models/Transaction.js).
-export type ChatLink = { id: string; platform: 'telegram' | 'zalo'; displayName: string; createdAt: string };
+// viaClaim and claimNoticeDismissedAt drive the "Not you? [Unlink]" notice (POST /chat-links/claim leaves the date out).
+export type ChatLink = {
+  id: string;
+  platform: 'telegram' | 'zalo';
+  displayName: string;
+  createdAt: string;
+  viaClaim?: boolean;
+  claimNoticeDismissedAt?: string | null;
+};
 
 // "Telegram · Anh", with t from the bot namespace: how Linked accounts and the link card name a linked chat.
 // A chat with no name (Zalo may send none) shows its platform instead of ending in a bare "·".
-export const nameOf = (t: TFunction<'bot'>, link: ChatLink) => `${t(`sources.${link.platform}`)} · ${link.displayName || link.platform}`;
+export const nameOf = (t: TFunction<'bot'>, link: Pick<ChatLink, 'platform' | 'displayName'>) => `${t(`sources.${link.platform}`)} · ${link.displayName || link.platform}`;
 
 // POST /chat-links/code: one link per chat app, null when the server lacks that app's setting (docs/04 §4.4).
 export type ChatApp = 'telegram' | 'whatsapp' | 'zalo';

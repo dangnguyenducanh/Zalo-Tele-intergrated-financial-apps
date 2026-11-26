@@ -1,24 +1,30 @@
+import CloseIcon from '@mui/icons-material/Close';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { Alert, Button, IconButton, List, ListItem, ListItemIcon, ListItemText, Paper, Typography } from '@mui/material';
 import { useId, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { showSnackbar } from '@/app/uiSlice';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { apiErrorMessage } from '@/features/categories/helpers';
+import { useDismissClaimNoticeMutation } from '@/features/link/linkApi';
 import { formatDate } from '@/i18n/format';
 import { nameOf, useDeleteChatLinkMutation, useGetChatLinksQuery, type ChatLink } from './botApi';
 import { sourceIcon } from './sourceIcon';
 
 // The Telegram/Zalo accounts linked to this web account (GET /chat-links), each with Unlink (DELETE /chat-links/:id).
+// A link made from a chat's claim link also gets a "Not you? [Unlink]" notice until it is dismissed (docs/02 §2.10.3).
 export default function LinkedAccounts() {
   const { t } = useTranslation('bot');
   const titleId = useId();
   const dispatch = useAppDispatch();
   const language = useAppSelector((s) => s.ui.language);
-  const { data: links, isError, refetch } = useGetChatLinksQuery();
+  // Chats are also linked outside this page (the bots, a claim on another device): reload when the inbox opens.
+  const { data: links, isError, refetch } = useGetChatLinksQuery(undefined, { refetchOnMountOrArgChange: true });
   const heading = useRef<HTMLHeadingElement>(null);
   const [deleteChatLink] = useDeleteChatLinkMutation();
+  const [dismissClaimNotice] = useDismissClaimNoticeMutation();
+  const { t: tLink } = useTranslation('link');
   const [unlinking, setUnlinking] = useState<ChatLink | null>(null);
 
   async function unlink() {
@@ -34,6 +40,19 @@ export default function LinkedAccounts() {
     }
   }
 
+  async function dismiss(link: ChatLink) {
+    try {
+      await dismissClaimNotice(link.id).unwrap();
+    } catch (error) {
+      // 404: unlinked meanwhile, and the reload takes the notice away. Anything else is said; the notice stays.
+      if ((error as { status?: unknown }).status !== 404) {
+        dispatch(showSnackbar({ message: apiErrorMessage(error), severity: 'error' }));
+        return;
+      }
+    }
+    heading.current?.focus(); // the button leaves with its notice
+  }
+
   return (
     <Paper component="section" variant="outlined" aria-labelledby={titleId} sx={{ p: 2 }}>
       <Typography id={titleId} ref={heading} tabIndex={-1} variant="h6" component="h2">
@@ -44,6 +63,30 @@ export default function LinkedAccounts() {
           {t('accounts.loadError')}
         </Alert>
       )}
+      {links
+        ?.filter((link) => link.viaClaim && !link.claimNoticeDismissedAt)
+        .map((link) => (
+          // Page content rather than a live alert; each notice is a group named by its own sentence.
+          <Alert
+            key={link.id}
+            role="group"
+            aria-labelledby={`${titleId}-${link.id}`}
+            severity="warning"
+            sx={{ mt: 1, '& .MuiAlert-message': { minWidth: 0, overflowWrap: 'anywhere' } }}
+            action={
+              <IconButton size="small" color="inherit" aria-label={tLink('notice.dismiss', { name: nameOf(t, link) })} onClick={() => void dismiss(link)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            }
+          >
+            <Typography id={`${titleId}-${link.id}`} variant="body2">
+              <Trans t={tLink} i18nKey="notice.text" components={{ chat: <strong>{nameOf(t, link)}</strong> }} />
+            </Typography>
+            <Button size="small" variant="outlined" color="inherit" sx={{ mt: 1 }} aria-label={t('accounts.unlink', { name: nameOf(t, link) })} onClick={() => setUnlinking(link)}>
+              {tLink('notice.unlink')}
+            </Button>
+          </Alert>
+        ))}
       {links?.length === 0 && <Typography sx={{ color: 'text.secondary', mt: 1 }}>{t('accounts.empty')}</Typography>}
       {links && links.length > 0 && (
         <List aria-labelledby={titleId}>
