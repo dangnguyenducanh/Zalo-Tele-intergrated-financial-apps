@@ -1,16 +1,15 @@
 import { expect, test } from '@playwright/test';
+import { PASSWORD, registerByApi } from './helpers';
 
 // The admin area seen by a normal user, in a real browser against the real API (see playwright.config.ts).
 test.use({ locale: 'vi-VN' });
 
 test('TC-F11-05 a normal user sees no admin menu and gets the 403 page on /admin/*', async ({ page, request }, testInfo) => {
-  const email = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const password = 'secret123';
-  expect((await request.post('/api/auth/register', { data: { name: 'Lan', email, password, language: 'vi' } })).status()).toBe(201);
+  const { email } = await registerByApi(request);
 
   await page.goto('/login');
   await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByLabel(/^Mật khẩu/).fill(password);
+  await page.getByLabel(/^Mật khẩu/).fill(PASSWORD);
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
 
   const nav = page.getByRole('navigation', { name: 'Điều hướng chính' });

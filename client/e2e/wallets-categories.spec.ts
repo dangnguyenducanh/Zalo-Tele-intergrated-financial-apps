@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { registerByApi } from './helpers';
 
 // Wallets and categories screens in a real browser against the real API (in-memory MongoDB, see playwright.config.ts).
 
@@ -7,10 +8,8 @@ test.use({ locale: 'vi-VN' }); // Vietnamese is the default UI language
 
 // Registers a fresh account through the API (its own cookie jar) and returns its email and access token.
 async function createAccount(request: APIRequestContext) {
-  const email = `wallets-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const res = await request.post('/api/auth/register', { data: { name: 'Lan', email, password: PASSWORD, language: 'vi' } });
-  expect(res.status()).toBe(201);
-  return { email, token: ((await res.json()) as { accessToken: string }).accessToken };
+  const { email, accessToken } = await registerByApi(request);
+  return { email, token: accessToken };
 }
 
 async function logIn(page: Page, email: string) {
