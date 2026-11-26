@@ -6,8 +6,8 @@ Several Claude agents build the app in parallel. Each works in its **own git wor
 
 | Agent | Who | Does | Never does | Definition |
 |---|---|---|---|---|
-| **Orchestrator** | the main Claude session, with you | Turns the plan into task cards (issues), leases worktrees, spawns agents, routes results, hands approved PRs to the merger (standing auto-merge policy, §8.8), runs recorded manual charters, logs bugs, returns the worktrees of abandoned tasks (the merger returns the coder's worktree after a merge) | Write feature code itself | this document |
-| **Coder** (up to 3 at once) | `coder` subagent | Implements ONE task card in its leased worktree: tests first, local gates, opens a PR to `main`, addresses review | Edit outside the card's scope, push anything but its own branch, merge, weaken tests | [`.claude/agents/coder.md`](../.claude/agents/coder.md) |
+| **Orchestrator** | the main Claude session, with you | Turns the plan into task cards (issues), leases worktrees, spawns agents, routes results, hands approved PRs to the merger (standing auto-merge policy, §8.8), runs recorded manual charters, logs bugs, returns the worktrees of abandoned tasks (the merger returns the coder's worktree after a merge) | Write feature code itself | [`.claude/agents/orchestrator.md`](../.claude/agents/orchestrator.md) (run with `claude --agent orchestrator`) |
+| **Coder** (as many as there are independent cards) | `coder` subagent | Implements ONE task card in its leased worktree: tests first, local gates, opens a PR to `main`, addresses review | Edit outside the card's scope, push anything but its own branch, merge, weaken tests | [`.claude/agents/coder.md`](../.claude/agents/coder.md) |
 | **Reviewer** | `reviewer` subagent | Leases its **own fresh worktree**, checks out the PR, re-runs every gate, reviews against spec + security + modern-web-guidance, posts the verdict and the `agent-review` status | Edit code, commit, push, merge | [`.claude/agents/reviewer.md`](../.claude/agents/reviewer.md) |
 | **Merger** (1, serial) | `merger` subagent | Merge queue: checks CI + `agent-review` + your approval, squash-merges, verifies `main` in a fresh worktree and on Vercel, opens a revert PR if `main` broke | Merge more than one PR at a time, resolve conflicts, push to `main` | [`.claude/agents/merger.md`](../.claude/agents/merger.md) |
 | **You** | the student | Approve the task list; read each PR's "How it works" and approve the merge; do the phone steps (Telegram/Zalo) during manual charters | n/a | n/a |
@@ -17,7 +17,7 @@ Why the reviewer gets a separate worktree: it rebuilds from the pushed branch wi
 ## 8.2 Worktrees with treehouse
 
 One-time config (committed):
-- `treehouse.toml` sets `base_branch = "main"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 9` (3 coders, up to 3 reviewers, 1 merger, 2 spare).
+- `treehouse.toml` sets `base_branch = \"staging\"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 32` (no fixed number of agents; the orchestrator raises it when the pool is full).
 - `.worktreeinclude` lists `server/.env`, so each worktree gets the secrets copied in. They stay git-ignored.
 
 | Who | Command (run from the main checkout) | Lease holder | Released |
@@ -62,14 +62,16 @@ sequenceDiagram
     M->>M: treehouse return C and A (coder's worktree)
 ```
 
+**Branches:** card PRs target `staging`, and the merger deploys the staging site after each merge; a reviewer then verifies the newest `staging` commit (every test level in full). When a run's cards are all in `staging` and it is clean, one release PR `staging → main` is reviewed, merged with a merge commit, verified on `main`, and only then deployed to production; `staging` is then fast-forwarded to `main`. Every PR, docs included, is reviewed. Details: [`.claude/agents/orchestrator.md`](../.claude/agents/orchestrator.md) ("Branches").
+
 **Labels** (created once): `status:ready`, `status:in-progress`, `status:in-review`, `status:changes-requested`, `review:approved`, `review:changes-requested`, `needs-update`, `auto-merge`, `revert`, `bug`.
 
-**Required checks on `main`** (branch protection, set once): PR required, no direct pushes or force-pushes, status checks `ci` (GitHub Actions) and `agent-review` (set by the reviewer) must pass on the head commit, and the branch must be up to date. The `ci` job also runs the agent service's pytest (`npm run test:agent`, from T44), so the one required `ci` check covers both the npm gates and the Python gate. A card that changes `agent/` runs it locally too (Python 3.12 in `agent/.venv`, see [06-deployment.md §6.10](06-deployment.md#610-ci)).
+**Required checks on `main` and `staging`** (branch protection, set once for each): PR required, no direct pushes or force-pushes, status checks `ci` (GitHub Actions) and `agent-review` (set by the reviewer) must pass on the head commit, and the branch must be up to date. The `ci` job also runs the agent service's pytest (`npm run test:agent`, from T44), so the one required `ci` check covers both the npm gates and the Python gate. A card that changes `agent/` runs it locally too (Python 3.12 in `agent/.venv`, see [06-deployment.md §6.10](06-deployment.md#610-ci)).
 
 ## 8.4 Orchestrator procedure (main session)
 
 1. **Plan:** keep the task cards (§8.7) as GitHub issues with label `status:ready`. Only tasks whose dependencies are merged are dispatchable.
-2. **Dispatch** up to 3 ready tasks whose **scopes don't overlap**. For each:
+2. **Dispatch continuously, not in waves:** a coder on every ready task whose **scope doesn't overlap** a running one, highest critical path first (rules in [`.claude/agents/orchestrator.md`](../.claude/agents/orchestrator.md)). For each:
    - lease a worktree (`-b feat/<issue>-<slug>`)
    - set `status:in-progress`
    - spawn `coder` (background, `ISSUE`, `WT`, `MODE=implement`)
@@ -129,7 +131,7 @@ Changed paths are all inside the card's scope: ✅  (or: justification for excep
 
 ## 8.7 Task cards (initial backlog)
 
-Each card becomes one GitHub issue: Goal, Spec sections, Scope (paths the coder may change), Test case IDs, Depends on, Done when. **T01 must merge first.** The orchestrator then dispatches up to three unblocked cards at a time.
+Each card becomes one GitHub issue: Goal, Spec sections, Scope (paths the coder may change), Test case IDs, Depends on, Done when. **T01 must merge first.** The orchestrator then keeps every unblocked, non-overlapping card in progress at once.
 
 | ID | Task | Depends on | Scope (paths) | Test IDs |
 |---|---|---|---|---|
