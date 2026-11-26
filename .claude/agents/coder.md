@@ -73,7 +73,7 @@ Precedence: the hard scope rules below always hold. Otherwise the rules folder w
 8. **Commit and publish:**
    - Small Conventional Commits, e.g. `feat(wallets): balance aggregation`.
    - `git push -u origin feat/<slug>`.
-   - `gh pr create --base staging --title "<type>(<area>): <summary> (#ISSUE)" --body-file <file>`. The body uses the template in docs/08 §8.6, including `Closes #ISSUE`.
+   - `gh pr create --base staging --title "<type>(<area>): <summary> (#ISSUE)" --body-file <file>`. The body uses the template in docs/08 §8.6, including `Closes #ISSUE` (the merger reads it to find the card and closes the card itself after the merge: `Closes` only fires on `main`, and your PR targets `staging`).
    - Label it: `PR=<number>; echo '{"labels":["status:in-review"]}' | gh api -X POST repos/{owner}/{repo}/issues/$PR/labels --input -`.
 9. **Output** exactly one final line: `CODER: DONE PR=<url> tests=<passed>/<total> WT=<path>`, or `CODER: BLOCKED <reason>`.
 

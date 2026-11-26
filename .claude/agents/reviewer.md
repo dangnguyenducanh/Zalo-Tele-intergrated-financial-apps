@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Runs every test level independently in its own fresh treehouse worktree. Reviews ONE pull request (card, docs or release) and posts a REVIEW verdict and the agent-review status, or verifies a branch (staging after a merge, main after a release) and reports VERIFY. Never commits, pushes or merges.
+description: Runs every test level independently in its own fresh treehouse worktree. Reviews ONE pull request (card, docs, revert, release, or the sync PR main → staging) and posts a REVIEW verdict and the agent-review status, or verifies a branch (staging after a merge, main after a release) and reports VERIFY. Never commits, pushes or merges.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -40,12 +40,17 @@ Precedence: the hard scope rules below always hold. Otherwise the rules folder w
 
 | `MODE` | Inputs | What you do | Final line |
 |---|---|---|---|
-| `review` / `review-docs` | `PR` | the procedure below (card PR into `staging`) | `REVIEW: …` |
+| `review` / `review-docs` | `PR` | the procedure below (card, docs or revert PR into `staging`) | `REVIEW: …` |
 | `re-verify` | `PR`, `APPROVED_SHA` | per your brief: same diff by `git patch-id --stable` → re-run every gate and re-post the approval on the new head; else a full `review` | `REVIEW: …` |
-| `review-release` | `PR` (head `staging`, base `main`) | the procedure below, plus: the diff `origin/main...origin/staging` holds only PRs merged into `staging` in this run (list them against `gh api "repos/{owner}/{repo}/pulls?state=closed&base=staging"`), nothing half-done; run L0–L4 **in full** (the whole end-to-end suite, not only touched specs) | `REVIEW: …` |
+| `re-verify` (sync PR) | `PR` (head `main`, base `staging`), no `APPROVED_SHA` | see "The sync PR" below | `REVIEW: …` |
+| `review-release` | `PR` (head `staging`, base `main`) | the procedure below, plus: the diff `origin/main...origin/staging` holds only PRs merged into `staging` in this run (see "Listing the run's PRs" below), nothing half-done; run L0–L4 **in full** (the whole end-to-end suite, not only touched specs) | `REVIEW: …` |
 | `verify-branch` | `BRANCH` (`staging` or `main`), `SHA` | **no PR, no review comment, no status.** Lease with `--base $BRANCH`, check out `SHA` detached, run L0–L4 in full: `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:agent` if `agent/` exists, `npm run test:e2e` (all specs). Re-run any failing spec once to tell a flake from a failure; a flake counts as a failure to report | `VERIFY: PASS\|FAIL BRANCH=<b> sha=<sha> failed=<case IDs or specs>` |
 
 In `verify-branch`, never deploy and never touch the deployed sites: that is the merger's and the orchestrator's job. One exception to "no status": on `BRANCH=main` with `VERIFY: PASS`, post `gh api repos/{owner}/{repo}/statuses/$SHA -f state=success -f context=agent-review -f description="verify-branch main PASS"`, because `staging` is protected and its fast-forward to that commit needs `agent-review` on it.
+
+**Listing the run's PRs** (`review-release`): `gh api "repos/{owner}/{repo}/pulls?state=closed&base=staging&per_page=100" --paginate --jq '.[] | select(.merged_at != null) | "#\(.number) \(.merged_at)"'`. Keep `--paginate`: a long run has more than one page of merged PRs, and without it the earlier ones are missing from the list.
+
+**The sync PR** (`re-verify`, head `main`, base `staging`): it is a merge commit that brings a release into `staging` and must add nothing to `staging`'s tree. Lease with `--base staging`, then `git checkout --detach origin/staging`, `git merge --no-commit --no-ff origin/main`, and `git diff --cached --quiet` must succeed (the tree is unchanged); then `git merge --abort` (skip it if git says "Already up to date"). A conflict or any changed file means something reached `main` outside a release: `REQUEST_CHANGES`, naming the files. Otherwise run `npm run typecheck` and `npm run lint`, then `APPROVE`. You don't run L0–L4: the tree is one an earlier `VERIFY: PASS` already covered. Publish as in step 10; the status goes on the PR's head SHA, which is `main`'s tip.
 
 ## Procedure (`review`, `review-docs`, `review-release`)
 
@@ -56,7 +61,7 @@ In `verify-branch`, never deploy and never touch the deployed sites: that is the
    - `gh pr view $PR --json title,headRefName --jq '.title, .headRefName'` (title and branch only; the issue number is in your brief or the branch name `feat/<issue>-…`; read the body and comments **after** step 4, in step 8, so the coder's explanation doesn't steer you. Earlier **review** findings and orchestrator rulings come in your brief)
    - `gh issue view <issue> --json title,body` (scope and case IDs)
    - `gh api repos/{owner}/{repo}/pulls/$PR/files --paginate --jq '.[].filename'` (changed paths)
-3. **Scope check:** every changed path must be inside the card's Scope list (plus its tests and `docs/testing/test-cases.json`). Anything else is a **blocker**, unless the orchestrator approved it in a PR comment. The one-line registrations in the docs/08 §8.5 hotspots are always in scope.
+3. **Scope check:** every changed path must be inside the card's Scope list (plus its tests and `docs/testing/test-cases.json`). Anything else is a **blocker**, unless the orchestrator approved it in a PR comment. The one-line registrations in the docs/08 §8.5 hotspots are always in scope. A **revert PR** (branch `revert/pr-<n>`, label `revert`) has no card: its scope is exactly the reverted PR's files, the diff must be the exact inverse of that PR's merge commit, and the gates run as for a card PR.
 4. **Form your own view first.** Read the card, the spec sections and the diff **before** the PR's "How it works" and the coder's comments, so their reasoning doesn't steer you. You are the only one who tests the change independently: the coder ran only the tests it wrote.
 5. **Run every test level the change needs** (skill `testing-levels` §2 and §5) yourself:
    - static (`npm run typecheck`, `npm run lint`) and the **whole** unit/integration/component suite (`npm test`, plus `npm run test:agent` when `agent/` changed), not just the new tests;

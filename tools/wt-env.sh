@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Per-worktree ports and dev database, so parallel agents never collide.
 # Usage (inside any checkout):  eval "$(tools/wt-env.sh)"
+# Run it once per shell, before you start the slot's servers. Run it again while the slot's own
+# API or Vite server is listening and it sees those ports as taken and moves to the next ones.
 # treehouse names slots "<repo>-<slot>" (unique_leaf = true); the main checkout gets slot 0.
 set -euo pipefail
 leaf="$(basename "$(git rev-parse --show-toplevel)")"
