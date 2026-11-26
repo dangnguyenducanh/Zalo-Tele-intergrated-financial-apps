@@ -1,6 +1,6 @@
 {
   "title": "Hộp thư bot",
-  "intro": "Ghi chi tiêu qua Telegram, Zalo hoặc ảnh hoá đơn. Những gì bot đọc được nằm ở đây dưới dạng bản nháp để bạn kiểm tra trước khi lưu.",
+  "intro": "Ghi chi tiêu qua Telegram, WhatsApp, Zalo hoặc ảnh hoá đơn. Những gì bot đọc được nằm ở đây dưới dạng bản nháp để bạn kiểm tra trước khi lưu.",
   "retry": "Thử lại",
   "sources": {
     "telegram": "Telegram",
