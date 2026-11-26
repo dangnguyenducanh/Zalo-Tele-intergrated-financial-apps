@@ -191,6 +191,25 @@ test('TC-F9-03 drafts from every source: edit the amount inline, Confirm sends t
   expect(screen.getByRole('heading', { level: 2, name: 'Bản nháp chờ duyệt (2)' })).toHaveFocus();
 });
 
+test('TC-F9-07 a WhatsApp draft and a linked WhatsApp chat show the WhatsApp icon and label, like Telegram and Zalo', async () => {
+  drafts = [draft({ id: 'w1', amount: 45000, note: 'phở WhatsApp', source: 'whatsapp' }), ...drafts];
+  links = [
+    { id: 'l1', platform: 'telegram', displayName: 'Anh', createdAt: NOW },
+    { id: 'l2', platform: 'whatsapp', displayName: 'Nguyễn Văn Ánh', createdAt: NOW },
+  ];
+  renderApp('/bot');
+
+  const whatsapp = await card('phở WhatsApp');
+  expect(within(whatsapp).getByText('WhatsApp')).toBeInTheDocument();
+  expect(within(whatsapp).getByTestId('WhatsAppIcon')).toHaveAttribute('aria-hidden', 'true'); // decorative: the label says it
+  expect(within(await card('phở')).queryByTestId('WhatsAppIcon')).not.toBeInTheDocument(); // Telegram keeps its own
+
+  const linked = await screen.findByRole('region', { name: 'Tài khoản đã liên kết' });
+  const account = (await within(linked).findAllByRole('listitem')).find((item) => item.textContent?.includes('WhatsApp ·'))!;
+  expect(account).toHaveTextContent('WhatsApp · Nguyễn Văn Ánh');
+  expect(within(account).getByTestId('WhatsAppIcon')).toBeInTheDocument();
+});
+
 test('TC-F9-03 receipt line items expand; an unchanged draft confirms without edits; Discard asks first', async () => {
   const user = userEvent.setup();
   confirmAnswer = { budgetWarning: { percent: 85, threshold: 80 } };

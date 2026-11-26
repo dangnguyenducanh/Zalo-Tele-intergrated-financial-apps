@@ -206,7 +206,7 @@ function StatsCards() {
   const cards = [
     { label: t('stats.users'), value: n(data.users) },
     { label: t('stats.activeUsers7d'), value: n(data.activeUsers7d) },
-    { label: t('stats.chatLinks'), value: n(data.chatLinks.telegram + data.chatLinks.zalo), detail: t('stats.chatLinksDetail', mapValues(data.chatLinks, n)) },
+    { label: t('stats.chatLinks'), value: n(Object.values(data.chatLinks).reduce((sum, count) => sum + count, 0)), detail: t('stats.chatLinksDetail', mapValues(data.chatLinks, n)) },
     {
       label: t('stats.transactions'),
       value: n(Object.values(data.transactionsBySource).reduce((sum, count) => sum + count, 0)),

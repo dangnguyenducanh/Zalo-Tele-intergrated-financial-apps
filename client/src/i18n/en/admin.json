@@ -42,9 +42,9 @@
     "users": "Users",
     "activeUsers7d": "Active in the last 7 days",
     "chatLinks": "Linked chats",
-    "chatLinksDetail": "Telegram {{telegram}} · Zalo {{zalo}}",
+    "chatLinksDetail": "Telegram {{telegram}} · WhatsApp {{whatsapp}} · Zalo {{zalo}}",
     "transactions": "Transactions",
-    "transactionsDetail": "Web {{web}} · Telegram {{telegram}} · Zalo {{zalo}} · Receipt {{receipt}}"
+    "transactionsDetail": "Web {{web}} · Telegram {{telegram}} · WhatsApp {{whatsapp}} · Zalo {{zalo}} · Receipt {{receipt}}"
   },
   "categories": {
     "title": "Default categories",

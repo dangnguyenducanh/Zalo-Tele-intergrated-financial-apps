@@ -1,5 +1,5 @@
 // Outbound HTTP for the E2E API server (BUG-002), like the MSW mocks in the Vitest suites: the Telegram and
-// Zalo Bot APIs are answered here, so an E2E run never messages a real chat, even with a real token in the
+// Zalo Bot APIs and the WhatsApp Graph API are answered here, so an E2E run never messages a real chat, even with a real token in the
 // environment. Any other host except localhost fails with a network error, so a new outbound call cannot slip in.
 import { appendFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { http, HttpResponse, passthrough } from 'msw';
 import { setupServer } from 'msw/node';
 
-// Every stubbed Bot API call as { platform, method, chatId }. Never the token: it is part of the URL.
+// Every stubbed Bot API call as { platform, method, chatId }. Never the token: it is in the URL (Telegram, Zalo) or a header (WhatsApp).
 export const botCalls = [];
 
 // What the bots said, one JSON line per reply, for a Playwright spec that needs it: the claim link of an unlinked
@@ -27,6 +27,17 @@ const answer =
     return HttpResponse.json({ ok: true, result: message });
   };
 
+// WhatsApp's Graph API: POST /<version>/<phone number ID>/messages to a `recipient` (the user's BSUID), answered with the sent message's id.
+async function answerWhatsApp({ request }) {
+  const body = await request.json().catch(() => ({}));
+  const chatId = body.recipient === undefined ? null : String(body.recipient);
+  botCalls.push({ platform: 'whatsapp', method: 'messages', chatId });
+  const text = body.text?.body ?? body.interactive?.body?.text;
+  if (repliesFile() && text) appendFileSync(repliesFile(), `${JSON.stringify({ platform: 'whatsapp', chatId, text })}\n`);
+  console.info(`[bot-api-stub] whatsapp messages chat=${chatId}`);
+  return HttpResponse.json({ messaging_product: 'whatsapp', contacts: [{ input: chatId, user_id: chatId }], messages: [{ id: `wamid.stub${botCalls.length}` }] });
+}
+
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 
 // Starts intercepting fetch and node:http in this process. Returns the MSW server (close() stops it).
@@ -35,6 +46,7 @@ export function stubOutboundHttp() {
   const server = setupServer(
     http.post('https://api.telegram.org/:bot/:method', answer('telegram')),
     http.post('https://bot-api.zaloplatforms.com/:bot/:method', answer('zalo')),
+    http.post('https://graph.facebook.com/:version/:phoneNumberId/messages', answerWhatsApp),
     // Anything else: this machine passes through (the KIE service runs on 127.0.0.1), any other host fails
     // with a network error, so the caller's fetch throws and the reason is in the server log.
     http.all('*', ({ request }) => {

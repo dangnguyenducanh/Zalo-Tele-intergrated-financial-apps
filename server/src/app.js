@@ -13,7 +13,12 @@ app.set('trust proxy', 1); // behind Vercel's proxy: req.ip comes from X-Forward
 
 // Middleware order follows docs/04 §4.1.
 app.use(helmet());
-app.use(express.json({ limit: '1mb' }));
+// Meta signs the exact bytes it sends, and re-serialising req.body does not give them back, so the WhatsApp
+// webhook keeps the raw body (docs/04 §4.1). Every other route only gets the parsed one.
+const keepRawBodyForWhatsApp = (req, res, buf) => {
+  if (req.originalUrl.startsWith('/api/webhooks/whatsapp')) req.rawBody = buf;
+};
+app.use(express.json({ limit: '1mb', verify: keepRawBodyForWhatsApp }));
 app.use(cookieParser());
 app.use(requestId);
 app.use('/api', routes);

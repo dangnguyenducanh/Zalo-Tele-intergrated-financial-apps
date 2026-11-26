@@ -157,14 +157,16 @@ test('TC-F11-06 admin lists users with search, filters and pages, and sees syste
     expect(codeOf(await as.get(`/admin/users?${bad}`))).toEqual([400, 'VALIDATION_ERROR']);
   }
 
-  // Stats: Minh has not used the app for 10 days; Lan has a Telegram link and transactions from two sources.
+  // Stats: Minh has not used the app for 10 days; Lan has a Telegram and a WhatsApp link and transactions from three sources.
   await Session.updateMany({ userId: minh.user.id }, { lastUsedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) });
   await ChatLink.create({ userId: lan.user.id, platform: 'telegram', platformUserId: '1', chatId: '1' });
+  await ChatLink.create({ userId: lan.user.id, platform: 'whatsapp', platformUserId: 'VN.13491208655302741918', chatId: 'VN.13491208655302741918' });
   const tx = { userId: lan.user.id, walletId: new mongoose.Types.ObjectId(), categoryId: new mongoose.Types.ObjectId(), type: 'expense', amount: 45000, occurredAt: new Date() };
   await Transaction.create([
     { ...tx, source: 'web' },
     { ...tx, source: 'telegram', status: 'draft' },
     { ...tx, source: 'telegram' },
+    { ...tx, source: 'whatsapp', status: 'draft', chatRef: { platform: 'whatsapp', chatId: 'VN.13491208655302741918', messageId: 'wamid.1:1' } },
     { ...tx, source: 'web', deletedAt: new Date() }, // deleted: not counted
   ]);
 
@@ -172,8 +174,8 @@ test('TC-F11-06 admin lists users with search, filters and pages, and sees syste
   expect(stats.body).toEqual({
     users: 3,
     activeUsers7d: 2,
-    chatLinks: { telegram: 1, zalo: 0 },
-    transactionsBySource: { web: 1, telegram: 2, zalo: 0, receipt: 0 },
+    chatLinks: { telegram: 1, zalo: 0, whatsapp: 1 },
+    transactionsBySource: { web: 1, telegram: 2, zalo: 0, whatsapp: 1, receipt: 0 },
   });
 });
 

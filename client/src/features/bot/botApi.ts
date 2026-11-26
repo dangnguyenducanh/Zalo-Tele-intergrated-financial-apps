@@ -6,7 +6,7 @@ import type { Transaction, TransactionInput } from '@/features/transactions/tran
 // viaClaim and claimNoticeDismissedAt drive the "Not you? [Unlink]" notice (POST /chat-links/claim leaves the date out).
 export type ChatLink = {
   id: string;
-  platform: 'telegram' | 'zalo';
+  platform: 'telegram' | 'zalo' | 'whatsapp';
   displayName: string;
   createdAt: string;
   viaClaim?: boolean;

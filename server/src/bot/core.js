@@ -1,6 +1,6 @@
-// Bot core (docs/04 §4.6): everything the Telegram and Zalo bots do, written once. An adapter maps its
+// Bot core (docs/04 §4.6): everything the Telegram, Zalo and WhatsApp bots do, written once. An adapter maps its
 // platform's JSON to the calls below and gives the core a way to talk back:
-//   { platform: 'telegram' | 'zalo', sendText(chatId, text), sendDraft(chatId, { id, text }, language),
+//   { platform: 'telegram' | 'zalo' | 'whatsapp', sendText(chatId, text), sendDraft(chatId, { id, text }, language),
 //     downloadPhoto(photo) → Buffer }
 import { env } from '../config/env.js';
 import { Category } from '../models/Category.js';
@@ -80,7 +80,7 @@ export async function handleMessage(adapter, message) {
   return createDrafts(adapter, link, user.language, message);
 }
 
-// A button press (Telegram ✅ / ❌) → { ok, text }. Only the presser's own drafts can be touched.
+// A button press (Telegram and WhatsApp ✅ / ❌) → { ok, text }. Only the presser's own drafts can be touched.
 export async function handleButton(platform, platformUserId, action, transactionId) {
   const link = await ChatLink.findOne({ platform, platformUserId });
   if (!link) return { ok: false, text: inBothLanguages((m) => [pleaseLink(m)]) }; // a button's short notice can't be tapped
