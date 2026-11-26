@@ -35,7 +35,7 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**229 cases**: 221 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**230 cases**: 222 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
@@ -51,7 +51,7 @@ The full list (**229 cases**: 221 automated or semi-automated + 8 manual charter
 | F10 Receipt upload | 6 | TC-F10-01 real KIE output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit |
 | F11 Admin | 9 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
 | F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
-| F13 Quick add | 9 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed; TC-F13-08 a question answers `question: true` and never drafts; TC-F13-09 QuickAdd shows the question notice and saves nothing |
+| F13 Quick add | 10 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed; TC-F13-08 a question answers `question: true` and never drafts; TC-F13-09 QuickAdd shows the question notice and saves nothing; TC-F13-10 the notice at 375 px, in dark mode and with axe |
 | F14 Assistant | 27 (built so far: the one comparison rule, T43, TC-F14-01…03; the agent service scaffold, T44, TC-F14-04…17; the Zalo send counter and quota guard, T49, TC-F14-18…23; questions never become drafts, T41, TC-F14-24…27) | TC-F14-24 `classify` has a row per rule and every capture stays a capture; TC-F14-27 a question typed in any chat gets the help text and no draft; TC-F14-01 `compareRange()` is one rule; TC-F14-05 every agent path, websocket included, but `/health` needs the bearer; TC-F14-13 the agent's database role cannot change app data or create indexes; TC-F14-14 it cannot read `users`, sessions or link tokens; TC-F14-15 `usersForAgent` shows no e-mail or password hash |
 | Non-functional | 19 | TC-NF-02 responsive at 375/768/1280 px; TC-NF-04 NoSQL injection and XSS blocked; TC-NF-05 no `.env` in git; TC-NF-06 Vercel deploy smoke; TC-NF-19 `vercel deploy` uploads no `.env` file (BUG-042); TC-NF-15 the bot-e2e tool's `--help` and bad options |
 | Manual charters | 8 | MT-01…MT-08 below |
@@ -168,7 +168,7 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (217 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (230 cases, last results from results.json)
 ```
 
 ## 7.8 One-tap linking and WhatsApp (§2.10)

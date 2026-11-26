@@ -65,10 +65,10 @@ async function messagesOf(link) {
   return messagesFor(user?.language);
 }
 
-// "/start ABC234" → ['start', 'ABC234']; "/today@my_bot" → ['today', '']; anything else → [].
+// "/start ABC234" → ['start', 'ABC234']; "/today@my_bot" → ['today', '']; "/Hỏi x" → ['hoi', 'x']; anything else → [].
 function readCommand(text) {
-  const match = /^\/(\w+)(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(text.trim());
-  return match ? [match[1].toLowerCase(), (match[2] ?? '').trim()] : [];
+  const match = /^\/([\p{L}\p{N}_]+)(?:@\w+)?(?:\s+([\s\S]*))?$/u.exec(text.trim());
+  return match ? [normalize(match[1]), (match[2] ?? '').trim()] : [];
 }
 
 // Every incoming chat message, mapped by the adapter to { platformUserId, chatId, messageId, displayName, text, photo? }.
