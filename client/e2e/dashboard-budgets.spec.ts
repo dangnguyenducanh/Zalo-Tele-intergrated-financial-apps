@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { registerByApi } from './helpers';
 
 // Dashboard and budgets in a real browser against the real API and statistics (in-memory MongoDB, see
 // playwright.config.ts). Every account is new; its money is added through the API, then read on screen.
@@ -18,10 +19,7 @@ type Headers = Record<string, string>;
 
 // Registers a fresh account through the API; returns its email, an Authorization header and its seeded ids.
 async function createAccount(request: APIRequestContext) {
-  const email = `dash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const res = await request.post('/api/auth/register', { data: { name: 'Lan', email, password: PASSWORD, language: 'vi' } });
-  expect(res.status()).toBe(201);
-  const { accessToken } = (await res.json()) as { accessToken: string };
+  const { email, accessToken } = await registerByApi(request);
   const headers = { Authorization: `Bearer ${accessToken}` };
   const wallets = (await (await request.get('/api/wallets', { headers })).json()) as { id: string }[];
   const categories = (await (await request.get('/api/categories', { headers })).json()) as { id: string; names?: { vi: string } }[];

@@ -3,7 +3,7 @@
 The webhook contract tests (`server/test/telegram.test.js`, `zalo.test.js`) and charters MT-02/MT-03 send **simulated** webhook payloads, so they never see a real chat app, a real bot reply, a real button press or a real photo download. This runbook closes that gap: someone types into the **real** Telegram and Zalo chats with the deployed bots, and [`tools/bot-e2e/bot-e2e.mjs`](../../tools/bot-e2e/bot-e2e.mjs) checks, after each step, that the expected bot replies and buttons are there (extra replies don't fail a step) and that the server state is exactly as expected, using the API. Test cases: TC-F7-08 (linking), TC-F8-16 (Telegram text), TC-F8-17 (Zalo text), TC-F8-18 (real receipts). They sit in the catalogue's feature groups, not under a separate TC-BOT-E2E prefix.
 
 - **Driver:** Claude in Chrome on Telegram Web (`web.telegram.org/a/`) and Zalo Web (`chat.zalo.me`), logged in as the student's own accounts. A person on a phone works the same way.
-- **Target:** production (both bots' webhooks point there), with a dedicated e2e web user `bot-e2e-…@example.com`. The checker creates it on first use and keeps its login in `~/.config/bot-e2e/<host>.json` (0600), never in the repo. Cleanup unlinks its chats and deletes its transactions through the API (a soft delete, like the web's delete: the rows stay in the database with `deletedAt`), so the chats are free to link elsewhere afterwards. `--target` defaults to production. Pass `--target staging` for anything else.
+- **Target:** production (both bots' webhooks point there), with a dedicated e2e web user. **The checker never signs up:** with e-mail codes on, a sign-up would send a code to an address that bounces. Register the user once on the website with an inbox you can read, and save its login as `{"email","password"}` in `~/.config/bot-e2e/<host>.json` (mode 600), never in the repo. Without that file, a command that needs a login makes no network call, prints these instructions with the exact path, and exits 1. Cleanup unlinks its chats and deletes its transactions through the API (a soft delete, like the web's delete: the rows stay in the database with `deletedAt`), so the chats are free to link elsewhere afterwards. `--target` defaults to production. Pass `--target staging` for anything else.
 - **Steps:** [`tools/bot-e2e/scenarios.json`](../../tools/bot-e2e/scenarios.json). Each step has the action, the regexes the bot replies must match, the buttons (Telegram), and the exact state afterwards (`links`, `drafts`, `confirmed` as `source:amount` multisets).
 - **Evidence:** `charter-runs/<VN date>/bot-e2e/results.jsonl`, one JSON line per checked step. This folder is git-ignored because it holds chat text.
 
@@ -25,7 +25,7 @@ The receipt steps take `--photo <file>` and expect that photo's true total. The 
 ```bash
 node tools/bot-e2e/bot-e2e.mjs --help    # the usage (an unknown option prints the usage and exits 1)
 node tools/bot-e2e/bot-e2e.mjs list      # the steps
-node tools/bot-e2e/bot-e2e.mjs setup     # e2e user exists and is empty
+node tools/bot-e2e/bot-e2e.mjs setup     # empties the e2e user (it must exist: see Target above)
 node tools/bot-e2e/bot-e2e.mjs code      # code for TG-01 (run again for ZL-01: codes are single-use)
 # after each step in the chat:
 node tools/bot-e2e/bot-e2e.mjs step TG-02 --reply "<bot reply as shown>" --button "✅ Lưu" --button "❌ Huỷ" --button "✏️ Sửa"
@@ -34,7 +34,7 @@ node tools/bot-e2e/bot-e2e.mjs budget "Đi lại" 80000   # before ZL-14 only
 node tools/bot-e2e/bot-e2e.mjs reset     # always at the end: no transactions, no budgets this month, no chat links
 ```
 
-Run `step` right after its action: the state check is exact, and the next action changes it. A step that fails exits with code 1 and lists each problem (missing reply pattern, missing button, state difference). The tool's own self-test (TC-NF-15: help and bad options) is `node --test tools/bot-e2e/bot-e2e.test.mjs`; it needs no network.
+Run `step` right after its action: the state check is exact, and the next action changes it. A step that fails exits with code 1 and lists each problem (missing reply pattern, missing button, state difference). The tool's own self-test (TC-NF-15: help and bad options; TC-NF-20: no credentials file, no sign-up) is `node --test tools/bot-e2e/bot-e2e.test.mjs`; it needs no network.
 
 ### Driving the chats with Claude in Chrome
 
