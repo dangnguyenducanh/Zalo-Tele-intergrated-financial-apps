@@ -102,7 +102,7 @@ The bot variables are the same in both projects. A bot has one webhook, and both
 
 1. `tools/deploy.sh staging` deploys the current checkout with `--prod` to the project's main domain and prints the URL. It runs the pinned Vercel CLI through `npx` and needs a logged-in CLI. The CLI never reads `.gitignore`, so `.vercelignore` keeps every `.env` file (but `.env.example`) and `agent/` out of the upload: the CLI itself skips only `.env.local` and `.env.*.local`, and `server/.env` holds the real keys (BUG-042, TC-NF-19). The deployed API reads its variables from the Vercel project, not from a file.
 2. Check staging: `GET /api/health` → `{status:'ok', db:'up'}`, plus a deep link on refresh.
-3. `tools/deploy.sh production`, then check it the same way.
+3. `tools/deploy.sh production`, then check it the same way. In the agent flow production is deployed only by the merger's `deploy-production`, after `main` has passed its verify and from a lease on `main`, never from an arbitrary checkout ([08 §8.4](08-agent-workflow.md), R5).
 
 ## 6.4 Telegram bot
 
@@ -204,7 +204,7 @@ MONGODB_DB=finance_staging npm run seed:test -w server      # staging
 
 ## 6.10 CI
 
-`.github/workflows/ci.yml` runs on every pull request and on pushes to `main` (Node 22): `npm ci`, `npm run typecheck` (client), `npm run lint` (ESLint), `npm test` (Vitest, server then client). The real-KIE contract test skips itself when `KIE_URL` doesn't answer `/health`, so it always skips in CI. JUnit results are uploaded as the `test-results` artifact.
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main` and `staging` (Node 22): `npm ci`, `npm run typecheck` (client), `npm run lint` (ESLint), `npm test` (Vitest, server then client). The real-KIE contract test skips itself when `KIE_URL` doesn't answer `/health`, so it always skips in CI. JUnit results are uploaded as the `test-results` artifact.
 
 The same `ci` job then tests the agent service (T44), after `npm test` on purpose: Python 3.12 (`actions/setup-python`), `pip install -r agent/requirements-dev.txt` (the pinned FastAPI, uvicorn, LangGraph, pymongo and openai, plus httpx and pytest; **never** sentence-transformers or torch), and `npm run test:agent` with `HF_HUB_OFFLINE=1` and no `VLLM_BASE_URL`. The pytest fixture starts the `mongod` binary that mongodb-memory-server downloaded during `npm test` (it asks that package for the path; locally the first run downloads it), on a free port with authentication, so the database-role tests run against a real MongoDB. No GPU, model weights or network service are used, and the tests fail if they try. Its JUnit file is `test-results/agent-pytest.xml`, uploaded as the `agent-test-results` artifact. The required `ci` check covers both. To run it by hand: `python3.12 -m venv agent/.venv && agent/.venv/bin/pip install -r agent/requirements-dev.txt`, then `PATH="$PWD/agent/.venv/bin:$PATH" npm run test:agent`.
 
@@ -437,7 +437,7 @@ tools/set-secret.sh AGENT_PUBLIC_URL AGENT_SECRET RECEIPT_READER ASSISTANT_ENABL
 ```
 
    This saves them in `server/.env` and pushes them to **both** Vercel projects, `AGENT_PUBLIC_URL` as `AGENT_URL`. Leave `RECEIPT_READER` at `kie` (or skip it) until the receipt eval passes, and set `ASSISTANT_ENABLED=true` only when Stage AI is ready. If a push fails, repeat it with `tools/vercel-env-push.sh production AGENT_URL …` (and `staging`).
-7. **Redeploy** both projects (`tools/deploy.sh staging`, then `production`).
+7. **Redeploy** both projects (`tools/deploy.sh staging`, then `production`; in the agent flow production waits for the merger's `deploy-production`, [08 §8.4](08-agent-workflow.md) R5).
 8. **Smoke test:**
    - `curl -s https://<agent tunnel>/health` from any machine → `vllm: ok`.
    - One question: ask "hôm nay tiêu bao nhiêu?" in the web drawer → an answer with its sources line. By hand on the GPU host, with the secret read from `agent/.env` and passed through stdin (as in §6.4: `-H @-` reads the header from stdin, so the secret never appears in `ps`):
