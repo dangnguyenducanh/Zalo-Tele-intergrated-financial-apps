@@ -1,0 +1,31 @@
+# The first skill (docs/02 §2.11.3): income, expense and net for a period, answered from MongoDB with no model.
+# The period comes from the question ("hôm nay", "tuần trước", "tháng 10", "7 ngày qua"); with none, it is this month.
+code: thu_chi_ky
+labelVi: Thu chi theo kỳ
+labelEn: Income and spending for a period
+description: Tổng thu, tổng chi và còn lại của một kỳ (ngày, tuần, tháng, năm) từ các giao dịch đã xác nhận. Income, spending and what is left for a period.
+examples:
+  - "hôm nay tiêu bao nhiêu?"
+  - tháng 10 thu bao nhiêu
+  - tuần trước tiêu bao nhiêu
+triggers: [bao nhiêu, tiêu, thu, chi tiêu, how much, spend, spent, earn, earned, income]
+mode: pipeline
+tools:
+  - {name: get_period_summary, ord: 1, preset: {}}
+followups:
+  - {vi: "Hôm qua tiêu bao nhiêu?", en: "How much did I spend yesterday?"}
+  - {vi: "Tháng này thu bao nhiêu?", en: "How much did I earn this month?"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      Thu chi {period}, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: Giao dịch đã xác nhận {range}
+  en:
+    answer: |-
+      Income and spending for {period}, confirmed transactions only:
+      {facts}
+    sources: Confirmed transactions {range}

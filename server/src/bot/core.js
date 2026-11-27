@@ -44,7 +44,7 @@ async function linkInstructions(platform, { platformUserId, chatId, displayName 
   return inBothLanguages((m) => [wrongCode && m.invalidCode, pleaseLink(m), claimUrl && m.tapToLink(claimUrl)]);
 }
 
-const money = (amount, m) => new Intl.NumberFormat(m.locale, { style: 'currency', currency: 'VND' }).format(amount);
+export const money = (amount, m) => new Intl.NumberFormat(m.locale, { style: 'currency', currency: 'VND' }).format(amount);
 const dateText = (date, m) =>
   new Intl.DateTimeFormat(m.locale, { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 // The user's own name for a category, else the default name in the reply language ('vi-VN' → names.vi).

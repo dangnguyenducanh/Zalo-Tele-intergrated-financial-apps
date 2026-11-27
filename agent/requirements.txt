@@ -5,4 +5,5 @@ uvicorn==0.54.0
 langgraph==1.2.24
 pymongo==4.18.3
 openai==3.59.0
+pyyaml==6.0.4
 # ponytail: only these direct pins; what they pull in floats. Add a lock file (uv pip compile) if CI ever breaks on one.

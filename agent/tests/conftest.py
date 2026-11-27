@@ -18,6 +18,8 @@ from pymongo import MongoClient
 from agent.app import create_app
 from agent.config import Settings
 from agent.embedder import FakeEmbedder
+from agent.setup import main as setup_main
+from turn_helpers import NOW, FakeChatModel
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRET = 'test-agent-secret-' + 'a' * 32
@@ -167,7 +169,34 @@ def db(mongo):
 
 @pytest.fixture
 def agent_db(mongo):
-    """The same database as sochitieu_agent sees it."""
-    client = MongoClient(mongo.agent_uri)
+    """The same database as sochitieu_agent sees it (with aware datetimes, as the service reads it)."""
+    client = MongoClient(mongo.agent_uri, tz_aware=True)
     yield client[DB]
     client.close()
+
+
+# ---- the turn pipeline (T45): a database as `python -m agent.setup` leaves it, and the app on top of it ----
+
+@pytest.fixture
+def world(mongo, db):
+    """The empty test database with the collections, indexes and the usersForAgent view of `python -m agent.setup`."""
+    assert setup_main([], {'MONGODB_URI': mongo.app_uri}) == 0
+    return db
+
+
+@pytest.fixture
+def turn_app(mongo, world):
+    """create_app on the throwaway mongod as sochitieu_agent, with a fixed clock; returns make(**overrides) → app."""
+    made = []
+
+    def make(**overrides):
+        settings = Settings(agent_secret=SECRET, mongodb_uri_agent=mongo.agent_uri)
+        overrides.setdefault('now', lambda: NOW)
+        overrides.setdefault('chat_model', FakeChatModel())
+        app = create_app(settings, FakeEmbedder(), **overrides)
+        made.append(app)
+        return app
+
+    yield make
+    for app in made:
+        app.state.mongo.close()
