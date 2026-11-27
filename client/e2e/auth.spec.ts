@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { addTransaction, createAccount as createAccountWithData } from './helpers';
+import { addTransaction, createAccount as createAccountWithData, registerByApi } from './helpers';
 
 // App shell journeys in a real browser against the real API (in-memory MongoDB, see playwright.config.ts):
 // login/register, silent refresh on reload, logout, theme, language and the responsive layout.
@@ -9,10 +9,7 @@ test.use({ locale: 'vi-VN' }); // Vietnamese is the default UI language
 
 // Registers a fresh account through the API (its own cookie jar, so the browser stays logged out).
 async function createAccount(request: APIRequestContext, name = 'Lan'): Promise<string> {
-  const email = `${name.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const res = await request.post('/api/auth/register', { data: { name, email, password: PASSWORD, language: 'vi' } });
-  expect(res.status()).toBe(201);
-  return email;
+  return (await registerByApi(request, name)).email;
 }
 
 // The profile as the API stores it.

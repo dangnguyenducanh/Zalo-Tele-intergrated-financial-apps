@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { registerByApi } from './helpers';
 
 // Transactions screen and quick add in a real browser against the real API and parser (in-memory MongoDB,
 // see playwright.config.ts). Every account is new, so each test starts with no transactions.
@@ -8,10 +9,7 @@ test.use({ locale: 'vi-VN' }); // Vietnamese is the default UI language
 
 // Registers a fresh account through the API (its own cookie jar); returns its email and an Authorization header.
 async function createAccount(request: APIRequestContext) {
-  const email = `tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const res = await request.post('/api/auth/register', { data: { name: 'Lan', email, password: PASSWORD, language: 'vi' } });
-  expect(res.status()).toBe(201);
-  const { accessToken } = (await res.json()) as { accessToken: string };
+  const { email, accessToken } = await registerByApi(request);
   return { email, headers: { Authorization: `Bearer ${accessToken}` } };
 }
 
