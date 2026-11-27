@@ -16,8 +16,8 @@ mode: pipeline
 tools:
   - {name: get_category_totals, ord: 1, preset: {top: 5}}
 followups:
-  - {vi: "Chi theo danh mục tháng trước", en: "Spending by category"}
-  - {vi: "Chi theo danh mục tuần này", en: "Spending by category yesterday"}
+  - {vi: "Chi theo danh mục tháng này", en: "Spending by category this month"}
+  - {vi: "Chi theo danh mục hôm qua", en: "Spending by category yesterday"}
 maxSteps: 4
 enabled: true
 version: 1

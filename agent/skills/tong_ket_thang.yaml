@@ -18,8 +18,8 @@ tools:
   - {name: get_budgets, ord: 3, preset: {}}
   - {name: suggest_budgets, ord: 4, preset: {}, monthShift: 1}
 followups:
-  - {vi: "Tổng kết tháng trước", en: "Monthly summary"}
-  - {vi: "Tổng kết tháng này", en: "Monthly report"}
+  - {vi: "Tổng kết tháng này", en: "Monthly summary"}
+  - {vi: "Báo cáo tháng này", en: "Monthly report"}
 maxSteps: 4
 enabled: true
 version: 1

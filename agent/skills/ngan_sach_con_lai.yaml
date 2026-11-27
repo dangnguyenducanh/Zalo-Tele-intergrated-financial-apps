@@ -16,7 +16,7 @@ tools:
   - {name: get_budget_pace, ord: 2, preset: {}}
 followups:
   - {vi: "Ngân sách còn lại", en: "Budget left"}
-  - {vi: "Ngân sách tháng trước còn bao nhiêu", en: "Budgets this month"}
+  - {vi: "Ngân sách tháng này", en: "Budgets this month"}
 maxSteps: 4
 enabled: true
 version: 1

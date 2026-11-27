@@ -15,7 +15,7 @@ tools:
   - {name: list_transactions, ord: 1, preset: {type: expense, order: biggest}}
 followups:
   - {vi: "5 khoản chi lớn nhất tháng này", en: "Biggest expenses this month"}
-  - {vi: "3 khoản chi lớn nhất hôm qua", en: "Biggest expenses yesterday"}
+  - {vi: "3 khoản chi lớn nhất hôm qua", en: "Top 3 biggest expenses yesterday"}
 maxSteps: 4
 enabled: true
 version: 1

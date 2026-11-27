@@ -190,8 +190,9 @@ def load_context(state, deps):
 def rewrite_question(state, deps):
     """The question as the rules read it: the period its words name (else this month, or the month the request names) and
     the user's own categories and wallets its words name. A bare 1-3 that answers this thread's ask-back is read as that
-    option instead. Turning a follow-up into a full question comes with T50."""
-    reply = askback.read_reply(state, deps)
+    option instead, unless the turn is a command (it names its skill, so its text is never a reply). Turning a follow-up
+    into a full question comes with T50."""
+    reply = None if state['skill'] else askback.read_reply(state, deps)
     if reply and reply['kind'] == 'run':
         return {'standalone': reply['question'], 'period': reply['period'], 'periodNamed': reply['named'], 'entities': reply['entities'],
                 'skillCode': reply['skill'], 'retrieval': 'direct', 'reply': reply, 'count': count_in(reply['question'])}

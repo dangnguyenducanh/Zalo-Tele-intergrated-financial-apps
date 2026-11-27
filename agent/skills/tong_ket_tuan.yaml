@@ -19,8 +19,8 @@ tools:
   - {name: compare_periods, ord: 3, preset: {}}
   - {name: get_budget_pace, ord: 4, preset: {}}
 followups:
-  - {vi: "Tổng kết tuần trước", en: "Weekly summary"}
-  - {vi: "Tổng kết tuần này", en: "Weekly report"}
+  - {vi: "Tổng kết tuần này", en: "Weekly summary"}
+  - {vi: "Báo cáo tuần này", en: "Weekly report"}
 maxSteps: 4
 enabled: true
 version: 1

@@ -80,6 +80,18 @@ def test_every_follow_up_chip_is_a_question_the_same_skill_answers_in_both_langu
     assert rich.model.calls == 0
 
 
+@pytest.mark.parametrize('code', sorted(SKILLS))
+def test_a_chip_and_its_translation_ask_the_same_question(rich, agent_db, code):
+    """TC-F14-69 Chip number n of each skill in vi and in en runs the same tools with the same arguments (the same period, the same filters), so the slot does not change its question with the language"""
+    for number, chip in enumerate(SKILLS[code].followups):
+        args = {}
+        for language in ('vi', 'en'):
+            rid = f'same-{language}-{number}'
+            say(rich, chip[language], language=language, requestId=rid)
+            args[language] = [(call['tool'], call['args']) for call in turn_row(agent_db, rich.user, rid)['toolCalls']]
+        assert args['vi'] == args['en'] and args['vi'], (chip['vi'], chip['en'])
+
+
 # ---- chi_theo_danh_muc ----
 
 def test_one_category_over_a_period_is_the_fixtures_total_with_its_period_and_filter_named(rich, agent_db):
@@ -91,7 +103,7 @@ def test_one_category_over_a_period_is_the_fixtures_total_with_its_period_and_fi
     assert vi_money(category_total('Ăn uống', '2026-11-01', '2026-11-30')) == vi_money(215_000)
     assert 'tháng này (11/2026)' in body['text'] and 'Ăn uống' in body['text'] and 'đã xác nhận' in body['text'] and 'Bỏ qua' not in body['text']
     assert body['sources'] == ['Giao dịch đã xác nhận 11/2026, theo danh mục'] and 'Nguồn' in body['text']
-    assert len(body['followups']) == 2 and body['followups'][0] == 'Chi theo danh mục tháng trước'
+    assert len(body['followups']) == 2 and body['followups'][0] == 'Chi theo danh mục tháng này'
     row = turn_row(agent_db, rich.user, 'cat-1')
     assert (row['skill'], row['retrieval']) == ('chi_theo_danh_muc', 'direct')
     assert [(c['tool'], c['ok']) for c in row['toolCalls']] == [('get_category_totals', True)]
@@ -339,6 +351,18 @@ def test_the_reply_is_scoped_to_this_user_this_thread_and_this_channel_and_a_cle
     assert cleared['facts'] == [] and 'find_skills' in cleared['steps']
     agent_db['agentTurns'].update_one({'userId': rich.user, 'requestId': 'ask-1'}, {'$set': {'clearedAt': None}})
     assert say(rich, '1', requestId='back-again')['facts']
+
+
+def test_a_command_whose_text_is_a_bare_digit_is_not_an_ask_back_reply(rich, agent_db):
+    """TC-F14-65 A command (a chat turn with `skill` set) whose text is 1-3 runs its own skill while an ask-back is open and after it has expired: only a message with no skill is a reply"""
+    say(rich, CHOOSE, requestId='ask-1')  # two skills fit: an ask-back is open in this thread
+    body = say(rich, '3', skill='thu_chi_ky', requestId='cmd-3')
+    row = turn_row(agent_db, rich.user, 'cmd-3')
+    assert (row['skill'], row['command']) == ('thu_chi_ky', True) and vi_money(1_100_000) in body['text'] and 'rewrite_question' in body['steps']
+    rich.clock['now'] = NOW + timedelta(minutes=30)  # the ask-back has expired
+    body = say(rich, '2', skill='thu_chi_ky', requestId='cmd-2')
+    assert vi_money(1_100_000) in body['text'] and 'hết hạn' not in body['text']
+    assert turn_row(agent_db, rich.user, 'cmd-2')['skill'] == 'thu_chi_ky'
 
 
 @pytest.mark.parametrize('function,state,expected', [
