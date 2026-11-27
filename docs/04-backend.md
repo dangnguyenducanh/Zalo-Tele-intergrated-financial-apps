@@ -35,9 +35,9 @@ trust proxy 1 → helmet → express.json({ limit: '1mb' }) → cookie-parser �
 - no `TELEGRAM_BOT_USERNAME`, `WHATSAPP_NUMBER` or `ZALO_BOT_URL` → that app's entry in the link code's `links` is `null`, and the web link card hides the app.
 - if any of the WhatsApp webhook settings `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` is unset, the WhatsApp webhook is disabled: `GET` and `POST /webhooks/whatsapp` answer 503 `FEATURE_NOT_CONFIGURED` and process nothing, and `links.whatsapp` is `null` (even with `WHATSAPP_NUMBER` set), so the link card hides WhatsApp. Unlike Telegram and Zalo (401 without their secret), an unset setting is not treated as a failed check (`whatsappConfigured()` in `config/env.js`; the error handler logs each such 503 like any 5xx);
 - *planned (§2.11.6):* each agent variable is optional and a missing one turns its feature off, as with KIE. Without `AGENT_URL` or `AGENT_SECRET`, Express never calls the agent service: questions in chat and in the drawer get the help text with the plain commands, receipts go to KIE whatever `RECEIPT_READER` says, and a Khác/Other draft gets no suggestion. `ASSISTANT_ENABLED` and `ASSISTANT_CHANNELS` only open or close the model gate (§4.11); pipeline skills answer either way. Without `CRON_SECRET`, `sameSecret()` fails every call, so `GET /cron/daily` answers 401, as a webhook does without its secret (§2.11 names no status for this);
-- *planned (§2.12.4):* mail is on only when both `GMAIL_USER` and `GMAIL_APP_PASSWORD` are set. Without them in development and test, the code is written to the server log (`[mail] signup code for a***@gmail.com: 123456`) instead of sent. Without them in production, `POST /auth/register` answers as today (201, logged in, no code) and `POST /auth/password/forgot` answers 503 `FEATURE_NOT_CONFIGURED`. What `register/verify`, `register/resend` and `password/reset` answer then is not stated in §2.12.
+- *built, T35 (§2.12.4):* mail is on only when both `GMAIL_USER` and `GMAIL_APP_PASSWORD` are set. Without them in development and test, `sendCode` writes the code to the server log (`[mail] signup code for a***@gmail.com: 123456`) instead of sending it. Without them in production, `sendCode` rejects and `canSendCodes()` is false. Nothing calls the mailer yet, so no endpoint changes. *Planned:* without them in production, `POST /auth/register` answers as today (201, logged in, no code) and `POST /auth/password/forgot` answers 503 `FEATURE_NOT_CONFIGURED`. What `register/verify`, `register/resend` and `password/reset` answer then is not stated in §2.12.
 
-An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required variables and the `APP_URL`, bot and KIE variables get harmless defaults, so the test suites run without `server/.env` (`MONGODB_DB` and the `SEED_*` variables stay unset).
+An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required variables and the `APP_URL`, bot and KIE variables get harmless defaults, so the test suites run without `server/.env` (`MONGODB_DB` and the `SEED_*` variables stay unset). `GMAIL_USER` and `GMAIL_APP_PASSWORD` get **no** default, because a default would turn mail on in every suite; the Vitest setup file (`test/helpers/no-gmail.js`) also deletes both from the environment before each test file.
 
 | Variable | Example / rule |
 |---|---|
@@ -66,8 +66,8 @@ An empty value (`KIE_URL=`) counts as unset. Under `NODE_ENV=test` the required 
 | `ASSISTANT_ENABLED` *(planned)* | `true` \| `false`, default `false`; the model gate's ceiling, and the runtime switch's value while `appSettings` has no row |
 | `ASSISTANT_CHANNELS` *(planned)* | comma list, default `web,telegram,zalo,whatsapp` |
 | `CRON_SECRET` *(planned)* | sent by Vercel Cron as `Authorization: Bearer …`; checked with `sameSecret()` |
-| `GMAIL_USER` *(planned, §2.12)* | the Gmail address that sends the codes |
-| `GMAIL_APP_PASSWORD` *(planned)* | a 16-character Google app password (2-Step Verification must be on); changing the Google password revokes it |
+| `GMAIL_USER` | optional e-mail address of the Gmail account that sends the codes (§2.12); a space or newline around it is dropped, and only whitespace counts as unset. Set only in the Vercel dashboard of both projects, never in `server/.env` (decision D8, docs/06 §6.14) |
+| `GMAIL_APP_PASSWORD` | optional; a 16-character Google app password (2-Step Verification must be on); every whitespace character is removed, so it can be pasted as Google shows it; changing the Google password revokes it. Same rule: dashboard only |
 | `KIE_URL` | `https://<tunnel-host>`, must be a URL |
 | `KIE_API_KEY` | shared secret sent as `X-KIE-Key` (see §4.8) |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | used by `npm run seed` and `npm run seed:test` only |
@@ -106,9 +106,9 @@ All paths are prefixed with `/api`. Bodies are JSON unless noted. 🔒 = needs J
 
 | Method | Path | Auth | Body / query | Success | Errors |
 |---|---|---|---|---|---|
-| POST | `/auth/register` | — | `{name, email, password, language?}` | **201** `{accessToken, user}` + cookie. *Planned (§2.12.2):* with mail on, **202** `{email: "a***@gmail.com", resendAfter: 60}`, no cookie and no token; the `emailCodes` row keeps the name, language and bcrypt hash, and the code is mailed (the send is awaited). Registering again while a code is live replaces them and counts as a send. With mail off in production, 201 as today | 400, 409 `EMAIL_TAKEN` (no mail), 429. *Planned:* 429 `RATE_LIMITED` also within 60 s of the last send or past 5 sends an hour (`details.retryAfter`, seconds) and from `mailRateLimit`; `EMAIL_SEND_FAILED` (503: Gmail refused; the row is deleted) |
-| POST | `/auth/register/verify` *(planned, §2.12.2)* | — | `{email, code}` | **201** `{accessToken, user}` + cookie, exactly as register today: the row is deleted, the user is created with the stored hash and `onUserRegistered()` seeds the wallet and categories | 400; `CODE_INVALID` (400, `details.attemptsLeft`); `CODE_EXPIRED` (400: no live code, or out of tries); 409 `EMAIL_TAKEN` (registered meanwhile) |
-| POST | `/auth/register/resend` *(planned, §2.12.2)* | — | `{email}` | **202** `{resendAfter: 60}`, the same whether or not a sign-up is pending; a new code replaces the old one | 400, 429 `RATE_LIMITED` (too early or over 5 an hour, `details.retryAfter`; or `mailRateLimit`) |
+| POST | `/auth/register` | — | `{name, email, password, language?}` | **201** `{accessToken, user}` + cookie. *Planned (§2.12.2):* with mail on, **202** `{email: "a***@gmail.com", resendAfter: 60, signupToken}`, no cookie and no session token; the `emailCodes` row keeps the name, language and bcrypt hash and a hash of the random `signupToken`, and the code is mailed (the send is awaited). Registering again while a code is live replaces them (the earlier `signupToken` stops matching, so the earlier tab's code answers `CODE_EXPIRED`) and counts as a send. With mail off in production, 201 as today | 400, 409 `EMAIL_TAKEN` (no mail), 429. *Planned:* 429 `RATE_LIMITED` also within 60 s of the last send or past 5 sends an hour (`details.retryAfter`, seconds) and from `mailRateLimit`; `EMAIL_SEND_FAILED` (503: Gmail refused; the row is deleted) |
+| POST | `/auth/register/verify` *(planned, §2.12.2)* | — | `{email, code, signupToken}` | **201** `{accessToken, user}` + cookie, exactly as register today: the row is deleted, the user is created with the stored hash and `onUserRegistered()` seeds the wallet and categories | 400; `CODE_INVALID` (400, `details.attemptsLeft`); `CODE_EXPIRED` (400: no live code, a `signupToken` that doesn't match, or out of tries); 409 `EMAIL_TAKEN` (registered meanwhile) |
+| POST | `/auth/register/resend` *(planned, §2.12.2)* | — | `{email}` | **202** `{resendAfter: 60}`, the same whether or not a sign-up is pending, and also when the mail fails to send (it never answers `EMAIL_SEND_FAILED`); a new code replaces the old one | 400, 429 `RATE_LIMITED` (too early or over 5 an hour, `details.retryAfter` when known; or `mailRateLimit`), 503 `FEATURE_NOT_CONFIGURED` (mail off) |
 | POST | `/auth/password/forgot` *(planned, §2.12.3)* | — | `{email}` | **202** `{resendAfter: 60}` always, whether or not the account exists. Only for an existing **active** user is the `reset` row upserted and the code sent, inside `waitUntil()`, so both answers are equally fast | 400, 429 `RATE_LIMITED`, 503 `FEATURE_NOT_CONFIGURED` (mail off in production) |
 | POST | `/auth/password/reset` *(planned, §2.12.3)* | — | `{email, code, newPassword}` (same rules as register: ≥ 8 characters, ≤ 72 bytes) | **204**: new hash set, then `revokeAllSessions(userId)` logs out every device. No auto-login | 400; `CODE_INVALID` (400); `CODE_EXPIRED` (400); 403 `ACCOUNT_LOCKED` (locked after the code was sent; the code is spent) |
 | POST | `/auth/login` | — | `{email, password}` | **200** `{accessToken, user}` + cookie | 400, 401 `INVALID_CREDENTIALS`, 403 `ACCOUNT_LOCKED`, 429 |
@@ -560,18 +560,25 @@ A7: when the parser fell back to Khác/Other, the draft offers the top 3 expense
 
 **Logs.** In Express and in the agent service, only the turn id, node and error class; never the question, notes, figures or tool arguments. vLLM request logging stays off.
 
-## 4.12 Email codes (planned, §2.12)
+## 4.12 Email codes (§2.12; the mailer is built, the rest is planned)
 
-None of this is built yet; docs/02 §2.12 is the spec. The endpoints are in §4.4, the codes and limits in §4.3, and the `emailCodes` collection in [03-database.md §3.8](03-database.md).
+**Built (T35): the mailer and the Gmail settings; nothing calls them yet.** The endpoints below, the `emailCodes` collection and the screens are planned; docs/02 §2.12 is the spec. The endpoints are in §4.4, the codes and limits in §4.3, and the `emailCodes` collection in [03-database.md §3.8](03-database.md).
 
-**Mail** (§2.12.1, §2.12.5). New server-only dependency `nodemailer`, one module `services/mail.js`:
+**Mail** (§2.12.1, §2.12.5). Server-only dependency `nodemailer` 10.6.1, one module `services/mail.js`:
 
 ```js
-sendCode({ to, purpose, code, language })   // purpose: 'signup' | 'reset'
+sendCode({ to, purpose, code, language })   // to: one plain address; purpose: 'signup' | 'reset'; code: a string of 6 digits
+canSendCodes()                              // can a code reach the user? false only in production without both Gmail settings
+maskEmail('an.nguyen@gmail.com')            // 'a***@gmail.com'
+setMailSender(deliver)                      // test seam, see below
 ```
 
 - Gmail SMTP on port 465 (`smtp.gmail.com`; Vercel blocks only port 25), logged in with `GMAIL_USER` and `GMAIL_APP_PASSWORD`. Free, about 500 emails a day.
 - From `"Sổ chi tiêu" <GMAIL_USER>`, in the user's language, plain text plus simple HTML. Subject "Mã xác nhận Sổ chi tiêu: 123456" / "Your Sổ chi tiêu code: 123456". The body says what the code is for, that it is valid for 10 minutes, and to ignore the email if the user didn't ask for it. No links, no images, no tracking.
+- **Modes** (read at call time): both settings set → SMTP, in every mode; not both, outside production → the log line `[mail] signup code for a***@gmail.com: 123456` (or `reset`); not both, in production → codes are off, `sendCode` rejects without logging the code, and callers ask `canSendCodes()` first.
+- **SMTP:** `smtp.gmail.com`, port 465, TLS, with 15 s connection (DNS included), greeting and socket timeouts. A bad `purpose`, a code that is not 6 digits, or a `to` that is not one plain address is refused before anything is sent (the code goes into the HTML as it is, and `to` into a header: a CR LF, a comma or a name in it would add a header or a second recipient). Any `language` but `en` is Vietnamese.
+- **Never leaked:** with mail on, the code and the full address are not logged. A failed send logs only `[mail] send failed for a***@gmail.com: <error code> <SMTP reply code>` and rejects with a plain `Error('the email could not be sent')` that has no `cause` (the nodemailer error and its message can repeat the address). The caller maps that rejection to `EMAIL_SEND_FAILED`; that code is not in the server yet.
+- **Test seam:** `setMailSender(deliver)` replaces delivery in every mode, also with `GMAIL_*` unset; `deliver(request, message)` gets `{ to, purpose, code, language }` and the built nodemailer message. Called with nothing it restores the real delivery. Only test code calls it (a test checks that nothing in `server/src` does); this is how the E2E mail stub will read codes.
 - Register awaits the send (a refusal → `EMAIL_SEND_FAILED` (503) and the row is deleted). `password/forgot` sends inside `waitUntil()`, so it answers as fast for an unknown address as for a real one.
 - Where the code logic lives (`services/emailCodes.js` or inside `services/auth.js`) is left to the builder.
 
@@ -579,4 +586,4 @@ sendCode({ to, purpose, code, language })   // purpose: 'signup' | 'reset'
 - *Sign-up* (§2.12.2): register → 202 and a mailed code → `register/verify` → 201 and logged in, the same answer as today's register. `onUserRegistered()` runs only then.
 - *Forgot password* (§2.12.3): `password/forgot` → 202 → `password/reset` with the code and a new password → 204 and `revokeAllSessions(userId)`, so every device, including a thief's, is logged out. A locked user gets no code.
 
-**Without mail** (§2.12.4): see §4.2. Unit tests replace `services/mail.js` and read the code from the mock. The Playwright server (`e2e-server.js`) uses a test-only mail stub, like `bot-api-stub.js`, which never loads in production. If Google stops the account sending, removing the two secrets and redeploying turns sign-up back to today's flow until it recovers.
+**Without mail** (§2.12.4): see §4.2. Unit tests replace `services/mail.js` and read the code from the mock. The Playwright server (`e2e-server.js`) uses a test-only mail stub, like `bot-api-stub.js`, which never loads in production. If Google stops the account sending, switching mail off (delete both variables in the Vercel dashboard, or `tools/set-secret.sh --remove GMAIL_USER GMAIL_APP_PASSWORD`; docs/06 §6.14) and redeploying turns sign-up back to today's flow until it recovers.

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '@/app/api';
 import { useAppDispatch } from '@/app/hooks';
 import { applyLanguage, applyThemeMode } from '@/app/uiSlice';
-import type { AuthResponse, RegisterInput, User } from '@/types/api';
+import type { AuthResponse, RegisterInput, SignupPending, User, VerifySignupInput } from '@/types/api';
 import { forgetClaimToken } from './claimToken';
+import { clearPendingSignup } from '@/features/auth/pendingSignup';
 import { onSessionChange, postAuth, refreshSession, setSession } from './session';
 import { AuthContext, type AuthContextValue, type AuthStatus } from './useAuth';
 
@@ -42,10 +43,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       ...state,
-      login: async (email, password) => setSession(await postAuth<AuthResponse>('login', { email, password })),
-      register: async (input: RegisterInput) => setSession(await postAuth<AuthResponse>('register', input)),
+      login: async (email, password) => {
+        setSession(await postAuth<AuthResponse>('login', { email, password }));
+        clearPendingSignup(); // an earlier sign-up waiting for its code must not outlive this login
+      },
+      register: async (input: RegisterInput) => {
+        const answer = await postAuth<AuthResponse | SignupPending>('register', input);
+        if (!('accessToken' in answer)) return answer; // 202: the code was emailed, nobody is logged in yet
+        setSession(answer);
+        clearPendingSignup();
+        return null;
+      },
+      verifySignup: async (input: VerifySignupInput) => setSession(await postAuth<AuthResponse>('register/verify', input)),
       logout: async () => {
         await postAuth('logout').catch(() => undefined); // log out locally even if the server is unreachable
+        clearPendingSignup(); // the next person in this tab must not see this sign-up's address
         forgetClaimToken(); // the next person on this browser must not get a chat link this one left waiting
         setSession(null);
       },

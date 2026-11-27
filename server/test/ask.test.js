@@ -116,6 +116,29 @@ describe('TC-F14-24 classify: a row per rule of docs/02 §2.11.1, in order', () 
   });
 });
 
+// BUG-044: "/hoi …" is the question command of the chat bots (docs/02 §2.11.1 row 3); QuickAdd and the parse route only run classify.
+describe('TC-F14-57 classify: a text whose first word is the /hoi command is a question', () => {
+  test.each([
+    ['/hoi phở 45k', 'question'],
+    ['/hỏi phở 45k', 'question'],
+    ['/Hoi phở 45k', 'question'],
+    ['/HỎI phở 45k', 'question'],
+    ['/ho\u0309i phở 45k', 'question'], // "ỏ" as o + combining hook (NFD)
+    ['  /hoi  tháng này ăn uống hết bao nhiêu', 'question'],
+    ['/hoi', 'question'],
+    ['/hoi@my_bot phở 45k', 'question'],
+    ['/hoi phở 45k\ngrab 32k', 'question'], // the router takes "/hoi" before anything else, whatever follows
+    ['/hoiphở 45k', 'capture'], // one word, not the command
+    ['/hoi_phở 45k', 'capture'],
+    ['hoi phở 45k', 'capture'], // no slash
+    ['phở 45k /hoi', 'capture'], // not the first word
+    ['/today', 'capture'], // another command is not a question
+  ])('TC-F14-57 "%s" → %s', (text, answer) => {
+    expect(classify(text)).toBe(answer);
+    if (answer === 'question') expect(classifyWithRule(text, { followUp: true }).answer).toBe('question');
+  });
+});
+
 // Every message the parser tests read as money, with no follow-up (docs/02 §2.11.8 "capture is unchanged").
 describe('TC-F14-24 classify: every text the parser reads as an expense or income is still a capture', () => {
   test.each([
