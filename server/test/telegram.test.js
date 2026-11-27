@@ -1034,3 +1034,27 @@ test('TC-F14-23 Telegram is not counted and never silenced by the quota guard, e
   expect(textOf((await say('ok'))[0])).toMatch(/Đã lưu.*45\.000/);
   expect(await ChannelUsage.find().lean()).toMatchObject([{ platform: 'zalo', sent: 3000 }]); // nothing counted for Telegram
 });
+
+// docs/02 §2.11.2 A4 on Telegram: the ✅ button records the confirm, so /sua and "hoàn tác" reach it like a typed "ok".
+test('TC-F14-81 TC-F14-82 Telegram: after a ✅ press, /sua edits the transaction and "hoàn tác" / "khôi phục" delete and restore it; /sua with a draft waiting keeps its buttons', async () => {
+  const { user } = await linkedUser();
+  await say('grab 32k');
+  const draft = await Transaction.findOne();
+  await press(`c:${draft.id}`);
+  expect(await ChatLink.findOne()).toMatchObject({ lastConfirmedId: draft._id, lastConfirmedAt: expect.any(Date) });
+
+  const fixed = await say('/sua 40k hôm qua');
+  expect(textOf(fixed[0])).toMatch(/^✏️ Đã sửa: Chi 40\.000/);
+  expect(await Transaction.findById(draft.id)).toMatchObject({ amount: 40_000, status: 'confirmed' });
+
+  expect(textOf((await say('hoàn tác'))[0])).toMatch(/Đã xoá.*40\.000/);
+  expect((await Transaction.findById(draft.id)).deletedAt).toBeInstanceOf(Date);
+  expect(textOf((await say('khôi phục'))[0])).toMatch(/Đã khôi phục.*40\.000/);
+  expect((await Transaction.findById(draft.id)).deletedAt).toBeNull();
+
+  await say('phở 45k');
+  const waiting = await Transaction.findOne({ status: 'draft' });
+  const replies = await say('/sua 50k');
+  expect(replies[0].body.reply_markup.inline_keyboard[0][0].callback_data).toBe(`c:${waiting.id}`);
+  expect(await Transaction.find({ userId: user.id }).sort({ _id: 1 }).lean()).toMatchObject([{ amount: 40_000 }, { amount: 50_000, status: 'draft' }]);
+});

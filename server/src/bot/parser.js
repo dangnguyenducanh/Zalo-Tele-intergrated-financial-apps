@@ -56,6 +56,26 @@ export function readLine(text, { categories = [], wallets = [], defaultWalletId,
   return { type, amount: split.amount, categoryId: category?._id ?? null, walletId, occurredAt, note: split.note, guessed: found.guessed };
 }
 
+// "/sua mm hôm qua 50k phim" → { changes, guessed }: the wallet, date, amount and category the text names, found with the
+// parser's own functions, and only those. `categories` are the ones the fixed transaction may use (its type). `changes` is {}
+// when the text names none of them; `guessed` is true for a bare number read as thousands.
+export function readFixes(text, { categories = [], wallets = [], now = new Date() } = {}) {
+  const words = wordsOf(text);
+  const keys = words.map(toKey);
+  const used = new Set();
+  const changes = {};
+  const occurredAt = findDate(keys, used, now);
+  if (used.size > 0) changes.occurredAt = occurredAt;
+  const walletId = findWallet(keys, used, wallets);
+  if (walletId) changes.walletId = walletId;
+  const found = findAmount(keys, used, findPeriod(words).indexes);
+  if (found) changes.amount = found.value;
+  const rest = keys.filter((_, i) => !used.has(i));
+  const category = bestCategory(categories, ` ${rest.join(' ').replace(/[^a-z0-9]+/g, ' ').trim()} `);
+  if (category) changes.categoryId = category._id;
+  return { changes, guessed: Boolean(found?.guessed) };
+}
+
 // "chia 4" → 4: the words "chia" and a whole number from 2 to 50 are used up, so the N is never an amount
 // ("chia 1" and "chia 51" are not a split and stay in the note). null when there is no such pair.
 function findSplit(keys, used) {

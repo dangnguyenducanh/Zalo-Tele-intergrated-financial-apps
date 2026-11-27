@@ -10,17 +10,17 @@ import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
 import { maySend } from '../services/channelUsage.js';
 import { createClaimToken, redeemLinkCode } from '../services/chatLinks.js';
-import { listBudgets } from '../services/budgets.js';
+import { budgetWarning, listBudgets } from '../services/budgets.js';
 import { draftHints } from '../services/draftHints.js';
 import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
-import { confirmTransaction, parseTransactions, updateTransaction } from '../services/transactions.js';
+import { confirmTransaction, deleteTransaction, parseTransactions, restoreTransaction, updateTransaction } from '../services/transactions.js';
 import { updateMe } from '../services/users.js';
 import { AppError } from '../utils/AppError.js';
 import { normalize } from '../utils/normalize.js';
 import { monthKey, vnParts } from '../utils/vnTime.js';
 import { classify } from './ask.js';
-import { loneSplit, splitBill } from './parser.js';
+import { loneSplit, readFixes, splitBill } from './parser.js';
 import en from './messages.en.js';
 import vi from './messages.vi.js';
 
@@ -79,7 +79,7 @@ function readCommand(text) {
 // Without a link, a valid "/start CODE" or "/link CODE" links the chat; anything else gets a claim link, the only
 // thing ever stored for an unlinked chat (no message text, no transaction).
 // For a linked, active chat the first match wins, in the order of docs/02 §2.11.1: a photo, "/hoi", any other command,
-// "ok" / "huy" / a lone "chia N" (reserved words), then classify(): a question or a capture. A question never reaches createDrafts.
+// "ok" / "huy" / "hoàn tác" / "undo" / "khôi phục" / a lone "chia N" (reserved words), then classify(): a question or a capture. A question never reaches createDrafts.
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
   const [command, arg] = readCommand(message.text);
@@ -90,9 +90,12 @@ export async function handleMessage(adapter, message) {
   if (user.status === 'locked') return reply(adapter, message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
   if (message.photo) return readReceipt(adapter, link, user.language, message);
   if (command === 'hoi') return answerQuestion(adapter, message.chatId, user.language);
+  if (command === 'sua') return fixLast(adapter, link, user.language, message.chatId, arg);
   if (command) return reply(adapter, message.chatId, await runCommand(link, user, command, arg));
   const word = normalize(message.text);
   if (word === 'ok' || word === 'huy') return reply(adapter, message.chatId, await answerPending(link, word), 'capture');
+  if (word === 'hoan tac' || word === 'undo') return reply(adapter, message.chatId, await undoLast(link), 'capture');
+  if (word === 'khoi phuc') return reply(adapter, message.chatId, await restoreLast(link), 'capture');
   const people = loneSplit(message.text); // before classify, so a follow-up never reads "chia 3" as a question (D11)
   if (people) return splitPending(adapter, link, user.language, message.chatId, people);
   // followUp is false until the assistant's answers are remembered per chat (T50).
@@ -306,9 +309,67 @@ async function confirm(link, transactionId) {
     throw err;
   }
   await clearPending(link, transactionId);
+  await ChatLink.updateOne({ _id: link._id }, { lastConfirmedId: result.transaction._id, lastConfirmedAt: new Date() }); // for "/sua" and "hoàn tác"
   const lines = [m.saved(await describe(result.transaction, m))];
   if (result.budgetWarning) lines.push(await warningLine(result.budgetWarning, m));
   return { ok: true, text: lines.join('\n') };
+}
+
+// What "/sua" and "hoàn tác" may touch: a transaction this chat confirmed in the last 15 minutes (docs/02 §2.11.2, A4).
+const FIX_WINDOW_MS = 15 * 60 * 1000;
+
+// The waiting draft (the same one "ok" / "huy" act on), else this chat's own last confirm while it is under 15 minutes
+// old, still saved and not deleted. null when there is neither. Always this link's own user: the stored id is
+// only a pointer, and the query adds userId.
+async function fixTarget(link) {
+  const draft = await pendingDraft(link);
+  if (draft) return draft;
+  if (!link.lastConfirmedId || Date.now() - link.lastConfirmedAt > FIX_WINDOW_MS) return null;
+  return Transaction.findOne({ _id: link.lastConfirmedId, userId: link.userId, status: 'confirmed', deletedAt: null });
+}
+
+// "/sua <changes>": the amount, wallet alias, date or category keyword in the text replace those of the target (see
+// fixTarget); the note stays. A draft is sent again with its buttons, like a Zalo correction. A saved transaction gets one
+// line, and after an amount change on an expense the budget warning runs again. The same service as the web edit.
+async function fixLast(adapter, link, language, chatId, text) {
+  const m = messagesFor(language);
+  const target = await fixTarget(link);
+  if (!target) return reply(adapter, chatId, m.nothingToFix, 'capture');
+  const [categories, wallets] = await Promise.all([
+    Category.find({ userId: link.userId, deletedAt: null, type: target.type }).lean(),
+    Wallet.find({ userId: link.userId, deletedAt: null, archived: false }).lean(),
+  ]);
+  const { changes, guessed } = readFixes(text, { categories, wallets });
+  if (Object.keys(changes).length === 0) return reply(adapter, chatId, m.help, 'capture'); // nothing recognised: no change
+  if (target.status === 'draft') return correctDraft(adapter, link, language, chatId, target, changes, guessed);
+  const updated = await updateTransaction(link.userId, target._id, changes);
+  const lines = [m.fixed(await describe(updated, m))];
+  const warning = changes.amount && updated.type === 'expense' && (await budgetWarning(link.userId, updated.categoryId, monthKey(updated.occurredAt)));
+  if (warning) lines.push(await warningLine(warning, m));
+  return reply(adapter, chatId, lines.join('\n'), 'capture');
+}
+
+// "hoàn tác" / "undo": the last transaction this chat confirmed is soft-deleted, as the web's undo snackbar does. The pointer stays,
+// so "khôi phục" can bring it back; once it is deleted a second "hoàn tác" finds nothing.
+async function undoLast(link) {
+  const m = await messagesOf(link);
+  const last = link.lastConfirmedId && (await Transaction.findOne({ _id: link.lastConfirmedId, userId: link.userId, deletedAt: null }));
+  if (!last) return m.nothingToUndo;
+  await deleteTransaction(link.userId, last._id);
+  return m.undone(await describe(last, m));
+}
+
+// "khôi phục": the last transaction this chat confirmed, when it was undone, is back. Refused (nothing to restore) when it
+// is not deleted, or when its wallet or category was deleted since.
+async function restoreLast(link) {
+  const m = await messagesOf(link);
+  try {
+    if (!link.lastConfirmedId) return m.nothingToRestore;
+    return m.restored(await describe(await restoreTransaction(link.userId, link.lastConfirmedId), m));
+  } catch (err) {
+    if (err instanceof AppError) return m.nothingToRestore;
+    throw err;
+  }
 }
 
 // Discard = soft delete, and only of a draft: a saved transaction is changed on the web.
