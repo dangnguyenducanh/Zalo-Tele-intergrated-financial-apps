@@ -1,14 +1,16 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
-import { beforeEach, expect, test } from 'vitest';
-import { CODE, fake, LAN, server } from '@/test/fakeApi';
+import { act } from '@testing-library/react';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { CODE, fake, LAN, PASSWORD, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 import { readPendingSignup, savePendingSignup, type PendingSignup } from './pendingSignup';
 
 // docs/07 §7.10.4: the Register page's 201 / 202 / 503 answers and every state of /verify-email (API stubbed by MSW).
 
 beforeEach(() => sessionStorage.clear());
+afterEach(() => vi.useRealTimers());
 
 const PENDING: PendingSignup = { email: 'minh@example.com', maskedEmail: 'm***@example.com', name: 'Minh', signupToken: 'token-1', resendAt: 0 };
 
@@ -165,6 +167,7 @@ test('TC-F1-39 an expired code offers Resend and a register-again link; a taken 
   await user.type(box, '333333');
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Email này đã được dùng cho một tài khoản khác.'));
   expect(screen.getByRole('link', { name: 'Đến trang đăng nhập' })).toHaveAttribute('href', '/login');
+  expect(readPendingSignup()).toBeNull(); // docs/05 §5.11.2: the entry is removed
 });
 
 test('TC-F1-39 a network error keeps the code and Confirm retries it', async () => {
@@ -308,4 +311,45 @@ test('TC-F1-42 switching the language after a wrong code re-translates the messa
 
   expect(await screen.findByText('Wrong code. 4 tries left.')).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: 'Confirmation code' })).toBeInTheDocument();
+});
+
+test('TC-F1-40 Resend turns back on when the 60 s countdown ends, then sends', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  seedPending({ resendAt: Date.now() + 60_000 });
+  renderApp('/verify-email');
+
+  await screen.findByRole('textbox', { name: 'Mã xác nhận' });
+  expect(resendButton()).toBeDisabled();
+  await act(() => vi.advanceTimersByTimeAsync(61_000));
+  expect(resendButton()).toBeEnabled();
+  expect(resendButton()).toHaveTextContent(/^Gửi lại mã$/);
+  await user.click(resendButton());
+  await waitFor(() => expect(fake.resendBodies).toEqual([{ email: 'minh@example.com' }]));
+});
+
+test('TC-F1-40 Resend turns back on when the 429 retryAfter 30 s countdown ends', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  seedPending();
+  server.use(http.post('*/api/auth/register/resend', () => rateLimited({ retryAfter: 30 })));
+  renderApp('/verify-email');
+
+  await user.click(await screen.findByRole('button', { name: 'Gửi lại mã' }));
+  await waitFor(() => expect(resendButton()).toBeDisabled());
+  await act(() => vi.advanceTimersByTimeAsync(31_000));
+  expect(resendButton()).toBeEnabled();
+});
+
+test('TC-F1-41 logging in drops a pending sign-up left in this tab (logout leaves no state for the next user)', async () => {
+  const user = userEvent.setup();
+  seedPending();
+  renderApp('/login');
+
+  await user.type(await screen.findByRole('textbox', { name: 'Email' }), LAN.email);
+  await user.type(screen.getByLabelText(/^Mật khẩu/), PASSWORD);
+  await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+  await screen.findByRole('heading', { level: 1, name: /^Xin chào/ });
+  expect(readPendingSignup()).toBeNull();
 });
