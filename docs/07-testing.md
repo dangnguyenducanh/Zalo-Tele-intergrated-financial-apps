@@ -11,7 +11,9 @@ How we prove that every feature in [02-features.md](02-features.md) works, find 
 | **API integration** | Vitest + Supertest + mongodb-memory-server (a real MongoDB in memory) | Every REST endpoint: methods, status codes, validation, auth, ownership, DB constraints | Every commit (~30 s) | The backend contract in [04-backend.md](04-backend.md) holds against a real database |
 | **Webhook contract** | Vitest + Supertest, recorded Telegram/Zalo payloads, outbound `fetch` mocked with MSW | Secret checks, linking, parse → draft → confirm, idempotency, KIE errors (WhatsApp: signed payloads and a stubbed Graph API, §7.8.4; assistant replies through a stubbed agent API and the daily cron planned, §7.9.4) | Every commit | The bots work without a phone, and the exact JSON both platforms send is handled |
 | **Component** | Vitest + React Testing Library + jsdom + MSW | Forms, QuickAdd, theme/language switch, error states | Every commit | Screens render loading/empty/error/data states and validate input |
-| **KIE contract** | Vitest, real KIE container, sample receipts from the KIE repo (`data/test_degraded/*.jpg`) | `/analyze` response → draft mapping | Before demo, after KIE changes (until KIE is retired: the receipt eval, §7.9.6, decides when `RECEIPT_READER` flips to `qwen`) | Our mapping works on real OCR output, not just mocks |
+| **Reader contract** | Vitest, the running receipt service on `KIE_URL` (Qwen, or KIE after a rollback), sample receipts from the KIE repo (`data/test_degraded/*.jpg`) | `/analyze` response → draft mapping | Before switching the reader, before demo, after reader changes | Our mapping works on a real reader's output, not just mocks |
+| **Receipt service** | pytest with a fake vLLM (`agent/receipts/tests/`, no GPU, no network; synthetic content only) | The payable-total picker on recorded line copies, the printed-total check, the HTTP contract (key, upload errors, 200 shape, model down) | Every commit (CI) | The Qwen reader never takes a subtotal, VAT, ID or invented total, and speaks KIE's contract |
+| **Receipt service, live** | The real Qwen3.5-2B on the GPU host: the service on a free port, 16 test receipts (git-ignored) and the reader contract | Payable totals and speed with the real model | By hand before a switch and after a model or prompt change | No wrong total on any receipt; at least 12 of the 16 photos read; torn receipts give no total; 95 % of reads finish within 15 s |
 | **End-to-end (E2E)** | Playwright (TypeScript), Chromium; **video + trace on** | Full user journeys in a real browser against local stack and the Vercel deployment | Before each deploy, run locally (CI runs only the Vitest suites, see [06-deployment.md](06-deployment.md)) | Frontend + API + DB work together the way a customer uses them |
 | **Manual exploratory** | Claude in Chrome on your browser (recorded GIF, console + network capture), Vercel runtime logs, Atlas Data Explorer, real phones for Telegram/Zalo | Charters MT-01…MT-08 (§7.4); planned charters in §7.8.5, §7.9.9 and §7.10.6 | Before demo, after big changes | Real-world use: real chat apps, real receipts, real devices |
 | **Agent service** *(planned, §2.11)* | pytest with a fake chat model and a fake embedder (no GPU), the compiled LangGraph graph, FastAPI `TestClient`, a throwaway local `mongod` | The Python agent service: date rules, skill ranking, the guard, `check_total`, the typed query, caps, every graph path, the agent API (§7.9.2, §7.9.3) | Every commit once built | The agent's rules and paths work without a model or a GPU |
@@ -37,7 +39,7 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 ## 7.3 Test catalogue
 
-The full list (**239 cases**: 231 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
+The full list (**259 cases**: 251 automated or semi-automated + 8 manual charters, each with steps, expected result and **what the test proves**) lives in [`docs/testing/test-cases.json`](testing/test-cases.json) and the **Test Cases** sheet of the Excel report. Summary:
 
 | Feature | Cases | Key cases (what they prove) |
 |---|---|---|
@@ -50,7 +52,7 @@ The full list (**239 cases**: 231 automated or semi-automated + 8 manual charter
 | F7 Bot linking | 23 | TC-F7-02 link codes are single-use and expire; TC-F7-03 one chat account → one web account; TC-F7-18 a claim link works once, for the logged-in user; TC-F7-23 linking from the chat, end to end |
 | F8 Bot capture | 23 | TC-F8-01 parser table; TC-F8-03 bad webhook secret rejected; TC-F8-05 duplicate delivery → one draft; TC-F8-08 Zalo photo → KIE → draft; TC-F8-27 a WhatsApp POST needs a valid signature; TC-F8-37 no phone number is stored or returned |
 | F9 Bot inbox | 6 | TC-F9-01 edit + confirm a draft from the web |
-| F10 Receipt upload | 6 | TC-F10-01 real KIE output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit |
+| F10 Receipt upload | 16 | TC-F10-01 real reader output maps to the right amount; TC-F10-03 phone photo resized under Vercel's 4.5 MB limit; TC-F10-26 a torn receipt gives no total, never an invented one; TC-F10-32 the Qwen service live |
 | F11 Admin | 9 | TC-F11-01 non-admin gets 403; TC-F11-03 the last admin can't lock or demote themselves |
 | F12 Preferences | 7 | TC-F12-01 theme persists; TC-F12-02 language changes UI, money format and bot replies |
 | F13 Quick add | 10 | TC-F13-02 `phở 45k` + Enter saves on the web, no bot needed; TC-F13-08 a question answers `question: true` and never drafts; TC-F13-09 QuickAdd shows the question notice and saves nothing; TC-F13-10 the notice at 375 px, in dark mode and with axe |
@@ -93,7 +95,7 @@ Playwright E2E runs also record automatically (`video: 'on'`, `trace: 'retain-on
 | MT-01 | First-time customer on the web only: register → quick add `phở 45k`, `grab 32k hôm qua`, `+lương 15tr` → dashboard → edit → delete + undo | numbers on cards match the DB; no console errors; all API calls 2xx | A customer can track money on the website without any bot |
 | MT-02 | Telegram: generate link code → tap deep link on phone → send `phở 45k` → ✅ → `/today` | draft then confirmed in DB; dashboard updates; webhook logs show 200 within 1 s | Telegram linking and capture work end to end |
 | MT-03 | Zalo: `/link CODE` → `grab 32k` → `ok` → `huy` on a second draft | `pendingTransactionId` used; discarded draft soft-deleted | Zalo flow without buttons works |
-| MT-04 | Receipt: photo of a real receipt to Telegram, Zalo and web upload | KIE timing in logs; total matches the receipt; failure message when the tunnel is stopped | KIE integration and its fallback message |
+| MT-04 | Receipt: photo of a real receipt to Telegram, Zalo and web upload | Reader timing in its log; total matches the receipt; failure message when the tunnel is stopped | Receipt reader integration and its fallback message |
 | MT-05 | Phone layout + dark mode + English: whole app at 375 px, toggle theme and language | no horizontal scroll; charts readable in dark; all strings translated | Responsive + theming + i18n requirement |
 | MT-06 | Admin: lock userB, edit a default category, register userC | userB logged out everywhere; userC gets the new category | Roles and permissions |
 | MT-07 | Security probing as userB: open userA's transaction URL, replay an old refresh cookie, send a webhook without the secret | 404 / 401 / 401; nothing changed in DB | Ownership isolation, token reuse detection, webhook auth |
@@ -161,8 +163,9 @@ npm run typecheck                    # client tsc --noEmit
 npm test                             # unit + API + webhook + component (Vitest), writes test-results/{server,client}-vitest.xml
 npm run test:agent                   # the agent service's pytest (Python 3.12, agent/.venv), writes test-results/agent-pytest.xml
 npm run test:e2e                     # Playwright, writes test-results/e2e.xml + videos
+python3 -m pytest agent/receipts --junitxml=test-results/receipts-pytest.xml   # receipt service, fake model (CI runs this)
 node --test tools/bot-e2e/bot-e2e.test.mjs   # TC-NF-15, TC-NF-20: the bot-e2e tool's --help, bad options and missing login (not part of npm test)
-npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml
+npm run report -- --junit test-results/server-vitest.xml --junit test-results/client-vitest.xml --junit test-results/e2e.xml --junit test-results/receipts-pytest.xml
 ```
 
 The report tool on its own:
@@ -170,8 +173,17 @@ The report tool on its own:
 ```bash
 npm install --prefix tools/test-report          # once (exceljs 4.4.0)
 node tools/test-report/junit.check.mjs          # self-check of the JUnit reader
-node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (239 cases, last results from results.json)
+node tools/test-report/build-report.mjs         # → docs/testing/test-report.xlsx (259 cases, last results from results.json)
 ```
+
+**Receipt service tests without installing Python packages** (the GPU host has the vLLM image, which has them all; `--network none` proves nothing real is called):
+
+```bash
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$PWD/agent/receipts":/app:ro -w /app -e PYTHONDONTWRITEBYTECODE=1 \
+  --entrypoint python3 vllm/vllm-openai@sha256:c1c9f6fd5c109ba7f0546a59f5b2f15fb87f64c77782e90a27b648b42a8e67c3 -m pytest -p no:cacheprovider
+```
+
+pytest function names cannot hold `TC-F10-26`, so the first docstring line of a test starts with the case ID, and `agent/receipts/conftest.py` reports the test under that line. **Live** (the service on a free port, [06-deployment.md §6.6](06-deployment.md#66-receipt-service-qwen-kie-kept-as-the-rollback)): the reader contract with `KIE_URL` pointed at it, and the 16 test receipts.
 
 ## 7.8 One-tap linking and WhatsApp (§2.10)
 
@@ -439,7 +451,7 @@ cases:
 - **Gates (one miss blocks the deploy):** skill accuracy ≥ 90 % (hit@1); every number exact (100 %); 0 guard leaks (no model-written digit reaches an answer); write safety 100 % (no app collection changes; C3 only makes `pendingActions` rows). **Reported:** hit@3, MRR, rewrite accuracy, argument accuracy, follow-up accuracy, p50/p95 latency against `budget_ms`, model calls per question.
 - Grow the set from real `agentTurns` rows: a misrouted question becomes a new case, with its numbers worked out by the oracle.
 
-**Receipt eval** (`python -m agent.eval receipts`).
+**Receipt eval** (`python -m agent.eval receipts`). *Since card T79 Qwen already reads receipts behind `KIE_URL` (§7.1, Receipt service); this eval is the older plan for the agent service's reader.*
 - **Set:** the 5 MC-OCR receipts in `server/test/fixtures/receipts/` plus at least 25 more real receipts collected for the eval (`agent/eval/receipts/`, git-ignored if they show personal data), each with its true payable total, merchant and date in a labels file.
 - **Run:** every receipt through Qwen (`/v1/receipt`) and through KIE (`/analyze`), side by side.
 - **Report:** total exact-match rate, merchant and date match, `NO_TOTAL` rate, wrong-total rate (a total given but wrong is worse than `NO_TOTAL`), ms p50/p95, per reader.
