@@ -22,6 +22,8 @@ Versions to pin (npm, 2026-11-20): vitest 5.1.1, @testing-library/react 16.3.3, 
 
 **Naming rule:** every automated test starts with its case ID, e.g. `test('TC-F1-05 refresh rotates token and detects reuse', …)`. The report tool matches results back to the catalogue by that ID.
 
+**Lazy routes in client tests:** `client/src/test/renderApp.tsx` preloads every lazy route when the file is imported (`preloadRoutes`, TC-NF-24), so no test loads a page's code under the 1 s `findBy*` timer; a new lazy route needs no extra wait in its tests.
+
 ## 7.2 Environments and test data
 
 | Env | Web/API | Database | Bots | Used for |
