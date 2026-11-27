@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
-import { createCategory, deleteCategory, listCategories, updateCategory } from '../services/categories.js';
+import { KEYWORD_MAX_COUNT, KEYWORD_MAX_LENGTH, createCategory, deleteCategory, listCategories, updateCategory } from '../services/categories.js';
 import { normalize } from '../utils/normalize.js';
 
 const router = Router();
@@ -9,8 +9,8 @@ router.use(requireAuth);
 
 // Bot keywords (and wallet aliases) are stored the way the parser compares them: "Phở Bò" → "pho bo", no duplicates.
 export const keywordList = z
-  .array(z.string().max(40))
-  .max(50)
+  .array(z.string().max(KEYWORD_MAX_LENGTH))
+  .max(KEYWORD_MAX_COUNT)
   .transform((words) => [...new Set(words.map(normalize).filter(Boolean))]);
 export const uiText = z.string().trim().max(40); // icon name or colour, only used by the UI
 

@@ -12,7 +12,8 @@ import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
 import { User } from '../src/models/User.js';
-import { topExpenseCategories } from '../src/services/categories.js';
+import { handleButton } from '../src/bot/core.js';
+import { learnKeyword, topExpenseCategories } from '../src/services/categories.js';
 import telegramFixtures from './fixtures/telegram-updates.json' with { type: 'json' };
 import zaloFixtures from './fixtures/zalo-events.json' with { type: 'json' };
 import { registerUser, resetLoginLimit } from './helpers/auth.js';
@@ -281,4 +282,29 @@ test('TC-F14-89 only an expense draft in Khác is offered categories: not one th
   const [income] = await tgSay('+nhận 100k');
   expect(buttonsOf(income).filter((b) => b.callback_data.startsWith('k:'))).toEqual([]);
   expect(textOf(income)).not.toContain(viText.offerTap);
+});
+
+test('TC-F14-87 a first word longer than the Categories page allows (40 characters) is not learned, so the category can still be edited on the web', async () => {
+  const { me, user, food } = await setup();
+  expect(await learnKeyword(user.id, food.id, `${'a'.repeat(45)} 50k`)).toBeNull();
+  const fresh = await keywordsOf(food.id);
+  const saved = await me.patch(`/categories/${food.id}`, { name: 'Renamed', keywords: fresh }); // what the page sends back
+  expect(saved.status).toBe(200);
+  expect(await learnKeyword(user.id, food.id, `${'b'.repeat(40)} 50k`)).toBe('b'.repeat(40)); // exactly the limit still counts
+});
+
+test('TC-F14-88 two category taps at once on one draft: one wins, the other is refused, and only the winner learns the word', async () => {
+  const { food, transport } = await setup();
+  await tgSay('lẩu 300k');
+  const [draft] = await Transaction.find().lean();
+  const tap = (category) => handleButton('telegram', String(TG_CHAT), 'learn', String(draft._id), category.id);
+  const results = await Promise.all([tap(food), tap(transport)]);
+
+  expect(results.map((r) => r.ok).sort()).toEqual([false, true]);
+  expect(results.find((r) => !r.ok).text).toBe(viText.hasCategory);
+  const winner = results.findIndex((r) => r.ok) === 0 ? food : transport;
+  const loser = winner === food ? transport : food;
+  expect(String((await Transaction.findById(draft._id).lean()).categoryId)).toBe(winner.id);
+  expect(await keywordsOf(winner.id)).toContain('lau');
+  expect(await keywordsOf(loser.id)).not.toContain('lau');
 });

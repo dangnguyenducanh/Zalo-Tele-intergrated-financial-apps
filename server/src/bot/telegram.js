@@ -32,7 +32,7 @@ export const telegram = {
   platform: 'telegram',
   categoryOffer: 'tap', // a Khác/Other draft offers its categories as buttons (A7)
   sendText: (chatId, text) => callApi('sendMessage', { chat_id: chatId, text }),
-  // The draft with ✅ / ❌ buttons, and for a draft in Khác/Other a button per offered category: "k:<draft>:<category>" (52 bytes).
+  // The draft with ✅ / ❌ buttons, and for a draft in Khác/Other a button per offered category: "k:<draft>:<category>" (51 bytes).
   sendDraft(chatId, draft, language) {
     const offered = draft.offers?.length > 0 ? [draft.offers.map(({ id, name }) => ({ text: name, callback_data: `k:${draft.id}:${id}` }))] : [];
     return callApi('sendMessage', { chat_id: chatId, text: draft.text, reply_markup: { inline_keyboard: [draftRow(draft.id, language), ...offered] } });

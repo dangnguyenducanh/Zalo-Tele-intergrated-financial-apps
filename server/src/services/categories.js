@@ -85,7 +85,9 @@ export async function seedCategoryTemplates() {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const KEYWORD_MAX = 50; // the same ceiling as the Categories page (routes/categories.js)
+// One limit at every entry point: the Categories page (routes/categories.js keywordList) and what a chat learns.
+export const KEYWORD_MAX_LENGTH = 40;
+export const KEYWORD_MAX_COUNT = 50;
 
 // A7: the categories a Khác/Other draft offers: the user's expense categories (not the fallback) by how many confirmed
 // expenses each has had in the last 90 days, most first; when fewer than 3 have any, the rest follow in creation order.
@@ -104,13 +106,13 @@ export async function topExpenseCategories(userId, { now = new Date(), count = 3
 }
 
 // A7: the first word of `note` (lower-case, no diacritics) becomes a keyword of the category, unless another of the user's
-// categories has it already or the word is only digits. Returns the word when it was added, else null. The ownership check
+// categories has it already, the word is only digits or it is longer than the page allows (it would block every later edit). Returns the word when it was added, else null. The ownership check
 // runs on every call, so a word learned meanwhere else is never taken over.
 export async function learnKeyword(userId, categoryId, note) {
   const word = normalize(note).split(/[^a-z0-9]+/).find(Boolean);
-  if (!word || /^\d+$/.test(word)) return null;
+  if (!word || /^\d+$/.test(word) || word.length > KEYWORD_MAX_LENGTH) return null;
   const taken = await Category.exists({ userId, deletedAt: null, keywords: word, _id: mongoose.trusted({ $ne: categoryId }) });
   if (taken) return null;
-  const { modifiedCount } = await Category.updateOne({ _id: categoryId, userId, [`keywords.${KEYWORD_MAX - 1}`]: mongoose.trusted({ $exists: false }) }, { $addToSet: { keywords: word } });
+  const { modifiedCount } = await Category.updateOne({ _id: categoryId, userId, [`keywords.${KEYWORD_MAX_COUNT - 1}`]: mongoose.trusted({ $exists: false }) }, { $addToSet: { keywords: word } });
   return modifiedCount > 0 ? word : null;
 }

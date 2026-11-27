@@ -296,9 +296,16 @@ async function categoryOffers(adapter, transaction) {
 
 const isFallbackDraft = async (transaction) => Boolean((await Category.findById(transaction.categoryId).lean())?.isFallback);
 
-// A7: the waiting draft goes to `category` and that category learns the note's first word. Returns the draft and the line to show.
+// A7: the waiting draft goes to `category` and that category learns the note's first word. The write only matches a draft that
+// still sits in the fallback it was read in, so two taps close together cannot both win: the late one changes nothing, learns
+// nothing and gets null. The caller has checked `category` (own, same type, not the fallback), so no reference check is needed.
 async function moveToCategory(link, m, draft, category) {
-  const updated = await updateTransaction(link.userId, draft._id, { categoryId: category._id });
+  const updated = await Transaction.findOneAndUpdate(
+    { _id: draft._id, userId: link.userId, status: 'draft', deletedAt: null, categoryId: draft.categoryId },
+    { categoryId: category._id },
+    { returnDocument: 'after' },
+  );
+  if (!updated) return null;
   const name = categoryName(category, m);
   const word = await learnKeyword(link.userId, category._id, draft.note);
   return { updated, line: word ? m.learned({ name, word }) : m.moved({ name }) };
@@ -312,7 +319,9 @@ async function tapCategory(link, language, transactionId, categoryId) {
   const category = draft && (await Category.findOne({ _id: categoryId, userId: link.userId, type: draft.type, isFallback: false, deletedAt: null }));
   if (!category) return { ok: false, text: m.notFound };
   if (!(await isFallbackDraft(draft))) return { ok: false, text: m.hasCategory };
-  const { updated, line } = await moveToCategory(link, m, draft, category);
+  const moved = await moveToCategory(link, m, draft, category);
+  if (!moved) return { ok: false, text: m.hasCategory }; // another tap got there first
+  const { updated, line } = moved;
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: updated._id });
   return { ok: true, text: await draftText(updated, m, { lines: [line] }), draft: { id: updated.id, language } };
 }
@@ -327,7 +336,12 @@ async function typedCategory(adapter, link, language, message) {
   const category = categories.find((c) => [c.name, c.names?.vi, c.names?.en].some((name) => name && normalize(name) === typed));
   if (!category) return false;
   const m = messagesFor(language);
-  const { updated, line } = await moveToCategory(link, m, draft, category);
+  const moved = await moveToCategory(link, m, draft, category);
+  if (!moved) {
+    await reply(adapter, message.chatId, m.hasCategory, 'capture'); // another answer got there first
+    return true;
+  }
+  const { updated, line } = moved;
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: updated._id });
   await adapter.sendDraft(message.chatId, await draftMessage(adapter, updated, m, { lines: [line] }), language);
   return true;
@@ -418,7 +432,12 @@ async function undoLast(link) {
   const m = await messagesOf(link);
   const last = link.lastConfirmedId && (await Transaction.findOne({ _id: link.lastConfirmedId, userId: link.userId, deletedAt: null }));
   if (!last) return m.nothingToUndo;
-  await deleteTransaction(link.userId, last._id);
+  try {
+    await deleteTransaction(link.userId, last._id);
+  } catch (err) {
+    if (err instanceof AppError) return m.nothingToUndo; // deleted on the web between the two steps
+    throw err;
+  }
   return m.undone(await describe(last, m));
 }
 
