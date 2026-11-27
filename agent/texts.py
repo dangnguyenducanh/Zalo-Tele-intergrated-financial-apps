@@ -10,7 +10,8 @@ SOURCE = {'vi': 'Nguồn', 'en': 'Source'}
 
 
 def help_text(examples, language):
-    """What the assistant can answer: up to 3 example questions of the enabled pipeline skills, then the plain commands."""
+    """What the assistant can answer: up to 3 example questions, one from each of the first enabled pipeline skills, then
+    the plain commands."""
     head = ('Mình trả lời được các câu hỏi về thu chi của bạn, ví dụ:' if language == 'vi'
             else 'I can answer questions about your income and spending, for example:')
     return '\n'.join([head, *(f'- {example}' for example in examples[:3]), COMMANDS[language]])
@@ -76,3 +77,43 @@ def describe(period, language):
         days = (period.end - period.start).days + 1
         return f'{days} ngày qua ({span(period)})' if language == 'vi' else f'the last {days} days ({span(period)})'
     return f'ngày {span(period)}' if language == 'vi' else f'on {span(period)}'  # a date
+
+
+# ---- ask-back and skipped conditions (T46) ----
+
+def ask_which(language):
+    return 'Bạn muốn hỏi ý nào?' if language == 'vi' else 'Which one do you mean?'
+
+
+def ask_back(question, options, language):
+    """The numbered list an ask-back shows (and Zalo's user answers by typing a number): the question, the options, how to reply."""
+    reply = (f'Trả lời 1-{len(options)} trong 10 phút.' if language == 'vi' else f'Reply 1-{len(options)} within 10 minutes.')
+    return '\n'.join([question, *(f"{option['n']}. {option['label']}" for option in options), reply])
+
+
+def ask_back_expired(language):
+    return 'Câu hỏi đã hết hạn, hãy hỏi lại' if language == 'vi' else 'That question has expired, please ask it again'
+
+
+def ask_back_gone(language):
+    return ('Lựa chọn này không còn dùng được nữa (danh mục, ví hoặc kỹ năng đã đổi), bạn hỏi lại nhé.' if language == 'vi'
+            else 'That choice no longer works (a category, wallet or skill has changed), please ask again.')
+
+
+KIND = {'category': ('danh mục', 'category'), 'wallet': ('ví', 'wallet')}
+
+
+def entity_label(entity, language):
+    """"danh mục Ăn uống", "ví MoMo"."""
+    return f"{KIND[entity['kind']][0 if language == 'vi' else 1]} {entity['name']}"
+
+
+def skipped(items, language):
+    """The conditions of the question that the skill could not use, said out loud instead of dropped (docs/02 §2.11.3)."""
+    return f"{'Bỏ qua điều kiện' if language == 'vi' else 'Skipped conditions'}: {'; '.join(items)}"
+
+
+def tie_label(entities, language):
+    """Words that name more than one row: "danh mục Momo / ví Momo (trùng tên, không đoán)"."""
+    names = ' / '.join(entity_label(entity, language) for entity in entities)
+    return f'{names} ({"trùng tên, không đoán" if language == "vi" else "same name, not guessing"})'

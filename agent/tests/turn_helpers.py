@@ -76,3 +76,40 @@ def vi_money(amount):
 
 def en_money(amount):
     return ('-' if amount < 0 else '') + '₫' + f'{abs(amount):,}'
+
+
+# ---- T46: wallets, a second set of rows, and the two helpers every turn test uses ----
+
+def ask(client, auth, user, **fields):
+    """POST /v1/turn for `user` with a body as turn_body writes it."""
+    return client.post('/v1/turn', json=turn_body(user, **fields), headers=auth)
+
+
+def turn_row(agent_db, user, request_id):
+    return agent_db['agentTurns'].find_one({'userId': user, 'requestId': request_id})
+
+
+def make_wallet(db, user_id, name, initial=0, aliases=(), archived=False, deleted=False):
+    return db['wallets'].insert_one({'userId': user_id, 'name': name, 'type': 'ewallet', 'initialBalance': initial, 'aliases': list(aliases),
+                                     'archived': archived, 'deletedAt': NOW if deleted else None, 'createdAt': NOW}).inserted_id
+
+
+def seed_wallets(db, user_id):
+    """MoMo (500.000 ₫ to start; +200.000 and -50.000 confirmed; a draft and a deleted row that do not count) = 650.000 ₫, and
+    Tiền mặt, which has nothing of its own: 0. The wallets of `seed_stats` ('Cash', all the fixture's rows) are untouched.
+    Returns {name: id}."""
+    momo = make_wallet(db, user_id, 'MoMo', 500_000, aliases=['mm'])
+    cash = make_wallet(db, user_id, 'Tiền mặt', 0, aliases=['tm'])
+    rows = [('income', 200_000, 'confirmed', None), ('expense', 50_000, 'confirmed', None), ('expense', 70_000, 'draft', None), ('expense', 30_000, 'confirmed', NOW)]
+    september = datetime(2026, 9, 15, 5, 0, tzinfo=timezone.utc)  # a balance has no period; this keeps November's figures the fixture's
+    db['transactions'].insert_many([{'userId': user_id, 'walletId': momo, 'categoryId': ObjectId(), 'type': kind, 'amount': amount,
+                                     'occurredAt': september, 'status': status, 'deletedAt': deleted, 'note': ''}
+                                    for kind, amount, status, deleted in rows])
+    return {'MoMo': momo, 'Tiền mặt': cash}
+
+
+def fixture_balance(scale=1):
+    """What the fixture's wallet holds, from the raw rows: every confirmed row that is not deleted, in any month (a balance has no
+    period), income minus expense."""
+    live = [t for t in STATS['transactions'] if t.get('status', 'confirmed') == 'confirmed' and not t.get('deleted')]
+    return sum((t['amount'] if t['type'] == 'income' else -t['amount']) * scale for t in live)

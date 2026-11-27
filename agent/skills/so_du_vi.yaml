@@ -1,0 +1,34 @@
+# The third skill (docs/02 §2.11.3): the balance of a wallet, or of every wallet, now, from MongoDB with no model.
+# "momo còn bao nhiêu": a wallet of the user's own (the lexicon links it) and "còn bao nhiêu" decide it.
+code: so_du_vi
+labelVi: Số dư ví
+labelEn: Wallet balance
+description: Số dư hiện tại của một ví hoặc của mọi ví, gồm số dư đầu cộng thu trừ chi đã xác nhận. The current balance of one wallet or of all of them.
+examples:
+  - "momo còn bao nhiêu?"
+  - số dư các ví
+  - "ví tiền mặt còn bao nhiêu?"
+triggers: [số dư, còn bao nhiêu, wallet balance, wallet balances, balance, balances, how much is left]
+pairs:
+  - entity: wallet
+    phrases: [còn bao nhiêu, số dư, còn lại, balance, balances, left]
+mode: pipeline
+tools:
+  - {name: get_wallet_balances, ord: 1, preset: {}}
+followups:
+  - {vi: "Số dư các ví", en: "Wallet balances"}
+  - {vi: "Số dư hiện tại", en: "My balance"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      Số dư hiện tại{filter}, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: Số dư đầu của ví cộng thu trừ chi đã xác nhận
+  en:
+    answer: |-
+      Current balance{filter}, confirmed transactions only:
+      {facts}
+    sources: The wallet's opening balance plus confirmed income minus confirmed expenses

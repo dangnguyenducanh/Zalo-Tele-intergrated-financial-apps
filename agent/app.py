@@ -3,6 +3,7 @@
 # ids and error classes only.
 # POST /v1/turn (T45) runs the question engine of graph.py behind the queue of turn_queue.py; /v1/receipt and
 # /v1/categorize arrive with the next cards. All of them inherit the bearer check, the error shape and the log line.
+# When the service starts (the lifespan below) sync.py copies the skills and tools to MongoDB and embeds the new ones.
 import hashlib
 import http
 import logging
@@ -28,6 +29,7 @@ from .embedder import load_embedder
 from .graph import Deps, Duplicate, build_graph, new_state
 from .schemas import TurnRequest
 from .skills import load_skills
+from .sync import sync
 from .tools import default_registry
 from .turn_queue import Busy, TurnQueue
 
@@ -101,6 +103,7 @@ def create_app(settings=None, embedder=None, *, now=None, chat_model=None, skill
 
     @asynccontextmanager
     async def lifespan(app):
+        sync(deps)  # nothing is served until it is done; a database or an embedder that fails stops the start
         yield
         mongo.close()
 
@@ -108,6 +111,7 @@ def create_app(settings=None, embedder=None, *, now=None, chat_model=None, skill
     app = FastAPI(title='sochitieu-agent', docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.settings, app.state.embedder, app.state.mongo = settings, embedder, mongo
     app.state.deps, app.state.graph, app.state.queue = deps, graph, queue
+    app.state.sync = lambda: sync(deps)  # what the lifespan runs: tests that do not enter it call this
 
     # Added first, so it sits inside the logger below (the last one added is the outermost): a 401 is logged too.
     app.add_middleware(RequireSecret, secret=settings.agent_secret)

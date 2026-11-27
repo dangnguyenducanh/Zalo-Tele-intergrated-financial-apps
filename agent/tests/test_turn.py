@@ -59,7 +59,8 @@ def test_thu_chi_ky_answers_from_mongodb_with_no_model(seeded, agent_db):
     assert body['sources'] and all('11/2026' in s for s in body['sources']) and 'Nguồn' in body['text']
     assert 2 <= len(body['followups']) <= 3 and all(isinstance(f, str) and f for f in body['followups'])
     assert 'action' not in body and 'card' not in body
-    assert seeded.model.calls == 0 and seeded.app.state.embedder.calls == []  # no model, and nothing embedded either (T46)
+    # No model. The embedder ran when the service started (the 3 skills, then the 3 tools) and once for this question (T46).
+    assert seeded.model.calls == 0 and [len(call) for call in seeded.app.state.embedder.calls] == [3, 3, 1] and seeded.app.state.embedder.calls[-1] == ['tháng này thu bao nhiêu?']
 
     row = turn_row(agent_db, seeded.user, rid)
     assert agent_db['agentTurns'].count_documents({'userId': seeded.user}) == 1
@@ -192,7 +193,8 @@ def test_text_no_skill_fits_gets_help_text_with_three_examples_at_most(seeded, a
     assert body['steps'] == ['ingress', 'load_context', 'rewrite_question', 'recall_memory', 'find_skills', *HELP_TAIL]
     row = turn_row(agent_db, seeded.user, 'none-1')
     assert (row['retrieval'], row['skill'], row['toolCalls']) == ('none', None, [])
-    assert 'hôm nay tiêu bao nhiêu' in body['text'] and 'tháng 10 thu bao nhiêu' in body['text']
+    examples = [line[2:] for line in body['text'].splitlines() if line.startswith('- ')]
+    assert len(examples) == 3 and all(any(example in skill.examples for skill in load_skills(default_registry()).values()) for example in examples)  # three, each an example of an enabled skill
     english = ask(seeded.client, seeded.auth, seeded.user, text='hello there', language='en').json()
     assert 'Commands' in english['text'] and '/today' in english['text']
 

@@ -1,0 +1,34 @@
+# The second skill (docs/02 §2.11.3): what one category, or each of the biggest ones, came to over a period, from MongoDB
+# with no model. "ăn uống" is a category of the user's own (the lexicon links it); a question phrase next to it decides.
+code: chi_theo_danh_muc
+labelVi: Chi theo danh mục
+labelEn: Spending by category
+description: Tổng tiền của một danh mục, hoặc của các danh mục lớn nhất, trong một kỳ, từ các giao dịch đã xác nhận. The total of one category, or of the biggest ones, over a period.
+examples:
+  - "tháng này ăn uống hết bao nhiêu?"
+  - tuần trước đi lại hết bao nhiêu
+  - chi theo danh mục tháng 10
+triggers: [theo danh mục, danh mục, chi theo, category, categories, by category]
+pairs:
+  - entity: category
+    phrases: [bao nhiêu, hết bao nhiêu, tiêu, chi, thu, mất, how much, spend, spent, earn, earned]
+mode: pipeline
+tools:
+  - {name: get_category_totals, ord: 1, preset: {top: 5}}
+followups:
+  - {vi: "Chi theo danh mục tháng trước", en: "Spending by category"}
+  - {vi: "Chi theo danh mục tuần này", en: "Spending by category yesterday"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      Theo danh mục {period}{filter}, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: Giao dịch đã xác nhận {range}, theo danh mục
+  en:
+    answer: |-
+      By category for {period}{filter}, confirmed transactions only:
+      {facts}
+    sources: Confirmed transactions {range}, by category

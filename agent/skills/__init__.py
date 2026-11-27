@@ -1,6 +1,6 @@
 # The skills of the agent service (docs/02 §2.11.3 "Skills"): one YAML file each in this folder, read when the service
-# starts. A file that is wrong stops the start, so a bad skill never reaches a user. Syncing them to `agentSkills`
-# and ranking them for a question come with T46.
+# starts. A file that is wrong stops the start, so a bad skill never reaches a user. sync.py copies them to `agentSkills`
+# and routing.py ranks them for a question.
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -8,6 +8,7 @@ import yaml
 
 FOLDER = Path(__file__).parent
 LANGUAGES = ('vi', 'en')
+ENTITIES = ('category', 'wallet')
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class Skill:
     max_steps: int = 4
     enabled: bool = True
     version: int = 1
+    pairs: list = field(default_factory=list)  # [{entity: category|wallet, phrases: [...]}]: a phrase plus a linked entity is decisive
 
 
 def read_skill(path, registry):
@@ -54,10 +56,13 @@ def read_skill(path, registry):
     for key in ('labelVi', 'labelEn', 'description', 'examples', 'triggers'):
         if not raw.get(key):
             raise ValueError(f'{where}: {key} is missing')
+    for pair in raw.get('pairs') or []:
+        if pair.get('entity') not in ENTITIES or not pair.get('phrases'):
+            raise ValueError(f'{where}: a pair needs an entity (category or wallet) and phrases')
     return Skill(
         code=raw['code'], label_vi=raw['labelVi'], label_en=raw['labelEn'], description=raw['description'], examples=raw['examples'],
         triggers=raw['triggers'], mode=raw['mode'], tools=tools, followups=raw['followups'], templates=raw['templates'],
-        max_steps=raw.get('maxSteps', 4), enabled=raw.get('enabled', True), version=raw.get('version', 1))
+        max_steps=raw.get('maxSteps', 4), enabled=raw.get('enabled', True), version=raw.get('version', 1), pairs=raw.get('pairs') or [])
 
 
 def load_skills(registry, folder=FOLDER):

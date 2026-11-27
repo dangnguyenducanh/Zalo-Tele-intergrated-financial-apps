@@ -186,15 +186,17 @@ def world(mongo, db):
 
 @pytest.fixture
 def turn_app(mongo, world):
-    """create_app on the throwaway mongod as sochitieu_agent, with a fixed clock; returns make(**overrides) → app."""
+    """create_app on the throwaway mongod as sochitieu_agent, with a fixed clock and started (skills synced); returns make(**overrides) → app.
+    `embedder=` replaces the fake one."""
     made = []
 
     def make(**overrides):
         settings = Settings(agent_secret=SECRET, mongodb_uri_agent=mongo.agent_uri)
         overrides.setdefault('now', lambda: NOW)
         overrides.setdefault('chat_model', FakeChatModel())
-        app = create_app(settings, FakeEmbedder(), **overrides)
+        app = create_app(settings, overrides.pop('embedder', None) or FakeEmbedder(), **overrides)
         made.append(app)
+        app.state.sync()  # what uvicorn does when the service starts (the lifespan): skills and tools to MongoDB, vectors in memory
         return app
 
     yield make
