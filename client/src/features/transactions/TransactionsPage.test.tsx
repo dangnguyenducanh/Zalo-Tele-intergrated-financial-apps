@@ -326,6 +326,8 @@ test('TC-F13-06 quick add names a line with no amount, or past the 10th, and sav
   expect(posted()).toEqual([]);
 });
 
+const QUESTION_CHIP = 'Đây là câu hỏi · Hỏi Sổ chi tiêu ›'; // docs/05 §5.10.2: pressing it opens the drawer and sends the text
+
 // The server answers a question like this (docs/04 §4.4); the stand-in recognises "bao nhiêu" and "?" and lets every other text fall
 // through to the parse handler of beforeEach.
 function answerQuestions() {
@@ -346,8 +348,7 @@ test('TC-F13-09 quick add: a question shows a notice instead of the preview; Ent
   await screen.findByRole('row', { name: /grab/ });
 
   await user.type(quickAdd(), 'tháng 10 thu bao nhiêu');
-  const notice = await screen.findByText('Đây là câu hỏi');
-  expect(notice.closest('button, a, [role="button"]')).toBeNull(); // not clickable: T51 turns it into the drawer button
+  expect(await screen.findByRole('button', { name: QUESTION_CHIP })).toBeInTheDocument(); // T51: the notice is the drawer's chip
   expect(screen.queryByRole('list', { name: 'Xem trước' })).not.toBeInTheDocument();
   expect(quickAdd()).toHaveAccessibleDescription('Câu hỏi không được lưu thành giao dịch: Enter và Lưu không lưu gì.');
   expect(quickAdd()).not.toHaveAttribute('aria-invalid', 'true');
@@ -362,13 +363,14 @@ test('TC-F13-09 quick add: a question shows a notice instead of the preview; Ent
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); // no form with the question as its note
   expect(quickAdd()).toHaveValue('tháng 10 thu bao nhiêu'); // the box is not cleared
   expect(screen.queryByText(/Đã lưu giao dịch/)).not.toBeInTheDocument();
-  expect(screen.getByText('Đây là câu hỏi')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: QUESTION_CHIP })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); // Enter and Save never open the drawer: only the chip does
 
   // Typing on makes it a capture again: the notice goes, the preview comes back, and Enter saves.
   await user.clear(quickAdd());
   await user.type(quickAdd(), 'phở 45k');
   expect(await screen.findByRole('list', { name: 'Xem trước' })).toBeInTheDocument();
-  expect(screen.queryByText('Đây là câu hỏi')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: QUESTION_CHIP })).not.toBeInTheDocument();
   await user.keyboard('{Enter}');
   await waitFor(() => expect(posted()).toHaveLength(1));
 });
@@ -380,14 +382,14 @@ test('TC-F13-09 quick add: Enter pressed before the preview has settled saves no
   await screen.findByRole('row', { name: /grab/ });
 
   await user.type(quickAdd(), 'hôm nay ăn gì?{Enter}');
-  expect(await screen.findByText('Đây là câu hỏi')).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: QUESTION_CHIP })).toBeInTheDocument();
   expect(posted()).toEqual([]);
   expect(quickAdd()).toHaveValue('hôm nay ăn gì?');
   expect(screen.queryByText(/Đã lưu giao dịch/)).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-test('TC-F13-09 quick add: the question notice and its hint are in English too', async () => {
+test('TC-F13-09 quick add: the question chip and its hint are in English too', async () => {
   resetFake({ ...LAN, language: 'en' }, true);
   answerQuestions();
   const user = userEvent.setup();
@@ -395,7 +397,7 @@ test('TC-F13-09 quick add: the question notice and its hint are in English too',
   const box = await screen.findByRole('textbox', { name: 'Quick add' });
 
   await user.type(box, 'how much did I spend in October');
-  expect(await screen.findByText('This is a question')).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: 'This is a question · Ask Sổ chi tiêu ›' })).toBeInTheDocument();
   expect(box).toHaveAccessibleDescription('A question is not saved as a transaction: Enter and Save store nothing.');
   await user.keyboard('{Enter}');
   await user.click(screen.getByRole('button', { name: 'Open full form' }));
@@ -501,4 +503,81 @@ test('TC-F4-13 an amount over 10^13 ₫ is marked at the field with the maximum,
   expect(amount).toHaveAttribute('aria-invalid', 'true');
   expect(amount).toHaveFocus();
   expect(posted()).toEqual([]);
+});
+
+// The drawer's own requests (docs/04 §4.4 Assistant): an empty thread, and one canned answer to every question.
+function serveAssistant(chats: { message: string; month?: string; requestId: string }[]) {
+  server.use(
+    http.get('*/api/assistant/thread', () => HttpResponse.json({ turns: [], ai: { remainingToday: 30 } })),
+    http.post('*/api/assistant/chat', async ({ request }) => {
+      chats.push((await request.json()) as { message: string; requestId: string });
+      return HttpResponse.json({ route: 'rules', text: 'Tháng 10 bạn thu 15.000.000 ₫.', facts: [], sources: [], followups: [], remainingToday: 29 });
+    }),
+  );
+}
+
+test('TC-F14-110 the question chip on Transactions opens the drawer and sends the text as its first message; nothing is saved and the box keeps its text', async () => {
+  answerQuestions();
+  const chats: { message: string; month?: string; requestId: string }[] = [];
+  serveAssistant(chats);
+  const user = userEvent.setup();
+  renderApp('/transactions'); // the button is on the Dashboard only: the chip has to work here too
+  await screen.findByRole('row', { name: /grab/ });
+  expect(screen.queryByRole('button', { name: 'Hỏi Sổ chi tiêu' })).not.toBeInTheDocument();
+
+  await user.type(quickAdd(), 'tháng 10 thu bao nhiêu');
+  const chip = await screen.findByRole('button', { name: QUESTION_CHIP });
+  await user.click(chip);
+
+  const dialog = await screen.findByRole('dialog', { name: 'Hỏi Sổ chi tiêu' });
+  expect(await within(dialog).findByText('Tháng 10 bạn thu 15.000.000 ₫.')).toBeInTheDocument();
+  expect(chats).toHaveLength(1);
+  expect(chats[0]).toMatchObject({ message: 'tháng 10 thu bao nhiêu', requestId: expect.any(String) });
+  expect(within(dialog).getByText('tháng 10 thu bao nhiêu')).toBeInTheDocument(); // shown as the first message of the thread
+  expect(posted()).toEqual([]);
+
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(chip).toHaveFocus(); // back on what opened it
+  expect(quickAdd()).toHaveValue('tháng 10 thu bao nhiêu');
+  expect(posted()).toEqual([]);
+});
+
+test('TC-F14-110 the chip sends the question once: opening the drawer a second time from the chip sends it again as a new request, and the chip is gone for a capture', async () => {
+  answerQuestions();
+  const chats: { message: string; month?: string; requestId: string }[] = [];
+  serveAssistant(chats);
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  await screen.findByRole('row', { name: /grab/ });
+  await user.type(quickAdd(), 'hôm nay ăn gì?');
+  await user.click(await screen.findByRole('button', { name: QUESTION_CHIP }));
+  await screen.findByText('Tháng 10 bạn thu 15.000.000 ₫.');
+  expect(chats).toHaveLength(1); // one press, one request (React StrictMode runs effects twice in development)
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: QUESTION_CHIP }));
+  await waitFor(() => expect(chats).toHaveLength(2));
+  expect(chats[1]!.requestId).not.toBe(chats[0]!.requestId);
+
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await user.clear(quickAdd());
+  await user.type(quickAdd(), 'phở 45k');
+  expect(await screen.findByRole('list', { name: 'Xem trước' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: QUESTION_CHIP })).not.toBeInTheDocument();
+});
+
+test('TC-F14-110 the question chip is a button with its own name, and the drawer is not in the page until it opens', async () => {
+  answerQuestions();
+  serveAssistant([]);
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  await screen.findByRole('row', { name: /grab/ });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await user.type(quickAdd(), 'tháng 10 thu bao nhiêu');
+  const chip = await screen.findByRole('button', { name: QUESTION_CHIP });
+  chip.focus();
+  await user.keyboard('{Enter}'); // reachable and usable from the keyboard
+  expect(await screen.findByRole('dialog', { name: 'Hỏi Sổ chi tiêu' })).toBeInTheDocument();
 });

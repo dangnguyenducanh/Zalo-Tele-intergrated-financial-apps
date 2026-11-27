@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { telegram } from '../src/bot/telegram.js';
@@ -12,7 +12,7 @@ import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import telegramUpdates from './fixtures/telegram-updates.json' with { type: 'json' };
 import whatsappWebhooks from './fixtures/whatsapp-webhooks.json' with { type: 'json' };
 import zaloEvents from './fixtures/zalo-events.json' with { type: 'json' };
-import { botCalls, stubOutboundHttp } from './helpers/bot-api-stub.js';
+import { agentModeFile, botCalls, stubOutboundHttp } from './helpers/bot-api-stub.js';
 import { startTestDb, stopTestDb } from './helpers/db.js';
 import { mailFile } from './helpers/mail-stub.js';
 
@@ -163,3 +163,72 @@ test('TC-NF-25 the E2E server with realistic GMAIL_* settings records a sign-up 
     server.kill();
   }
 }, 90_000);
+
+// The agent service of the E2E server (docs/07 §7.9.5 *drawer E2E*): canned answers, its own agentTurns rows, switchable to 503 with a file.
+// The shell holds a real-looking AGENT_URL and secret on purpose: the server must still talk to the stub, never to that host.
+test('TC-F14-115 the E2E server answers the drawer from the agent stub: canned answers, rows, ask-back, "Xoá", DUPLICATE, and 503 by the switch file', async () => {
+  const freePort = createServer().listen(0);
+  await once(freePort, 'listening');
+  const { port } = freePort.address();
+  freePort.close();
+  const agent = { AGENT_URL: 'https://real-agent.example.com', AGENT_SECRET: 'real-looking-agent-secret' };
+  const server = spawn(process.execPath, ['test/helpers/e2e-server.js'], {
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
+    env: { ...process.env, ...agent, NODE_ENV: 'test', PORT: String(port), MONGODB_URI: '' },
+  });
+  let output = '';
+  server.stdout.on('data', (chunk) => (output += chunk));
+  server.stderr.on('data', (chunk) => (output += chunk));
+  const previousPort = process.env.PORT;
+  process.env.PORT = String(port); // agentModeFile() is named after the API port
+  try {
+    await vi.waitFor(() => expect(output).toMatch(/API listening/), { timeout: 60_000, interval: 100 });
+    const call = async (method, path, body, token) => {
+      const res = await fetch(`http://127.0.0.1:${port}/api${path}`, {
+        method,
+        headers: { 'content-type': 'application/json', ...(token && { authorization: `Bearer ${token}` }) },
+        body: body && JSON.stringify(body),
+      });
+      return { status: res.status, body: res.status === 204 ? null : await res.json() };
+    };
+
+    const email = 'drawer.stub@example.com';
+    const pending = await call('POST', '/auth/register', { name: 'Lan', email, password: 'correct-horse-1', language: 'vi' });
+    const code = readFileSync(mailFile(port), 'utf8').trim().split('\n').map((line) => JSON.parse(line)).at(-1).code;
+    const { accessToken } = (await call('POST', '/auth/register/verify', { email, code, signupToken: pending.body.signupToken })).body;
+    const chat = (message, requestId) => call('POST', '/assistant/chat', { message, requestId }, accessToken);
+
+    const first = await chat('tháng 10 thu bao nhiêu', 'r1');
+    expect(first).toMatchObject({ status: 200, body: { route: 'rules', text: 'Tháng 10 bạn thu 15.000.000 ₫.', followups: ['Còn tháng 9?', 'Chi tiêu tháng 10?'], remainingToday: 29 } });
+    expect((await chat('tháng 10 thu bao nhiêu', 'r1')).status).toBe(409); // the same requestId: the agent's row remembers it
+    expect((await call('POST', '/assistant/chat', { message: 'x', requestId: 'r0' })).status).toBe(401);
+
+    const asked = await chat('chi tiêu', 'r2');
+    expect(asked.body.card).toEqual({ kind: 'ask_back', options: [{ n: 1, label: 'Thu chi theo kỳ · tháng này' }, { n: 2, label: 'Chi theo danh mục · Ăn uống' }] });
+    expect((await chat('2', 'r3')).body.text).toBe('Bạn chọn ý 2: Ăn uống tháng này 45.000 ₫.'); // a live ask-back: the digit goes to the agent as a question
+    await chat('chi tiêu hết hạn', 'r4'); // its ten minutes are over
+    expect((await chat('2', 'r5')).body).toMatchObject({ route: 'rules', text: 'Câu hỏi đã hết hạn, hãy hỏi lại' }); // Express answers, no capture, no agent call
+
+    const thread = await call('GET', '/assistant/thread', undefined, accessToken);
+    expect(thread.body.turns.map((turn) => turn.question)).toEqual(['tháng 10 thu bao nhiêu', 'chi tiêu', '2', 'chi tiêu hết hạn']);
+    expect(thread.body.ai.remainingToday).toBe(26);
+    expect((await call('DELETE', '/assistant/thread', undefined, accessToken)).status).toBe(204);
+    expect((await call('GET', '/assistant/thread', undefined, accessToken)).body).toEqual({ turns: [], ai: { remainingToday: 26 } }); // "Xoá" keeps the count
+
+    // The switch: the same file a Playwright spec writes. A failed turn leaves no row, so Thử lại with the same requestId works.
+    writeFileSync(agentModeFile(), 'down');
+    expect(await chat('số dư các ví', 'r6')).toMatchObject({ status: 503, body: { error: { code: 'AGENT_UNAVAILABLE' } } });
+    writeFileSync(agentModeFile(), 'busy');
+    expect(await chat('số dư các ví', 'r6')).toMatchObject({ status: 503, body: { error: { code: 'AGENT_BUSY' } } });
+    rmSync(agentModeFile());
+    expect((await chat('số dư các ví', 'r6')).status).toBe(200);
+
+    expect(output).not.toMatch(/blocked outbound request|real-agent\.example\.com/);
+    for (const secret of [agent.AGENT_SECRET, 'số dư các ví', 'tháng 10 thu bao nhiêu']) expect(output).not.toContain(secret);
+  } finally {
+    rmSync(agentModeFile(), { force: true }); // while PORT is still this server's
+    if (previousPort === undefined) delete process.env.PORT;
+    else process.env.PORT = previousPort;
+    server.kill();
+  }
+}, 120_000);

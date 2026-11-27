@@ -1,0 +1,53 @@
+{
+  "open": "Ask Sổ chi tiêu",
+  "title": "Ask Sổ chi tiêu",
+  "close": "Close",
+  "clear": "Clear",
+  "starters": {
+    "label": "Suggested questions",
+    "category": "How much did I spend on food this month?",
+    "compare": "This month compared to last month?",
+    "wallets": "Wallet balances",
+    "budget": "Budgets this month"
+  },
+  "thread": "Conversation",
+  "threadError": "Could not load your earlier questions.",
+  "input": {
+    "label": "Your question",
+    "placeholder": "Ask about your spending…",
+    "hint": "Enter sends, Shift+Enter adds a line.",
+    "send": "Send"
+  },
+  "remaining_one": "{{count}} question left today",
+  "remaining_other": "{{count}} questions left today",
+  "capped": "You have asked all 30 questions for today, ask again tomorrow",
+  "cappedCommands": "The /today and /month commands still work in Telegram and Zalo.",
+  "pending": "Answering…",
+  "stop": "Stop",
+  "retry": "Try again",
+  "announce": {
+    "answer": "The assistant answered: {{text}}",
+    "error": "No answer: {{text}}",
+    "capture": "Your message was read as a transaction. Press Save to save it."
+  },
+  "error": {
+    "unavailable": "The assistant is under maintenance, please try again later",
+    "stillWorks": "The Dashboard and Transactions still show your numbers.",
+    "busy": "The assistant is answering a lot of people, please try again in a few seconds"
+  },
+  "badge": {
+    "template": "Template",
+    "ai": "AI",
+    "aiDescription": "Answered by the model running on the Sổ chi tiêu server"
+  },
+  "facts": "Figures",
+  "sources": "Source: {{list}}",
+  "followups": "Ask next",
+  "askBack": "Pick one",
+  "capture": {
+    "label": "Transactions from this message",
+    "save": "Save",
+    "saved": "Transactions saved: {{count}}",
+    "noWallet": "No wallet or category to save to. Add a wallet and a category first."
+  }
+}

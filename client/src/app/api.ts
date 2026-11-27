@@ -25,6 +25,6 @@ export const baseQueryWithRefresh: BaseQueryFn<string | FetchArgs, unknown, Fetc
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithRefresh,
-  tagTypes: ['Wallet', 'Category', 'Transaction', 'Budget', 'Stats', 'Draft', 'Session', 'ChatLink', 'AdminUser', 'AdminCategory'],
+  tagTypes: ['Wallet', 'Category', 'Transaction', 'Budget', 'Stats', 'Draft', 'Session', 'ChatLink', 'AdminUser', 'AdminCategory', 'AssistantThread'],
   endpoints: () => ({}),
 });

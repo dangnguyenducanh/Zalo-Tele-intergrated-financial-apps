@@ -2,7 +2,8 @@ import { Box, Button, Chip, Paper, Stack, TextField, Typography } from '@mui/mat
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { showSnackbar } from '@/app/uiSlice';
+import { assistantAsked, showSnackbar } from '@/app/uiSlice';
+import { isComplete, toInput } from '@/features/assistant/drafts';
 import { categoryName, useGetCategoriesQuery } from '@/features/categories/categoriesApi';
 import { apiErrorMessage } from '@/features/categories/helpers';
 import { signedMoney } from '@/features/transactions/helpers';
@@ -20,17 +21,14 @@ import { useDebounced } from '@/features/transactions/useDebounced';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
 import { formatDate, formatMoney } from '@/i18n/format';
 
-const isComplete = (draft: ParsedDraft): draft is TransactionInput => Boolean(draft.walletId && draft.categoryId);
-// What the API takes: a preview line also carries its hints, which are not data to save.
-const toInput = ({ type, amount, walletId, categoryId, occurredAt, note }: TransactionInput): TransactionInput => ({ type, amount, walletId, categoryId, occurredAt, note });
-
 // Which dialog is open: "apply" edits one preview line, "save" is the full add form (Shift+Enter).
 type OpenForm = { mode: 'apply'; index: number; draft: ParsedDraft } | { mode: 'save'; draft: Partial<ParsedDraft> };
 
 // The quick-add box (docs/05 §5.7, F13): type "phở 45k" like in the bot. After a 300 ms pause the server parser
 // (POST /transactions/parse, saves nothing) shows a preview; Enter saves every line, Shift+Enter opens the full form.
 // A question ("tháng 10 thu bao nhiêu") is not money: the server answers question: true, the preview becomes a notice,
-// and Enter, Save, Shift+Enter and "Open full form" do nothing (docs/05 §5.10.2).
+// and Enter, Save, Shift+Enter and "Open full form" do nothing (docs/05 §5.10.2). Only the chip that replaces the preview asks it:
+// it opens the "Hỏi Sổ chi tiêu" drawer, mounted in AppLayout so it works here and on Transactions, and sends the text.
 export default function QuickAdd() {
   const { t } = useTranslation('transactions');
   const dispatch = useAppDispatch();
@@ -172,7 +170,9 @@ export default function QuickAdd() {
         </Stack>
       </Box>
 
-      <Box role="status">{isQuestion && <Chip label={t('quickAdd.question')} variant="outlined" sx={{ mt: 1.5 }} />}</Box>
+      <Box role="status">
+        {isQuestion && <Chip label={t('quickAdd.question')} onClick={() => dispatch(assistantAsked(value))} variant="outlined" color="primary" sx={{ mt: 1.5 }} />}
+      </Box>
 
       {shown.length > 0 && (
         <Stack component="ul" aria-label={t('quickAdd.preview')} spacing={1} sx={{ listStyle: 'none', p: 0, m: 0, mt: 1.5 }}>

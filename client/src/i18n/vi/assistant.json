@@ -1,0 +1,53 @@
+{
+  "open": "Hỏi Sổ chi tiêu",
+  "title": "Hỏi Sổ chi tiêu",
+  "close": "Đóng",
+  "clear": "Xoá",
+  "starters": {
+    "label": "Câu hỏi gợi ý",
+    "category": "Tháng này ăn uống hết bao nhiêu?",
+    "compare": "Tháng này so với tháng trước?",
+    "wallets": "Số dư các ví",
+    "budget": "Ngân sách tháng này"
+  },
+  "thread": "Cuộc trò chuyện",
+  "threadError": "Không tải được các câu hỏi trước đó.",
+  "input": {
+    "label": "Câu hỏi của bạn",
+    "placeholder": "Hỏi về chi tiêu của bạn…",
+    "hint": "Enter để gửi, Shift+Enter để xuống dòng.",
+    "send": "Gửi"
+  },
+  "remaining_one": "Còn {{count}} câu hỏi hôm nay",
+  "remaining_other": "Còn {{count}} câu hỏi hôm nay",
+  "capped": "Hôm nay bạn đã hỏi đủ 30 câu, mai hỏi tiếp nhé",
+  "cappedCommands": "Lệnh /today và /month trong Telegram và Zalo vẫn dùng được.",
+  "pending": "Đang trả lời…",
+  "stop": "Dừng",
+  "retry": "Thử lại",
+  "announce": {
+    "answer": "Trợ lý trả lời: {{text}}",
+    "error": "Không có câu trả lời: {{text}}",
+    "capture": "Đã đọc câu của bạn như một giao dịch. Nhấn Lưu để lưu."
+  },
+  "error": {
+    "unavailable": "Trợ lý đang bận bảo trì, thử lại sau",
+    "stillWorks": "Trang Tổng quan và Giao dịch vẫn hiện số liệu của bạn.",
+    "busy": "Trợ lý đang trả lời nhiều người, thử lại sau vài giây"
+  },
+  "badge": {
+    "template": "Theo mẫu",
+    "ai": "AI",
+    "aiDescription": "Trả lời bởi mô hình chạy trên máy chủ của Sổ chi tiêu"
+  },
+  "facts": "Số liệu",
+  "sources": "Nguồn: {{list}}",
+  "followups": "Hỏi tiếp",
+  "askBack": "Chọn một ý",
+  "capture": {
+    "label": "Giao dịch từ câu này",
+    "save": "Lưu",
+    "saved": "Đã lưu giao dịch: {{count}}",
+    "noWallet": "Chưa có ví hoặc danh mục để lưu. Hãy thêm ví và danh mục trước."
+  }
+}

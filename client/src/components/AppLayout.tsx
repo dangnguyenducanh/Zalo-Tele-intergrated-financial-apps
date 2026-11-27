@@ -1,6 +1,7 @@
 import { AppBar, Box, Container, Link, Stack, Toolbar, useMediaQuery, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router';
+import AssistantDrawer from '@/features/assistant/AssistantDrawer';
 import AppSnackbar from './AppSnackbar';
 import BottomNav from './BottomNav';
 import Brand from './BrandMark';
@@ -45,6 +46,7 @@ export default function AppLayout() {
         </Container>
       </Box>
       {!isDesktop && <BottomNav />}
+      <AssistantDrawer />
       <AppSnackbar />
     </Box>
   );

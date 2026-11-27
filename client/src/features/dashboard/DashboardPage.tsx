@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
 import { useAppSelector } from '@/app/hooks';
 import { useAuth } from '@/auth/useAuth';
+import AssistantButton from '@/features/assistant/AssistantButton';
 import MoneyText from '@/components/MoneyText';
 import MonthPicker from '@/components/MonthPicker';
 import QuickAdd from '@/components/QuickAdd';
@@ -49,7 +50,10 @@ export default function DashboardPage() {
         <Typography variant="h4" component="h1" sx={{ typography: { xs: 'h5', sm: 'h4' } }}>
           {t('common:home.title', { name: user?.name })}
         </Typography>
-        <MonthPicker />
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <AssistantButton />
+          <MonthPicker />
+        </Stack>
       </Stack>
 
       <QuickAdd />
