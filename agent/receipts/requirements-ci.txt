@@ -1,0 +1,9 @@
+# For CI only: the versions inside the pinned vLLM image (Dockerfile), so CI tests what runs. The image installs nothing.
+fastapi==0.136.3
+starlette==1.7.0
+uvicorn==0.54.0
+httpx==0.28.1
+python-multipart==0.0.32
+pydantic==2.13.5
+pillow==12.3.0
+pytest==9.1.1
