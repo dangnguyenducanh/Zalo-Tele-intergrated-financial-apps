@@ -3,6 +3,7 @@
 // so a tie goes to "question". The first rule that fires decides.
 import { amountCandidates } from './parser.js';
 import { findPeriod, toKey, wordsOf } from './period.js';
+import { normalize } from '../utils/normalize.js';
 
 const LAST_WORDS = ['chua', 'khong', 'ko']; // rule 4: "45k là nhiều chưa", "ăn ngoài nhiều không"
 // Rule 6, matched on whole words without accents: strong markers. "sao" only as the first or last word, "mấy" only with its accent.
@@ -12,15 +13,19 @@ const TRAILING_PUNCTUATION = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
 // A word as typed, in NFC and lower case: "tìm" typed with a combining accent still equals "tìm".
 const typed = (word) => word.normalize('NFC').toLowerCase().replace(TRAILING_PUNCTUATION, '');
 
+// The chat command "/hoi" as the first word, like readCommand in core.js reads it ("/Hỏi", "/hoi@bot", NFC or NFD; "/hoiphở" is another word).
+const isHoiCommand = (text) => normalize(/^\/([\p{L}\p{M}\p{N}_]+)(?:@\w+)?(?:\s|$)/u.exec(text)?.[1]) === 'hoi';
+
 const question = (rule) => ({ answer: 'question', rule });
 const capture = (rule) => ({ answer: 'capture', rule });
 
-// → { answer: 'question' | 'capture', rule: '1' … '8' | '5b' }, the rule that decided it. `followUp`: an assistant answer
+// → { answer: 'question' | 'capture', rule: '1' … '8' | '1b' | '5b' }, the rule that decided it. `followUp`: an assistant answer
 // went to this chat in the last 10 minutes (always true in the web drawer); chat and the web quick add pass false until the
 // follow-up exists (T50).
 export function classifyWithRule(text, { followUp = false } = {}) {
   const trimmed = String(text ?? '').trim();
   if (trimmed.startsWith('?')) return question('1');
+  if (isHoiCommand(trimmed)) return question('1b'); // the web has no router: "/hoi …" is the explicit question command here too
   if (trimmed.split(/\r?\n/).filter((line) => line.trim()).length > 1) return capture('2');
   if (trimmed.endsWith('?')) return question('3'); // even with an amount
 
