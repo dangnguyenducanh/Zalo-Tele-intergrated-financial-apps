@@ -58,4 +58,9 @@ export default {
   nothingToRestore: 'Không có khoản nào vừa hoàn tác để khôi phục.',
   hintBig: ({ name, times, median }) => `⚠️ Lớn gấp ${times} lần khoản "${name}" thường ngày (${median}). Gõ nhầm?`,
   hintDuplicate: ({ name }) => `⚠️ Giống một khoản "${name}" vừa nhập trong 10 phút qua. Nhập trùng?`,
+  offerTap: '❓ Chưa rõ danh mục. Chọn một, lần sau mình tự xếp:',
+  offerType: (names) => `❓ Chưa rõ danh mục. Gõ tên một danh mục để mình ghi nhớ: ${names}`,
+  learned: ({ name, word }) => `Đã chuyển sang ${name} và ghi nhớ "${word}". Lần sau mình tự xếp (sửa ở trang Danh mục).`,
+  moved: ({ name }) => `Đã chuyển sang ${name}.`,
+  hasCategory: 'Khoản này đã có danh mục rồi.',
 };

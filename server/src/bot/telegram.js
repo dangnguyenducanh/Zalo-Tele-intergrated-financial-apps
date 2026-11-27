@@ -16,19 +16,26 @@ async function callApi(method, body) {
   return data.result;
 }
 
+// ✅ / ❌ under a draft. callback_data is "c:<id>" or "x:<id>" (26 bytes; Telegram allows 64).
+function draftRow(draftId, language) {
+  const { buttons } = messagesFor(language);
+  const row = [
+    { text: buttons.save, callback_data: `c:${draftId}` },
+    { text: buttons.discard, callback_data: `x:${draftId}` },
+  ];
+  // ✏️ opens the web Bot inbox. Telegram refuses http:// and localhost links, so only for the deployed app.
+  if (env.APP_URL?.startsWith('https://')) row.push({ text: buttons.edit, url: `${env.APP_URL}/bot` });
+  return row;
+}
+
 export const telegram = {
   platform: 'telegram',
+  categoryOffer: 'tap', // a Khác/Other draft offers its categories as buttons (A7)
   sendText: (chatId, text) => callApi('sendMessage', { chat_id: chatId, text }),
-  // The draft with ✅ / ❌ buttons. callback_data is "c:<id>" or "x:<id>" (30 bytes; Telegram allows 64).
+  // The draft with ✅ / ❌ buttons, and for a draft in Khác/Other a button per offered category: "k:<draft>:<category>" (52 bytes).
   sendDraft(chatId, draft, language) {
-    const { buttons } = messagesFor(language);
-    const row = [
-      { text: buttons.save, callback_data: `c:${draft.id}` },
-      { text: buttons.discard, callback_data: `x:${draft.id}` },
-    ];
-    // ✏️ opens the web Bot inbox. Telegram refuses http:// and localhost links, so only for the deployed app.
-    if (env.APP_URL?.startsWith('https://')) row.push({ text: buttons.edit, url: `${env.APP_URL}/bot` });
-    return callApi('sendMessage', { chat_id: chatId, text: draft.text, reply_markup: { inline_keyboard: [row] } });
+    const offered = draft.offers?.length > 0 ? [draft.offers.map(({ id, name }) => ({ text: name, callback_data: `k:${draft.id}:${id}` }))] : [];
+    return callApi('sendMessage', { chat_id: chatId, text: draft.text, reply_markup: { inline_keyboard: [draftRow(draft.id, language), ...offered] } });
   },
   // A photo's file_id → getFile → its bytes (bots may download files up to 20 MB).
   async downloadPhoto(fileId) {
@@ -55,15 +62,17 @@ export async function handleTelegramUpdate(update) {
   });
 }
 
-// ✅ / ❌ under a draft. On success the draft message is replaced by the result (and loses its buttons);
+// ✅ / ❌ / a category under a draft. On success the draft message is replaced by the result (and loses its buttons);
 // otherwise Telegram shows the reason as a short notice. Every press must be answered to stop the spinner.
 async function pressButton(query) {
-  const [, action, transactionId] = /^([cx]):([0-9a-f]{24})$/.exec(query.data ?? '') ?? [];
-  if (!action) return callApi('answerCallbackQuery', { callback_query_id: query.id });
+  const [, action, transactionId, categoryId] = /^([cxk]):([0-9a-f]{24})(?::([0-9a-f]{24}))?$/.exec(query.data ?? '') ?? [];
+  if (!action || (action === 'k') !== Boolean(categoryId)) return callApi('answerCallbackQuery', { callback_query_id: query.id });
 
-  const result = await handleButton('telegram', String(query.from.id), action === 'c' ? 'confirm' : 'discard', transactionId);
+  const result = await handleButton('telegram', String(query.from.id), { c: 'confirm', x: 'discard', k: 'learn' }[action], transactionId, categoryId);
   if (result.ok && query.message) {
-    await callApi('editMessageText', { chat_id: query.message.chat.id, message_id: query.message.message_id, text: result.text });
+    // A category tap leaves the draft waiting, so its message keeps ✅ / ❌ (and no category buttons: it has one now).
+    const keyboard = result.draft && { inline_keyboard: [draftRow(result.draft.id, result.draft.language)] };
+    await callApi('editMessageText', { chat_id: query.message.chat.id, message_id: query.message.message_id, text: result.text, reply_markup: keyboard });
   }
   await callApi('answerCallbackQuery', { callback_query_id: query.id, text: result.ok ? undefined : result.text.slice(0, 200) });
 }

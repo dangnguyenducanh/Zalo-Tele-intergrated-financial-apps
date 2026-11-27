@@ -57,4 +57,9 @@ export default {
   nothingToRestore: 'There is nothing undone to restore.',
   hintBig: ({ name, times, median }) => `⚠️ ${times} times your usual "${name}" amount (${median}). A typo?`,
   hintDuplicate: ({ name }) => `⚠️ Same amount as a recent "${name}" entry in the last 10 minutes. Entered twice?`,
+  offerTap: '❓ Category unclear. Pick one and I will file it myself next time:',
+  offerType: (names) => `❓ Category unclear. Type the name of a category so I remember it: ${names}`,
+  learned: ({ name, word }) => `Moved to ${name} and remembered "${word}". Next time I file it myself (edit it on the Categories page).`,
+  moved: ({ name }) => `Moved to ${name}.`,
+  hasCategory: 'This one already has a category.',
 };
