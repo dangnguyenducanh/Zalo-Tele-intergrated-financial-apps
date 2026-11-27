@@ -4,7 +4,8 @@ import { z } from 'zod';
 // (never their values). Only MONGODB_URI and JWT_ACCESS_SECRET are required. The bot, KIE, APP_URL and
 // seed variables are optional and checked only when set, so the API still boots without them; a
 // feature that needs a missing one answers 503 FEATURE_NOT_CONFIGURED. Under NODE_ENV=test every
-// variable has a harmless default, so the automated suites run without server/.env.
+// variable has a harmless default (except GMAIL_USER and GMAIL_APP_PASSWORD, which stay unset), so the
+// automated suites run without server/.env.
 export function parseEnv(source) {
   const isTest = source.NODE_ENV === 'test';
   const required = (schema, testDefault) => (isTest ? schema.default(testDefault) : schema);
@@ -40,6 +41,20 @@ export function parseEnv(source) {
     WHATSAPP_PHONE_NUMBER_ID: optional(z.string().regex(/^\d{1,30}$/), '1234567890'),
     WHATSAPP_APP_SECRET: optional(z.string(), 'test-whatsapp-secret'),
     WHATSAPP_VERIFY_TOKEN: optional(z.string(), 'test-whatsapp-verify-token'),
+    // Email codes (docs/02 §2.12.4): mail is on only when both are set. Unlike the other optional variables they have NO
+    // NODE_ENV=test default, because a default would turn mail on in every suite. Set only in the Vercel dashboard, never in server/.env (D8).
+    // Whitespace around the pasted address is dropped, and only whitespace counts as not set (as for the password).
+    GMAIL_USER: z
+      .string()
+      .trim()
+      .transform((user) => user || undefined)
+      .pipe(z.email().optional())
+      .optional(),
+    // Google shows the app password in four groups; whatever whitespace came with the paste is dropped, and spaces alone count as not set.
+    GMAIL_APP_PASSWORD: z
+      .string()
+      .transform((password) => password.replace(/\s/g, '') || undefined)
+      .optional(),
     KIE_URL: optional(z.url(), 'http://127.0.0.1:9'),
     KIE_API_KEY: optional(z.string(), 'test-kie-key'),
     SEED_ADMIN_EMAIL: z.string().optional(), // used by `npm run seed` only
