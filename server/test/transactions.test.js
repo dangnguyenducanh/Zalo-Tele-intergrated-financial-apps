@@ -391,6 +391,19 @@ test('TC-F8-25 POST /transactions/parse reads the amount, not a year or month ty
   expect(await Transaction.countDocuments()).toBe(0);
 });
 
+test('TC-F14-58 POST /transactions/parse answers "/hoi …" like a question: question: true, no drafts, nothing stored (BUG-044)', async () => {
+  const { me } = await newUser();
+  for (const text of ['/hoi phở 45k', '/hỏi phở 45k', '/Hoi phở 45k', '/ho\u0309i phở 45k']) {
+    const res = await me.post('/transactions/parse', { text });
+    expect([text, res.status, res.body]).toEqual([text, 200, { question: true, drafts: [], noAmountLines: [], truncated: false }]);
+  }
+  expect(await Transaction.countDocuments()).toBe(0);
+  // Without a space after the command it is one ordinary word: a capture, as before.
+  const word = await me.post('/transactions/parse', { text: '/hoiphở 45k' });
+  expect(word.body).not.toHaveProperty('question');
+  expect(word.body.drafts).toMatchObject([{ amount: 45_000 }]);
+});
+
 test('TC-F13-08 POST /transactions/parse answers a question with question: true, no drafts and no reading of the user\'s data', async () => {
   const { me } = await newUser();
   const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', 'hôm nay ăn gì?', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', 'tổng kết tuần trước'];

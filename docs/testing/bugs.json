@@ -646,5 +646,23 @@
     "status": "Closed",
     "dateClosed": "2026-11-26",
     "evidence": "retest after the 2026-11-26 restart: charter-runs/2026-11-26/manual-T32-receipts/receipt.mp4 (staging draft 116.000) ; recurs until a named tunnel replaces the quick tunnel"
+  },
+  {
+    "id": "BUG-044",
+    "dateFound": "2026-11-27",
+    "foundBy": "Staging charter charter-T41-web (2026-11-27)",
+    "feature": "F13 Quick add",
+    "severity": "S3 Minor",
+    "title": "'/hoi phở 45k' typed in web QuickAdd saves a 45.000 ₫ draft with the note '/hoi phở' instead of being a question",
+    "stepsToReproduce": "1. Open QuickAdd on the web.\n2. Type '/hoi phở 45k' (or '/hỏi …'), see the preview, press Enter.\n3. Or POST /api/transactions/parse {\"text\": \"/hoi phở 45k\"}.",
+    "expected": "A question like in the chat bots (router row 3): no preview, nothing saved; parse answers question: true with no drafts.",
+    "actual": "A 45.000 ₫ draft with the note '/hoi phở' was previewed and saved.",
+    "rootCause": "The web parse route runs only classify (docs/02 §2.11.1), and classify did not know the chat command: '/hoi' is handled by the bots' router (readCommand in bot/core.js) before classify ever runs, so a text with an amount fell to rule 5 (capture).",
+    "fix": "classify has rule 1b: a first word that is the /hoi command (case, accents and NFC/NFD ignored, same normalizer as readCommand; '/hoi@bot' too; '/hoiphở' is another word) is a question. Documented in docs/02 §2.11.1 and docs/07 §7.9.4.",
+    "filesOrCommit": "server/src/bot/ask.js, docs/02 §2.11.1, docs/07 §7.9.4; T81 (#138)",
+    "regressionTest": "TC-F14-57, TC-F14-58",
+    "status": "Fixed (awaiting retest)",
+    "dateClosed": "",
+    "evidence": "found: charter-runs/2026-11-27/charter-T41-web/ (run.log parse lines, results.json) ; fix: PR pending"
   }
 ]
