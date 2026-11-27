@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { addTransaction, createAccount as createAccountWithData, registerByApi } from './helpers';
+import { addTransaction, assertMailStub, confirmSignup, createAccount as createAccountWithData, mailedCode, noHorizontalScroll as pageFits, registerByApi } from './helpers';
 
 // App shell journeys in a real browser against the real API (in-memory MongoDB, see playwright.config.ts):
 // login/register, silent refresh on reload, logout, theme, language and the responsive layout.
@@ -27,7 +27,8 @@ async function logIn(page: Page, email: string) {
   await expect(page.getByRole('button', { name: /^(Tài khoản|Account)$/ })).toBeVisible();
 }
 
-test('TC-F1-08 register, reload (still logged in), log out (back to /login)', async ({ page, context }) => {
+test('TC-F1-08 register, confirm the emailed code, reload (still logged in), log out (back to /login)', async ({ page, context }) => {
+  assertMailStub();
   const email = `an-${Date.now()}@example.com`;
   await page.goto('/register');
   await page.getByRole('textbox', { name: 'Họ tên' }).fill('An');
@@ -35,6 +36,7 @@ test('TC-F1-08 register, reload (still logged in), log out (back to /login)', as
   await page.getByLabel(/^Mật khẩu/).fill(PASSWORD);
   await page.getByLabel(/^Nhập lại mật khẩu/).fill(PASSWORD);
   await page.getByRole('button', { name: 'Đăng ký' }).click();
+  await confirmSignup(page, email); // docs/07 §7.10.1: the code from the mail stub, typed on /verify-email
 
   await expect(page.getByRole('heading', { level: 1, name: 'Xin chào, An' })).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
@@ -137,13 +139,21 @@ for (const scheme of ['light', 'dark'] as const) {
         expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `${label} scrolls sideways`).toBe(true);
       };
 
-      for (const path of ['/login', '/register', '/verify-email', '/no-such-page']) {
-        // /verify-email shows only while a sign-up is pending, so seed the entry Register keeps (docs/05 §5.11.1).
-        if (path === '/verify-email') await page.evaluate(() => sessionStorage.setItem('pendingSignup', JSON.stringify({ email: 'lan@example.com', maskedEmail: 'l***@example.com', name: 'Lan', signupToken: 't', resendAt: Date.now() + 60_000 })));
+      // The pages in front of the login. A page that shows only with a pending entry gets it seeded (docs/05 §5.11): the
+      // sign-up for /verify-email, and the reset for step 2 of /forgot-password (step 1 is visited before the seed).
+      const resendAt = Date.now() + 60_000;
+      const seeds: Record<string, [string, object]> = {
+        'verify-email': ['pendingSignup', { email: 'lan@example.com', maskedEmail: 'l***@example.com', name: 'Lan', signupToken: 't', resendAt }],
+        'forgot-password-code': ['pendingReset', { email: 'lan@example.com', resendAt, sent: true }],
+      };
+      const pages: [path: string, label: string][] = [['/login', 'login'], ['/register', 'register'], ['/verify-email', 'verify-email'], ['/forgot-password', 'forgot-password'], ['/forgot-password', 'forgot-password-code'], ['/no-such-page', 'no-such-page']];
+      for (const [path, label] of pages) {
+        const seed = seeds[label];
+        if (seed) await page.evaluate(([key, value]) => sessionStorage.setItem(key as string, JSON.stringify(value)), seed);
         await page.goto(path);
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
         await expect(page.locator('html')).toHaveCSS('color-scheme', scheme);
-        await noHorizontalScroll(path.slice(1));
+        await noHorizontalScroll(label);
       }
 
       await logIn(page, email);
@@ -172,3 +182,40 @@ for (const scheme of ['light', 'dark'] as const) {
     });
   }
 }
+
+// docs/02 §2.12.2 in a real browser: no account until the emailed code is typed. Screenshots of the real screen for the PR.
+test('TC-F1-52 sign-up with a code: /verify-email shows the masked address, a wrong code shows the tries left, the right one opens the Dashboard', async ({ page, request }, testInfo) => {
+  assertMailStub();
+  const email = `code-${Date.now()}@example.com`;
+  await page.goto('/register');
+  await page.getByRole('textbox', { name: 'Họ tên' }).fill('Lan');
+  await page.getByRole('textbox', { name: 'Email' }).fill(email);
+  await page.getByLabel(/^Mật khẩu/).fill(PASSWORD);
+  await page.getByLabel(/^Nhập lại mật khẩu/).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Đăng ký' }).click();
+
+  await expect(page).toHaveURL(/\/verify-email$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Kiểm tra email của bạn' })).toBeVisible();
+  await expect(page.getByText(/c\*\*\*@example\.com/)).toBeVisible(); // the masked address, never the full one
+  expect(await page.evaluate('document.body.innerText')).not.toContain(email);
+  // No account yet: the same address cannot log in.
+  expect((await request.post('/api/auth/login', { data: { email, password: PASSWORD } })).status()).toBe(401);
+  await page.screenshot({ path: testInfo.outputPath('verify-email-1280.png'), animations: 'disabled' });
+  await page.setViewportSize({ width: 375, height: 800 });
+  expect(await pageFits(page)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('verify-email-375.png'), animations: 'disabled' });
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  const code = await mailedCode(email);
+  const box = page.getByRole('textbox', { name: 'Mã xác nhận' });
+  await box.fill(code === '000000' ? '111111' : '000000'); // the 6th digit submits
+  await expect(box).toHaveAccessibleDescription('Mã không đúng. Còn 4 lần thử.');
+  await expect(page).toHaveURL(/\/verify-email$/);
+
+  await box.fill(code);
+  await expect(page.getByRole('heading', { level: 1, name: 'Xin chào, Lan' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: 'Xin chào, Lan' })).toBeVisible();
+  await page.getByRole('link', { name: 'Ví' }).click();
+  await expect(page.getByRole('article', { name: 'Tiền mặt' })).toBeVisible(); // the default wallet seeded by the verify
+});

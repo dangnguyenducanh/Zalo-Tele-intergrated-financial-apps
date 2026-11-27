@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { addTransaction, createAccount, logIn } from './helpers';
 
 // TC-NF-03: axe-core (WCAG 2.1 A/AA rules, colour contrast included) finds no serious or critical problem on
-// the login page, the verify-email page and every user page (dashboard, transactions and the rest), in light
+// the login page, the verify-email and forgot-password pages and every user page (dashboard, transactions and the rest), in light
 // and in dark. A failure lists every problem on every page: the page, the rule, its help text and the elements.
 test.use({ locale: 'vi-VN', reducedMotion: 'reduce' });
 
@@ -15,7 +15,7 @@ async function seriousViolations(page: Page) {
 }
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`TC-NF-03 login, verify-email and every user page have no serious or critical axe violations in ${scheme}`, async ({ page, request }) => {
+  test(`TC-NF-03 login, verify-email, forgot-password and every user page have no serious or critical axe violations in ${scheme}`, async ({ page, request }) => {
     const account = await createAccount(request);
     await addTransaction(request, account, 45_000, 'Ăn uống', 'phở');
     await addTransaction(request, account, 15_000_000, 'Lương', 'lương', 'income');
@@ -29,6 +29,15 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.evaluate(() => sessionStorage.setItem('pendingSignup', JSON.stringify({ email: 'lan@example.com', maskedEmail: 'l***@example.com', name: 'Lan', signupToken: 't', resendAt: Date.now() + 60_000 })));
     await page.goto('/verify-email');
     await expect(page.getByRole('heading', { level: 1, name: 'Kiểm tra email của bạn' })).toBeVisible();
+    found.push(...(await seriousViolations(page)));
+
+    // /forgot-password: step 1, then step 2 once its entry is there (docs/05 §5.11.4).
+    await page.goto('/forgot-password');
+    await expect(page.getByRole('heading', { level: 1, name: 'Quên mật khẩu' })).toBeVisible();
+    found.push(...(await seriousViolations(page)));
+    await page.evaluate(() => sessionStorage.setItem('pendingReset', JSON.stringify({ email: 'lan@example.com', resendAt: Date.now() + 60_000, sent: true })));
+    await page.goto('/forgot-password');
+    await expect(page.getByRole('heading', { level: 1, name: 'Nhập mã và mật khẩu mới' })).toBeVisible();
     found.push(...(await seriousViolations(page)));
 
     await logIn(page, account.email);

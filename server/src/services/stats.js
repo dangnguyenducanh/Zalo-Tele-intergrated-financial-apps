@@ -5,10 +5,9 @@ import { Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { monthRange } from '../utils/vnTime.js';
 
-// $match for the money that really moved in a Vietnamese month: the user's confirmed, non-deleted
+// $match for the money that really moved between two instants (`end` excluded): the user's confirmed, non-deleted
 // transactions (docs/03 §3.4). Aggregations do not cast, so userId becomes an ObjectId here.
-function confirmedInMonth(userId, month) {
-  const { start, end } = monthRange(month);
+export function confirmedInRange(userId, start, end) {
   return {
     userId: new mongoose.Types.ObjectId(String(userId)),
     status: 'confirmed',
@@ -16,6 +15,9 @@ function confirmedInMonth(userId, month) {
     occurredAt: { $gte: start, $lt: end },
   };
 }
+
+// The same for a Vietnamese month 'YYYY-MM'.
+const confirmedInMonth = (userId, month) => confirmedInRange(userId, ...Object.values(monthRange(month)));
 
 // Σ amount per category for one type in the month → [{ _id: categoryId, total }], biggest first.
 // Budgets (services/budgets.js) use it too, for how much of each category's budget is spent.

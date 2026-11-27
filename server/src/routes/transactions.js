@@ -9,7 +9,7 @@ import {
   deleteTransaction,
   getTransaction,
   listTransactions,
-  parseTransactions,
+  previewTransactions,
   restoreTransaction,
   updateTransaction,
 } from '../services/transactions.js';
@@ -55,7 +55,7 @@ router.get('/', async (req, res) => {
 router.post('/parse', async (req, res) => {
   const { text } = parseBody.parse(req.body);
   if (classify(text, { followUp: false }) === 'question') return res.json({ question: true, drafts: [], noAmountLines: [], truncated: false });
-  res.json(await parseTransactions(req.user.id, text));
+  res.json(await previewTransactions(req.user.id, text));
 });
 
 router.post('/', async (req, res) => {

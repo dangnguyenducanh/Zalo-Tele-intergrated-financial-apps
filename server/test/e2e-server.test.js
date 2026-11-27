@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { telegram } from '../src/bot/telegram.js';
@@ -13,6 +14,7 @@ import whatsappWebhooks from './fixtures/whatsapp-webhooks.json' with { type: 'j
 import zaloEvents from './fixtures/zalo-events.json' with { type: 'json' };
 import { botCalls, stubOutboundHttp } from './helpers/bot-api-stub.js';
 import { startTestDb, stopTestDb } from './helpers/db.js';
+import { mailFile } from './helpers/mail-stub.js';
 
 // BUG-002: the E2E API server (helpers/e2e-server.js) must never call the real Telegram or Zalo Bot API.
 
@@ -124,4 +126,40 @@ test('TC-NF-11 the E2E server answers bot replies itself, even with real-looking
   );
   expect(output).not.toMatch(/webhook update failed|blocked outbound request/);
   for (const token of Object.values(tokens)) expect(output).not.toContain(token);
+}, 90_000);
+
+// TC-NF-11 extended for mail (docs/07 §7.10.1, §7.10.5): SMTP is not HTTP, so the stub above cannot see a real send.
+test('TC-NF-25 the E2E server with realistic GMAIL_* settings records a sign-up code and never opens SMTP', async () => {
+  const freePort = createServer().listen(0);
+  await once(freePort, 'listening');
+  const { port } = freePort.address();
+  freePort.close();
+  const gmail = { GMAIL_USER: 'real.sender@gmail.com', GMAIL_APP_PASSWORD: 'abcdefghijklmnop' };
+  const server = spawn(process.execPath, ['test/helpers/e2e-server.js'], {
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
+    env: { ...process.env, ...gmail, NODE_ENV: 'test', PORT: String(port), MONGODB_URI: '' },
+  });
+  let output = '';
+  server.stdout.on('data', (chunk) => (output += chunk));
+  server.stderr.on('data', (chunk) => (output += chunk));
+  try {
+    await vi.waitFor(() => expect(output).toMatch(/API listening/), { timeout: 60_000, interval: 100 });
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Lan', email: 'Lan.Stub@Example.com', password: 'correct-horse-1' }),
+    });
+
+    // Real SMTP with a made-up app password could not have answered 202: the code went to the stub, not to Gmail.
+    expect(res.status).toBe(202);
+    const lines = readFileSync(mailFile(port), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    expect(lines[0]).toEqual({ stub: true, pid: server.pid }); // the marker a Playwright helper looks for
+    expect(lines.slice(1)).toEqual([{ to: 'lan.stub@example.com', purpose: 'signup', code: expect.stringMatching(/^\d{6}$/), language: 'vi' }]);
+    expect(output).toContain('[mail-stub] signup code recorded');
+    expect(output).not.toMatch(/send failed|smtp\.gmail\.com/);
+    for (const secret of [...Object.values(gmail), lines[1].code, 'lan.stub@example.com']) expect(output).not.toContain(secret);
+  } finally {
+    server.kill();
+  }
 }, 90_000);

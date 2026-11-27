@@ -1,7 +1,10 @@
 import mongoose from 'mongoose';
 import { Category } from '../models/Category.js';
+import { Transaction } from '../models/Transaction.js';
 import { DEFAULT_CATEGORIES } from '../seed/templates.js';
 import { AppError } from '../utils/AppError.js';
+import { normalize } from '../utils/normalize.js';
+import { confirmedInRange } from './stats.js';
 
 const categoryNotFound = () => new AppError(404, 'NOT_FOUND', 'Category not found');
 
@@ -79,4 +82,37 @@ export async function seedCategoryTemplates() {
   }
   await Category.insertMany(DEFAULT_CATEGORIES.map((template) => ({ ...copyOf(template), userId: null })));
   console.info(`seed: created ${DEFAULT_CATEGORIES.length} category templates`);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// One limit at every entry point: the Categories page (routes/categories.js keywordList) and what a chat learns.
+export const KEYWORD_MAX_LENGTH = 40;
+export const KEYWORD_MAX_COUNT = 50;
+
+// A7: the categories a Khác/Other draft offers: the user's expense categories (not the fallback) by how many confirmed
+// expenses each has had in the last 90 days, most first; when fewer than 3 have any, the rest follow in creation order.
+export async function topExpenseCategories(userId, { now = new Date(), count = 3 } = {}) {
+  const [used, own] = await Promise.all([
+    Transaction.aggregate([
+      { $match: { ...confirmedInRange(userId, new Date(now.getTime() - 90 * DAY_MS), now), type: 'expense' } },
+      { $group: { _id: '$categoryId', n: { $sum: 1 } } },
+      { $sort: { n: -1, _id: 1 } },
+    ]),
+    Category.find({ userId, type: 'expense', isFallback: false, deletedAt: null }).sort({ _id: 1 }).lean(),
+  ]);
+  const byId = new Map(own.map((category) => [String(category._id), category]));
+  const ranked = used.map((row) => byId.get(String(row._id))).filter(Boolean);
+  return [...ranked, ...own.filter((category) => !ranked.includes(category))].slice(0, count);
+}
+
+// A7: the first word of `note` (lower-case, no diacritics) becomes a keyword of the category, unless another of the user's
+// categories has it already, the word is only digits or it is longer than the page allows (it would block every later edit). Returns the word when it was added, else null. The ownership check
+// runs on every call, so a word learned meanwhere else is never taken over.
+export async function learnKeyword(userId, categoryId, note) {
+  const word = normalize(note).split(/[^a-z0-9]+/).find(Boolean);
+  if (!word || /^\d+$/.test(word) || word.length > KEYWORD_MAX_LENGTH) return null;
+  const taken = await Category.exists({ userId, deletedAt: null, keywords: word, _id: mongoose.trusted({ $ne: categoryId }) });
+  if (taken) return null;
+  const { modifiedCount } = await Category.updateOne({ _id: categoryId, userId, [`keywords.${KEYWORD_MAX_COUNT - 1}`]: mongoose.trusted({ $exists: false }) }, { $addToSet: { keywords: word } });
+  return modifiedCount > 0 ? word : null;
 }

@@ -29,6 +29,7 @@ async function sendMessage(chatId, text) {
 // Replies stay far below Zalo's 2000-char limit: a note is at most 200 chars, names at most 40.
 export const zalo = {
   platform: 'zalo',
+  categoryOffer: 'type', // a Khác/Other draft names its categories; the user types one (A7)
   sendText: sendMessage,
   sendDraft: (chatId, draft, language) => zalo.sendText(chatId, `${draft.text}\n${messagesFor(language).replyHint}`),
   // A photo arrives as a plain URL, so downloading it is one GET.

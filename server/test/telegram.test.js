@@ -425,6 +425,105 @@ test('TC-F14-27 the help text lists /hoi, in both languages, and a question in E
   expect(await Transaction.countDocuments()).toBe(0);
 });
 
+const dong = (amount, m) => new Intl.NumberFormat(m.locale, { style: 'currency', currency: 'VND' }).format(amount); // as the bot writes money
+
+// Confirmed spending of a user for the last days, so the 90-day median of a category exists (draft check, A6).
+async function seedSpending(userId, categoryId, amounts) {
+  const user = await User.findById(userId);
+  await Transaction.insertMany(
+    amounts.map((amount) => ({ userId, walletId: user.defaultWalletId, categoryId, type: 'expense', amount, occurredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), status: 'confirmed' })),
+  );
+}
+
+test('TC-F14-51 "cơm 1tr2 chia 4" in a chat is one draft of 300.000 ₫ with the split in the note (docs/02 §2.11.2 A5)', async () => {
+  await linkedUser();
+  const replies = await say('cơm 1tr2 chia 4');
+  expect(replies.map((c) => c.method)).toEqual(['sendMessage']);
+  expect(textOf(replies[0])).toMatch(/^📝 Chi 300\.000\s₫ · Ăn uống · Tiền mặt · \d\d\/\d\d\/\d{4} · cơm \(1\.200\.000 ₫ ÷ 4\)$/);
+  expect(replies[0].body.reply_markup).toBeDefined(); // ✅ / ❌
+  expect(await Transaction.find().lean()).toMatchObject([{ amount: 300_000, note: 'cơm (1.200.000 ₫ ÷ 4)', status: 'draft' }]);
+});
+
+test('TC-F14-51 a lone "chia N" divides the waiting draft in place: same draft, new amount, the split in the note; "ok" saves the share', async () => {
+  await linkedUser();
+  await say('cơm 1tr2');
+  const [draft] = await Transaction.find().lean();
+  expect(draft.amount).toBe(1_200_000);
+
+  const replies = await say('chia 4');
+  expect(replies.map((c) => c.method)).toEqual(['sendMessage']);
+  expect(textOf(replies[0])).toMatch(/300\.000.*cơm \(1\.200\.000 ₫ ÷ 4\)/);
+  expect(replies[0].body.reply_markup.inline_keyboard[0][0].callback_data).toBe(`c:${draft._id}`); // the same draft, with its buttons
+  expect(await Transaction.find().lean()).toMatchObject([{ _id: draft._id, amount: 300_000, note: 'cơm (1.200.000 ₫ ÷ 4)', status: 'draft' }]);
+
+  // Another kind of bill: case and spaces do not matter, and the share rounds up to 1.000 ₫.
+  await say('phở 100k');
+  expect(textOf((await say('  Chia   3 '))[0])).toMatch(/34\.000.*phở \(100\.000 ₫ ÷ 3\)/);
+  expect(textOf((await say('ok'))[0])).toMatch(/Đã lưu.*34\.000/);
+  expect((await Transaction.find({ status: 'confirmed' }).lean()).map((t) => t.amount)).toEqual([34_000]);
+});
+
+test('TC-F14-52 "chia N" with no waiting draft changes nothing and says so, in the chat\'s language; it is never read as a question or an amount', async () => {
+  await linkedUser();
+  for (const text of ['chia 3', 'Chia 50', 'chia 2']) {
+    const replies = await say(text);
+    expect([text, replies.map((c) => c.method), textOf(replies[0])]).toEqual([text, ['sendMessage'], viText.nothingToSplit]);
+    expect(replies[0].body.reply_markup).toBeUndefined(); // no draft, no buttons
+  }
+  expect(viText.nothingToSplit).not.toBe(viText.help); // it is not the help text a question would get
+  expect(await Transaction.countDocuments()).toBe(0);
+
+  // A draft that is already saved is not waiting any more.
+  await say('phở 45k');
+  await say('ok');
+  expect(textOf((await say('chia 3'))[0])).toBe(viText.nothingToSplit);
+  expect((await Transaction.findOne().lean()).amount).toBe(45_000);
+
+  await say('/lang en');
+  expect(textOf((await say('chia 3'))[0])).toBe(enText.nothingToSplit);
+  expect(enText.nothingToSplit).not.toBe(viText.nothingToSplit);
+});
+
+test('TC-F14-56 /help explains "chia N" in both languages', async () => {
+  await linkedUser();
+  expect(textOf((await say('/help'))[0])).toBe(viText.help);
+  expect(viText.help).toContain('chia 4');
+  expect(enText.help).toContain('chia 4');
+});
+
+test('TC-F14-55 a draft 3× its category\'s usual amount (a guessed "450") carries the check line under it, in the chat\'s language', async () => {
+  const { user, food } = await linkedUser();
+  await seedSpending(user.id, food, [55_000, 55_000, 55_000, 55_000, 55_000]);
+
+  const replies = await say('phở 450');
+  expect(replies).toHaveLength(1); // the hint is inside the draft message: no extra send
+  const lines = textOf(replies[0]).split('\n');
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toMatch(/^📝 Chi 450\.000\s₫ · Ăn uống/);
+  expect(lines[1]).toBe(viText.hintBig({ name: 'Ăn uống', times: 8, median: dong(55_000, viText) }));
+  expect(lines[1]).toMatch(/gấp 8 lần.*Ăn uống.*55\.000/);
+
+  // The same amount typed with a unit is checked at 5×: 165k is only 3× → no line.
+  expect(textOf((await say('phở 165k'))[0]).split('\n')).toHaveLength(1);
+  expect(textOf((await say('phở 275k'))[0]).split('\n')).toHaveLength(2); // 5× exactly
+
+  await say('/lang en');
+  expect(textOf((await say('lunch 450'))[0]).split('\n')[1]).toBe(enText.hintBig({ name: 'Food & drinks', times: 8, median: dong(55_000, enText) }));
+});
+
+test('TC-F14-55 the same amount and category sent twice within 10 minutes: only the second draft says so; a different amount does not', async () => {
+  await linkedUser();
+  expect(textOf((await say('phở 45k'))[0]).split('\n')).toHaveLength(1);
+  const second = textOf((await say('phở 45k'))[0]).split('\n');
+  expect(second).toHaveLength(2);
+  expect(second[1]).toBe(viText.hintDuplicate({ name: 'Ăn uống' }));
+  expect(textOf((await say('phở 46k'))[0]).split('\n')).toHaveLength(1);
+
+  // Two identical lines in one message: the first is clean, the second is the duplicate of the first.
+  const both = await say('bún 70k\nbún 70k');
+  expect(both.map((c) => textOf(c).split('\n').length)).toEqual([1, 2]);
+});
+
 test("TC-F8-06 ✅ confirms and ❌ discards, only on the presser's own drafts", async () => {
   const a = await linkedUser(CHAT_A);
   const b = await linkedUser(CHAT_B);
@@ -934,4 +1033,28 @@ test('TC-F14-23 Telegram is not counted and never silenced by the quota guard, e
   expect((await say('phở 45k'))[0].body.reply_markup.inline_keyboard[0]).toHaveLength(2); // the draft, with ✅ / ❌ (no ✏️ over http)
   expect(textOf((await say('ok'))[0])).toMatch(/Đã lưu.*45\.000/);
   expect(await ChannelUsage.find().lean()).toMatchObject([{ platform: 'zalo', sent: 3000 }]); // nothing counted for Telegram
+});
+
+// docs/02 §2.11.2 A4 on Telegram: the ✅ button records the confirm, so /sua and "hoàn tác" reach it like a typed "ok".
+test('TC-F14-81 TC-F14-82 Telegram: after a ✅ press, /sua edits the transaction and "hoàn tác" / "khôi phục" delete and restore it; /sua with a draft waiting keeps its buttons', async () => {
+  const { user } = await linkedUser();
+  await say('grab 32k');
+  const draft = await Transaction.findOne();
+  await press(`c:${draft.id}`);
+  expect(await ChatLink.findOne()).toMatchObject({ lastConfirmedId: draft._id, lastConfirmedAt: expect.any(Date) });
+
+  const fixed = await say('/sua 40k hôm qua');
+  expect(textOf(fixed[0])).toMatch(/^✏️ Đã sửa: Chi 40\.000/);
+  expect(await Transaction.findById(draft.id)).toMatchObject({ amount: 40_000, status: 'confirmed' });
+
+  expect(textOf((await say('hoàn tác'))[0])).toMatch(/Đã xoá.*40\.000/);
+  expect((await Transaction.findById(draft.id)).deletedAt).toBeInstanceOf(Date);
+  expect(textOf((await say('khôi phục'))[0])).toMatch(/Đã khôi phục.*40\.000/);
+  expect((await Transaction.findById(draft.id)).deletedAt).toBeNull();
+
+  await say('phở 45k');
+  const waiting = await Transaction.findOne({ status: 'draft' });
+  const replies = await say('/sua 50k');
+  expect(replies[0].body.reply_markup.inline_keyboard[0][0].callback_data).toBe(`c:${waiting.id}`);
+  expect(await Transaction.find({ userId: user.id }).sort({ _id: 1 }).lean()).toMatchObject([{ amount: 40_000 }, { amount: 50_000, status: 'draft' }]);
 });

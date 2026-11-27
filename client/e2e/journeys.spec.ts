@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { PASSWORD } from './helpers';
+import { confirmSignup, PASSWORD } from './helpers';
 
 // Whole customer journeys across pages, in a real browser against the real API, parser and statistics.
 // The feature specs test one screen each; these check that the screens agree with each other.
@@ -13,6 +13,7 @@ test('TC-F13-03 journey, web only (MT-01 steps): register, quick add three lines
   await page.getByLabel(/^Mật khẩu/).fill(PASSWORD);
   await page.getByLabel(/^Nhập lại mật khẩu/).fill(PASSWORD);
   await page.getByRole('button', { name: 'Đăng ký' }).click();
+  await confirmSignup(page, email); // through /verify-email with the code from the mail stub (docs/07 §7.10.1)
   await expect(page.getByRole('heading', { level: 1, name: 'Xin chào, An' })).toBeVisible();
 
   // Three lines in the dashboard's quick add: no bot, no form.

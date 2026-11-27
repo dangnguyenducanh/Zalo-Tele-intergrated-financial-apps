@@ -6,6 +6,7 @@ import { AuthError, postAuth } from '@/auth/session';
 import { useAuth } from '@/auth/useAuth';
 import { errorMessage } from '@/i18n/errors';
 import type { ResendAnswer } from '@/types/api';
+import { numberIn } from './apiDetails';
 import AuthLayout from './AuthLayout';
 import CodeInput, { CODE_LENGTH } from './CodeInput';
 import { clearPendingSignup, readPendingSignup, savePendingSignup, type PendingSignup } from './pendingSignup';
@@ -25,11 +26,6 @@ export default function VerifyEmailPage() {
     </AuthLayout>
   );
 }
-
-const numberIn = (details: unknown, key: string) => {
-  const value = (details as Record<string, unknown> | null)?.[key];
-  return typeof value === 'number' ? value : undefined;
-};
 
 function VerifyForm({ pending }: { pending: PendingSignup }) {
   const { t } = useTranslation('auth');
