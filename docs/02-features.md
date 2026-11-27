@@ -82,7 +82,7 @@ The same **bot core** serves every platform. Only sending/receiving and confirm 
 | Receive photo | `message.photo` → `getFile` → download | `message.photo_url` → download | `message.image.id` → `GET /<media-id>` → `url` → download with the access token (the URL lives 5 minutes) |
 | Message limit | 4096 chars | 2000 chars | 4096 chars for text; 1024 for the body of a button message; button titles ≤ 20 chars |
 
-**Commands:** `/start` (welcome or link), `/link CODE`, `/help`, `/today` (today's spending), `/month` (month total, the overall budget and each category budget with its usage, fullest first), `/lang vi|en`. *Planned (§2.11.6):* `/hoi`, `/dubao`, `/visao`, `/sua`, `/ngansach`, `/tuan`, `/thang`, `/dinhky`, `/nhac`, `/tongket`, `/chep`, `/dunggoiy`, `/dongy`, `/thoi`, the words `hoàn tác` / `khôi phục`, and `chia N`; a question typed without a command is answered instead of becoming a draft (§2.11.1).
+**Commands:** `/start` (welcome or link), `/link CODE`, `/help`, `/today` (today's spending), `/month` (month total, the overall budget and each category budget with its usage, fullest first), `/lang vi|en`, and `/hoi <question>` (built, T41). A command name is read like capture text: case and accents are ignored, and so is the decomposed Unicode form (`/Today`, `/tôday` and `/Lang vi` run `/today` and `/lang vi`; `/Hỏi` is `/hoi`). A question never becomes a draft: `/hoi …` and any text `classify` reads as a question (§2.11.1) get the help text, which lists `/hoi`, and nothing is stored, until the question engine of §2.11.3 exists. *Planned (§2.11.6):* `/dubao`, `/visao`, `/sua`, `/ngansach`, `/tuan`, `/thang`, `/dinhky`, `/nhac`, `/tongket`, `/chep`, `/dunggoiy`, `/dongy`, `/thoi`, the words `hoàn tác` / `khôi phục`, and `chia N`.
 
 **Unlinked chats** get: "Please link your account: open `<app>/bot` and send `/link CODE`" (in both languages). *Planned:* the reply also carries a one-tap link to the website (§2.10.3).
 
@@ -106,6 +106,14 @@ Input is one line per transaction (up to 10 lines per message). Text is lower-ca
 
 **A year or month is not the amount.** A number written right after `năm` / `nam` that is a 4-digit year (1900–2099), or right after `tháng` / `thang` that is 1–12, is a date and never the amount: `thuê nhà năm 2026 36tr` → 36,000,000 and `ăn tối tháng 10 50` → 50,000 (the bare `50` is read as thousands). The words stay in the note. The number is still money when it carries a money unit (`tháng 10k`, `tháng 10 nghìn`) or thousands separators (`năm 2.026`). A line whose only number is such a date (`tiền nhà tháng 10`, `năm 2025`) has no amount: it is answered like any line with no number and nothing is saved. Every other number after `nam` / `tháng` is read as before, so `cắt tóc nam 50k`, `cắt tóc nam 50000` (`nam` also means "male"), `áo nam 2000k` and `gửi xe tháng 100k` keep their amounts. The flip side: a bare 1900–2099 after `nam` / `năm`, such as `cắt tóc nam 2000`, is read as a year, so that line has no amount; write `2000k` for money.
 
+**More numbers are never the amount** (decision D9, the default of 2026-11-25; the owner may change it). A question about a period or a list carries numbers that are not money (`chi tiêu 7 ngày qua`), so these bare numbers are never the amount either, in the parser (bots, quick add, the Zalo correction) and in `classify` (§2.11.1), through one shared rule in `bot/period.js` (cases: `shared/fixtures/period.json`):
+- right after `tháng` / `thang`, a 4-digit 2000–2099, a year (the 1–12 above is a month, and `năm` keeps its 1900–2099);
+- right before `ngày`, 1–366, only when `ngày` is written with its accent (the NFC form of the typed word is compared, so a combining accent counts) or `qua` / `trước` / `nay` follows it: `chi tiêu 7 ngày qua` has no amount, while `trả 500 ngay` stays 500,000 ₫ (500 is no day count, and "ngay" alone means "at once");
+- right before `khoản`, 1–50: `5 khoản chi lớn nhất`;
+- right after `top`, 1–999 (up to three digits), only when `top` is the first word: `top 3 cafe`, while `crop top 120` stays 120,000 ₫.
+
+As for the year and month above, only a bare number qualifies: a money unit, joined or apart (`7k ngày`, `7 k ngày`), or thousands separators make it money, and the words stay in the note. A line whose only numbers are these has no amount: it is answered like any line with no number and nothing is saved (`chi tiêu 7 ngày qua`, `đã chi gì tháng 9`, `chi tiêu năm 2025`). A line like `ăn 3 ngày 150k` keeps its amount, 150,000 ₫.
+
 The amount is rounded to whole đồng and must be from 1 ₫ to 10^13 ₫. A line whose amount is 0 or above that ceiling counts as having no amount. If no line in the message has an amount, the bot replies with help text and examples. Otherwise it saves the lines it can read and names the line numbers it did not record. Lines after the 10th are ignored without a message (the web quick add says so).
 
 **Type:** **income** if the line starts with `+`, or contains an income keyword (`lương`, `thưởng`, `nhận`, `salary`, `bonus`, `received`) or a keyword of an income category. Otherwise it's an **expense**.
@@ -127,6 +135,8 @@ Examples:
 | `+lương 15tr` | income · 15,000,000 · Lương · default wallet · now · "lương" |
 | `coffee 30k` | expense · 30,000 · Ăn uống (English keyword) · now · "coffee" |
 | `thuê nhà năm 2026 36tr` | expense · 36,000,000 · Nhà ở · default wallet · now · "thuê nhà năm 2026" (the year is a date, not 2,026) |
+| `ăn 3 ngày 150k` | expense · 150,000 · Ăn uống · default wallet · now · "ăn 3 ngày" (the 3 is a day count, not 3,000) |
+| `chi tiêu 7 ngày qua` | no draft: the 7 is a day count, so the line has no amount (help text in chat, `NO_AMOUNT_FOUND` on the web quick add) |
 
 ## 2.6 Receipt photos (KIE, then local Qwen)
 
@@ -315,24 +325,25 @@ The first match wins, in this order inside `handleMessage` (Telegram button pres
 |---|---|---|
 | 1 | `/start CODE`, `/link CODE`, unlinked or locked chat | Rules, as today (§2.4, §2.10) |
 | 2 | Photo | The receipt reader of §2.6 (KIE, or Qwen in the agent service once `RECEIPT_READER=qwen`) → draft → confirm |
-| 3 | `/hoi <question>` | The agent service (§2.11.3), explicit |
+| 3 | `/hoi <question>` | The agent service (§2.11.3), explicit. Built (T41): until that service exists, the help text, and nothing is stored |
 | 4 | Any other command (§2.11.6) | Rules / templates (B-tier reports through the agent service's pipeline skills) |
 | 5 | Reserved words `ok`, `huy`, `hoàn tác`, `khôi phục` | Rules (drafts, A4 undo) |
-| 6 | Everything else | `classify(text, { followUp })` → **question** → the agent service (§2.11.3), or **capture** → `createDrafts` as today |
+| 6 | Everything else | `classify(text, { followUp })` → **question** → the agent service (§2.11.3) (built, T41: until it exists, the help text; `followUp` is false until T50), or **capture** → `createDrafts` as today |
 
 **`classify` is a pure function in `bot/ask.js` (Express), no database, no model.** The first rule that fires decides:
 1. Starts with `?` → question.
 2. More than one non-empty line → capture.
 3. Ends with `?` → question, even with an amount.
 4. Last word `chưa`, `không` or `ko`, or `bao nhiêu` anywhere → question.
-5. Time phrases, `top N`, `N khoản`, `N ngày` are consumed first (by `period.js`), so a year after `năm`/`tháng` or a day count is never an amount. Then an explicit amount in the remaining words (a unit like `45k`, `1tr2`; thousands separators; 5+ digits) → capture.
-6. A strong question marker (`bao giờ`, `khi nào`, `thế nào`, `tại sao`, `vì sao`, `tổng kết`, `so với`, `how much`, `why`; `sao` as the first or last word; `mấy` only with diacritics) → question. Weak cues (`top`, `tìm` with its accent, `còn lại`) count only at the start of a message that has no amount at all, not even a bare number, so "tìm phở" is a question while "tim heo 50" and "crop top 120" stay captures.
-7. `followUp` (an assistant answer went to this chat in the last 10 minutes; always true in the web drawer) and no amount → question.
+5. Time phrases, `top N`, `N khoản` and `N ngày` are taken out first (by `period.js`, with the never-amount rules of §2.5), so a year or month after `năm`/`tháng` or a day count is never an amount. Then an explicit amount in the remaining words (a money unit, joined or apart, like `45k`, `45 k`, `1tr2`; thousands separators; 5+ digits) → capture. A bare number of 1–4 digits is not explicit.
+5b. A text with a `top N` (`top` is the first word) or an `N khoản`, and no other number left once rule 5 has taken the time phrases and counts out, not even a bare one → question (decision D10, the default of 2026-11-25; the owner may change it): "5 khoản chi lớn nhất tuần trước" and "top 3 cafe" are questions, not 5.000 ₫ and 3.000 ₫ drafts. "top 3 cafe 50" keeps its other number and is a capture.
+6. A strong question marker (`bao giờ`, `khi nào`, `thế nào`, `tại sao`, `vì sao`, `tổng kết`, `so với`, `how much`, `why`; `sao` as the first or last word; `mấy` only with diacritics) → question. Weak cues (`top`, `tìm` with its accent, `còn lại`) count only at the start of a message that has no number left after rule 5, not even a bare one, so "tìm phở" is a question while "tim heo 50" and "crop top 120" stay captures.
+7. `followUp` (an assistant answer went to this chat in the last 10 minutes; always true in the web drawer) → question (decision D11, the default of 2026-11-25; the owner may change it). While `followUp` is true a bare number is not an amount, so everything that reaches this rule is a question: an explicit amount was already a capture at rule 5, and two or more lines at rule 2. "còn 3 tháng trước" and "phở 45" are questions then; with `followUp` false they are captures (a 3.000 ₫ and a 45.000 ₫ draft, as today), and "phở 45k" is a capture either way.
 8. Anything else → capture (a bare number is still guessed as thousands; no amount → help text).
 
-Ties lean to *question*: a capture read as a question saves nothing, while a question read as a capture creates money data. **On the web**, `POST /api/transactions/parse` runs the same `classify` (`followUp: false`) and returns `{ question: true, drafts: [], noAmountLines: [], truncated: false }`; QuickAdd's Enter then saves nothing and shows the chip "Đây là câu hỏi · Hỏi Sổ chi tiêu ›".
+Ties lean to *question*: a capture read as a question saves nothing, while a question read as a capture creates money data. **On the web**, `POST /api/transactions/parse` runs the same `classify` (`followUp: false`) in the route, before the parser and without reading the user's categories or wallets, and returns `{ question: true, drafts: [], noAmountLines: [], truncated: false }`; QuickAdd's Enter then saves nothing. Built (T41): QuickAdd shows the non-clickable notice "Đây là câu hỏi" instead of the preview, and Enter, Save, Shift+Enter and "Open full form" do nothing (§5.10.2); T51 turns the notice into the chip "Đây là câu hỏi · Hỏi Sổ chi tiêu ›" that opens the drawer.
 
-**Agent service down or busy:** a question gets the help text plus the plain commands (`/today`, `/month`), and the web gets 503 `AGENT_UNAVAILABLE` or `AGENT_BUSY`. Capture never waits on the agent service.
+**Agent service down, busy or not built yet:** a question gets the help text plus the plain commands (`/today`, `/month`; since T41 the help text also lists `/hoi`), and the web gets 503 `AGENT_UNAVAILABLE` or `AGENT_BUSY` once there is an agent endpoint to ask. Capture never waits on the agent service.
 
 ### 2.11.2 Rule-based features (no LLM)
 
@@ -519,7 +530,7 @@ One helper, `maySend(platform, kind)` in `services/channelUsage.js`, answers whe
 
 From 2,850 only `capture` and `link` replies are sent. A command's effect still happens (`/lang` still switches the language); only its reply is not sent. ⚑ **Linking replies stay on past 2,850** (decision D20, the default of 2026-11-25; the owner may change it), so a user can still finish linking; the help replies stop. The core sends every text reply through one function that names its kind (an unnamed send is `other`, so a new send is guarded unless it says otherwise). If the count cannot be read, the message is sent and the failure is logged. The check reads the count and then sends, so two replies at 2,849 can both go out; the 150 messages between 2,850 and Zalo's 3,000 absorb that.
 
-**New commands** (vi, with English aliases where natural): `/hoi`, `/dubao`, `/visao`, `/sua`, `/ngansach <danh mục> <số tiền>`, `/tuan`, `/thang`, `/dinhky`, `/nhac toi|tuan|tat`, `/tongket`, `/chep`, `/dunggoiy`, `/dongy`, `/thoi`; reserved words `hoàn tác`, `khôi phục`; the parser rule `chia N`. `/help` lists them.
+**New commands** (Vietnamese only: the one English alias is `undo`, for `hoàn tác`, built by T59; no other new command has one): `/hoi` (built, T41), `/dubao`, `/visao`, `/sua`, `/ngansach <danh mục> <số tiền>`, `/tuan`, `/thang`, `/dinhky`, `/nhac toi|tuan|tat`, `/tongket`, `/chep`, `/dunggoiy`, `/dongy`, `/thoi`; reserved words `hoàn tác`, `khôi phục`; the parser rule `chia N`. `/help` lists them as they are built: `/hoi` since T41. Every command name, old or new, is read without case and accents (`/Hỏi`, `/HỎI` and `/hoi` are one command, also in the decomposed Unicode form); the arguments keep what was typed.
 
 **Data:**
 - New collections written by the agent service:
@@ -539,7 +550,7 @@ From 2,850 only `capture` and `link` replies are sent. A command's effect still 
 ### 2.11.7 Build order
 
 **Stage R, rules only.** It needs the agent service (FastAPI + LangGraph, the bge-m3 embedder, the tunnel and the `sochitieu_agent` user) but **not the LLM**: vLLM can stay stopped, because pipeline skills and templates need no model.
-1. `classify` + `/hoi` + the router slot in `handleMessage` + `question: true` from `/transactions/parse` and the QuickAdd chip. Express only, no agent service yet (a question gets the help text). Fixes the "question becomes a draft" risk on its own.
+1. `classify` + `/hoi` + the router slot in `handleMessage` + `question: true` from `/transactions/parse` and the QuickAdd chip. Express only, no agent service yet (a question gets the help text). Fixes the "question becomes a draft" risk on its own. **Built (T41):** `bot/ask.js`, `bot/period.js`, the router slot, the parse flag and QuickAdd's notice; the chip's button comes with the drawer (T51).
 2. A2 `pace()` and `/dubao`.
 3. The agent service without vLLM: the compose project with `agent` and `tunnel`, `/health`, `services/agent.js` with its down and busy fallbacks; the graph with the 8 v1 pipeline skills, `agentSkills` and `agentTools` seeded and embedded, `agentTurns`; the drawer in rules-only mode; the `compareRange()` fix in MonthCompare and the shared JS/Python fixture (the Express and browser halves are built, T43; the agent service adds `period.py` and its pytest on the same file).
 4. B1 digest on Telegram, with the cron, `notices` and `channelUsage` engine.

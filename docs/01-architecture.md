@@ -538,8 +538,8 @@ Zalo-Tele-intergrated-financial-apps/
 │   ├── wt-env.sh           # per-worktree ports and dev database
 │   ├── bot-e2e/            # real-chat bot checker: bot-e2e.mjs, scenarios.json
 │   └── test-report/        # build-report.mjs: JSON + test results → Excel
-├── .github/workflows/ci.yml # npm ci, typecheck, lint, test, then the agent's pytest, on every PR and push to main
-├── .claude/agents/         # coder, reviewer, merger agent definitions
+├── .github/workflows/ci.yml # npm ci, typecheck, lint, test, then the agent's pytest, on every PR and on pushes to main and staging
+├── .claude/agents/         # orchestrator, coder, reviewer, merger agent definitions
 ├── playwright.config.ts    # e2e: client/e2e against a test API + Vite
 ├── eslint.config.js
 ├── treehouse.toml          # worktree pool settings

@@ -26,6 +26,8 @@ type OpenForm = { mode: 'apply'; index: number; draft: ParsedDraft } | { mode: '
 
 // The quick-add box (docs/05 §5.7, F13): type "phở 45k" like in the bot. After a 300 ms pause the server parser
 // (POST /transactions/parse, saves nothing) shows a preview; Enter saves every line, Shift+Enter opens the full form.
+// A question ("tháng 10 thu bao nhiêu") is not money: the server answers question: true, the preview becomes a notice,
+// and Enter, Save, Shift+Enter and "Open full form" do nothing (docs/05 §5.10.2).
 export default function QuickAdd() {
   const { t } = useTranslation('transactions');
   const dispatch = useAppDispatch();
@@ -52,8 +54,9 @@ export default function QuickAdd() {
   // Lines the parser could not use. Saving only the others would silently lose them, so they are named and Enter waits.
   const skipped = ({ noAmountLines, truncated }: ParseResult) =>
     noAmountLines.length > 0 ? t('quickAdd.noAmountLines', { lines: noAmountLines.join(', ') }) : truncated ? t('quickAdd.tooManyLines') : null;
+  const isQuestion = Boolean(preview.currentData?.question) && value === settled;
   const warning = preview.currentData && value === settled ? skipped(preview.currentData) : null;
-  const hint = preview.error && value === settled ? apiErrorMessage(preview.error) : (warning ?? t('quickAdd.hint'));
+  const hint = preview.error && value === settled ? apiErrorMessage(preview.error) : isQuestion ? t('quickAdd.questionHint') : (warning ?? t('quickAdd.hint'));
 
   function reset(count: number) {
     setText('');
@@ -76,6 +79,7 @@ export default function QuickAdd() {
     if (!value) return;
     try {
       const result = await parse(value, true).unwrap();
+      if (result.question) return; // a question has no drafts: saving "nothing" must not clear the box or say "saved"
       const problem = skipped(result);
       if (problem) return setError(problem);
       const drafts = withEdits(result.drafts, value);
@@ -93,7 +97,9 @@ export default function QuickAdd() {
     let draft: Partial<ParsedDraft> = { note: value };
     if (value) {
       try {
-        draft = withEdits((await parse(value, true).unwrap()).drafts, value)[0] ?? draft;
+        const result = await parse(value, true).unwrap();
+        if (result.question) return; // no form with the question as its note
+        draft = withEdits(result.drafts, value)[0] ?? draft;
       } catch {
         // no amount: the form starts from the text alone
       }
@@ -162,6 +168,8 @@ export default function QuickAdd() {
           </Stack>
         </Stack>
       </Box>
+
+      <Box role="status">{isQuestion && <Chip label={t('quickAdd.question')} variant="outlined" sx={{ mt: 1.5 }} />}</Box>
 
       {shown.length > 0 && (
         <Stack component="ul" aria-label={t('quickAdd.preview')} spacing={1} sx={{ listStyle: 'none', p: 0, m: 0, mt: 1.5 }}>

@@ -213,3 +213,81 @@ describe('TC-F8-25 a year or month typed before the amount is a date, not the am
     expect(parseText('tiền nhà tháng 10\nthuê nhà năm 2026 36tr', ctx).map((d) => d?.amount ?? null)).toEqual([null, 36_000_000]);
   });
 });
+
+describe('TC-F14-26 more numbers that are never an amount: a day count, a count of items, top N, a year after tháng', () => {
+  test.each([
+    // after tháng, 2000-2099 is a year (T77 covers 1-12 there and 1900-2099 after năm)
+    ['thuê nhà tháng 2026 36tr', 36_000_000, 'thuê nhà tháng 2026'],
+    ['học phí tháng 2025 12.000.000', 12_000_000, 'học phí tháng 2025'],
+    ['gửi xe tháng 2000 50', 50_000, 'gửi xe tháng 2000'],
+    ['an toi thang 2099 50k', 50_000, 'an toi thang 2099'],
+    // before ngày, 1-366, with the accent, or with qua / trước / nay after it
+    ['ăn 3 ngày 150k', 150_000, 'ăn 3 ngày'],
+    ['ăn 3 ngày qua 150k', 150_000, 'ăn 3 ngày qua'],
+    ['an 3 ngay truoc 150k', 150_000, 'an 3 ngay truoc'],
+    ['an 3 ngay nay 150k', 150_000, 'an 3 ngay nay'],
+    ['ăn 366 ngày 150k', 150_000, 'ăn 366 ngày'],
+    ['ăn 3 NGÀY 150k', 150_000, 'ăn 3 NGÀY'],
+    ['ăn 3 ngày 150k', 150_000, 'ăn 3 ngày'], // "ngày" typed as a + combining grave
+    ['ăn 3 ngày 50', 50_000, 'ăn 3 ngày'], // the bare 50 is the guess, the 3 is not
+    // before khoản, 1-50
+    ['mua 3 khoản 90k', 90_000, 'mua 3 khoản'],
+    ['mua 50 khoản 90k', 90_000, 'mua 50 khoản'],
+    ['mua 3 khoan 90', 90_000, 'mua 3 khoan'],
+    // top N, only as the first word
+    ['top 3 cafe 50', 50_000, 'top 3 cafe'],
+    ['Top 5 cafe 50k', 50_000, 'Top 5 cafe'],
+  ])('TC-F14-26 "%s" → %i, the skipped words stay in the note', (text, amount, note) => {
+    expect(parse(text)).toMatchObject({ amount, note });
+  });
+
+  test.each([
+    ['trả 500 ngay', 500_000], // 500 is no day count, and "ngay" without its accent is "at once"
+    ['trả 50 ngay', 50_000],
+    ['trả 367 ngày', 367_000], // more than 366 days
+    ['trả 500 ngày', 500_000],
+    ['trả 7 ngay', 7_000],
+    ['ăn 7k ngày', 7_000], // a unit makes it money, joined or apart
+    ['ăn 7 k ngày', 7_000],
+    ['ăn 7 nghìn ngày', 7_000],
+    ['mua 51 khoản', 51_000], // more than 50
+    ['mua 5k khoản', 5_000],
+    ['mua 5 k khoản', 5_000],
+    ['crop top 120', 120_000], // top is not the first word
+    ['áo top 120', 120_000],
+    ['top 3k cafe', 3_000], // a unit makes it money
+    ['top 1000', 1_000], // more than three digits
+    ['gửi xe tháng 1999', 1_999], // 2000-2099 only
+    ['gửi xe tháng 2100', 2_100],
+    ['gửi xe tháng 2.026', 2_026], // separators make money
+    ['gửi xe tháng 2026k', 2_026_000],
+  ])('TC-F14-26 "%s" is still money → %i', (text, amount) => {
+    expect(parse(text)?.amount).toBe(amount);
+  });
+
+  test.each([
+    'chi tiêu 7 ngày qua',
+    'chi tiêu 7 ngày',
+    'chi 7 ngay qua',
+    'chi 366 ngày',
+    'đã chi bao nhiêu 7 ngày qua',
+    '5 khoản chi lớn nhất tuần trước',
+    '50 khoản gần nhất',
+    'top 3 cafe',
+    'Top 5 chi tiêu tháng 10',
+    'đã chi gì tháng 9',
+    'chi tiêu năm 2025',
+    'tổng kết tháng 2025',
+    'chi tiêu 7 ngày qua, 5 khoản lớn nhất', // two counts, no other number
+  ])('TC-F14-26 "%s" has no amount → no draft', (text) => {
+    expect(parse(text)).toBeNull();
+  });
+
+  test('TC-F14-26 a month, a day count and a count together leave only the free number as the amount', () => {
+    expect(parse('ăn tối tháng 10 3 ngày 5 khoản 50')).toMatchObject({ amount: 50_000, note: 'ăn tối tháng 10 3 ngày 5 khoản' });
+  });
+
+  test('TC-F14-26 one result per line: a line with only a day count is null, its neighbours are read', () => {
+    expect(parseText('chi tiêu 7 ngày qua\nphở 45k\ntop 3 cafe\ngrab 32k', ctx).map((d) => d?.amount ?? null)).toEqual([null, 45_000, null, 32_000]);
+  });
+});
