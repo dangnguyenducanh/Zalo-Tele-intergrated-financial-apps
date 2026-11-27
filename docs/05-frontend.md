@@ -420,30 +420,31 @@ The form and its checks are unchanged. `register()` in `AuthContext` gets one of
 | Answer | When | Client does |
 |---|---|---|
 | **201** `{ accessToken, user }` + `rt` cookie | Production without `GMAIL_*` (§2.12.4) | As today: `setSession`, then `/` |
-| **202** `{ email: "a***@gmail.com", resendAfter: 60 }` | Mail is on (or development/test, where the code goes to the server log) | No session. Keep the typed email, the masked one and the name in `sessionStorage` (never the password); go to `/verify-email` |
+| **202** `{ email: "a***@gmail.com", resendAfter: 60, signupToken }` | Mail is on (or development/test, where the code goes to the server log) | No session. Keep the typed email, the masked one, the name and the `signupToken` in `sessionStorage` (never the password); go to `/verify-email` |
 | 409 `EMAIL_TAKEN`, 400, 429 | As today | As today |
 | 503 `EMAIL_SEND_FAILED` | Gmail refused the mail | "We couldn't send the email. Try again in a few minutes." on the form |
 
-- `postAuth` returns only the body, so the two are told apart by `accessToken` in the body (or `postAuth` learns to return the status; builder's choice).
-- Coming back from "Wrong email? Change it", the form has the name and email filled in; the password is empty.
+- `register()` in `AuthContext` tells the two apart by `accessToken` in the body: it sets the session and resolves `null` for a 201, and resolves the 202 body for the page to keep (`features/auth/pendingSignup.ts`: `sessionStorage` key `pendingSignup`, with the time Resend opens so a reload keeps the countdown).
+- Coming back from "Wrong email? Change it", the form has the name and email filled in (passed in router state); both password fields are empty.
 
 ### 5.11.2 `/verify-email` screen (planned, §2.12.2)
 
-Sketch in §2.12.2. A public route beside `/login`. With no pending email in `sessionStorage` (opened bare, or in another tab) it goes to `/register`.
+Sketch in §2.12.2. A public route beside `/login`, in `features/auth/routes.tsx`. A logged-in user goes to `/`. With no pending entry in `sessionStorage` (opened bare, or in another tab or device) it goes to `/register`: only the tab that registered holds the `signupToken`, so no other tab can finish the sign-up (decision D1). The entry is read once when the page opens, so removing it after a success does not trigger that redirect.
 
 - Heading "Kiểm tra email của bạn / Check your email", then "We sent a 6-digit code to a***@gmail.com" (the masked address from the 202).
-- **One** input, not six boxes, so paste and screen readers work: `inputmode="numeric"`, `autocomplete="one-time-code"`, `maxLength={6}`. It submits on the 6th digit or on **Confirm**: `POST /api/auth/register/verify { email, code }`.
-- Under it: "Didn't get it? Check spam/junk" · **Resend** (with the countdown) · **Wrong email? Change it** (back to `/register`, filled in; the old row expires on its own).
-- **Resend:** `POST /api/auth/register/resend { email }` → 202 `{ resendAfter: 60 }`, and the countdown starts again. The old code stops working (§2.12.1), so the screen says a new code was sent.
+- **One** input, not six boxes, so paste and screen readers work: `inputmode="numeric"`, `autocomplete="one-time-code"`, `maxLength={6}`. It is the reusable `CodeInput` (`features/auth/CodeInput.tsx`): digits only, a paste handler strips spaces and other characters from pasted text (`maxLength` alone would cut a pasted `123 456` before `onChange`), and its auto-submit on the 6th digit can be turned off (`autoSubmit={false}`, for `/forgot-password`, which also needs the new password). The page submits on the 6th digit or on **Confirm**: `POST /api/auth/register/verify { email, code, signupToken }`. One verify request runs at a time, so auto-submit followed by Enter sends one. Confirm with fewer than 6 digits shows "Enter all 6 digits" on the box and sends nothing.
+- Under it: "Didn't get it? Check spam/junk" · **Resend** (with the countdown) · **Wrong email? Change it** (back to `/register`, name and email filled in, both passwords empty; the old row expires on its own).
+- **Resend:** `POST /api/auth/register/resend { email }` → 202 `{ resendAfter: 60 }`, and the countdown starts again. The old code stops working (§2.12.1), so the screen says a new code was sent. A failed mail still answers 202 (decision D6), so there is no "send failed" state here.
 
 | State | When | Shows | Actions |
 |---|---|---|---|
 | Waiting | Page open | The masked address and the code box | Confirm; Resend once the countdown ends; Change it |
-| Wrong code | 400 `CODE_INVALID` with `details.attemptsLeft` | "Wrong code" with the tries left (plural); the box is cleared and focused | As above |
-| Expired or out of tries | 400 `CODE_EXPIRED` | "This code has expired. Send a new one." | Resend |
-| Too soon or too many | 429 `RATE_LIMITED` with `details.retryAfter` | The countdown runs from `retryAfter` seconds | Resend once it ends |
-| Taken meanwhile | 409 `EMAIL_TAKEN` | The existing `EMAIL_TAKEN` text | Go to login |
-| Send failed | Resend 503 `EMAIL_SEND_FAILED` | "We couldn't send the email. Try again in a few minutes." | Resend later |
+| Wrong code | 400 `CODE_INVALID` with `details.attemptsLeft` | "Wrong code" with the tries left (plural), tied to the box; the box is cleared and focused | As above |
+| Expired, out of tries, or another tab registered the address again | 400 `CODE_EXPIRED` | "This code has expired. Send a new one." | Resend, or a link to register again (the way out when nothing is pending any more: a resend then still answers 202) |
+| Too soon or too many | Resend 429 `RATE_LIMITED` | With `details.retryAfter`: the countdown runs from that many seconds and a line asks to wait. Without it: the plain rate-limit text | Resend once the countdown ends |
+| Mail not configured | Resend 503 `FEATURE_NOT_CONFIGURED` | The "not set up on the server" text | A link to register again |
+| Taken meanwhile | 409 `EMAIL_TAKEN` | The existing `EMAIL_TAKEN` text; the entry is removed | A link to login |
+| Network or other error | Any other failure | The translated message; the typed code stays | Confirm again |
 | Done | 201 `{ accessToken, user }` + `rt` cookie | `setSession` as after today's register, then `/` (the Dashboard). The `sessionStorage` entry is removed | – |
 
 ### 5.11.3 Login: "Forgot password?" link (planned, §2.12.3)
@@ -486,7 +487,7 @@ Keys and wording are left to the builder (§2.12.6), in vi and en. The email its
 
 ### 5.11.7 Open questions
 
-1. **Other tab or device:** `/verify-email` opened without the `sessionStorage` entry goes to `/register`. Should it instead ask for the email, so a code read on a phone can be typed on a computer?
-2. **Pasted codes with spaces** ("123 456") or a leading space: strip them before counting to 6?
+1. **Other tab or device:** *decided (D1):* `/verify-email` opened without the `sessionStorage` entry goes to `/register`, because only the tab that registered holds the `signupToken`. A code read on a phone cannot be typed on a computer; the owner may change D1.
+2. **Pasted codes with spaces** ("123 456") or a leading space: *decided:* the paste handler strips everything but digits before counting to 6.
 3. **Resend on step 2 of `/forgot-password`:** §2.12 has no reset-resend endpoint, so it calls `forgot` again. Confirm that this is meant.
 4. **Sign-up on the way to `/link`:** §5.9.8 item 5 asks whether `RegisterPage` honours `state.from`; the same applies after `/verify-email`.
