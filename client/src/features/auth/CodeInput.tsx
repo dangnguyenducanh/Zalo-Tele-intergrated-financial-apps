@@ -43,6 +43,7 @@ export default function CodeInput({ value, onChange, onComplete, autoSubmit = tr
           inputMode: 'numeric',
           autoComplete: 'one-time-code',
           maxLength: CODE_LENGTH,
+          pattern: `\\d{${CODE_LENGTH}}`,
           sx: { fontSize: '1.5rem', letterSpacing: '0.35em', fontVariantNumeric: 'tabular-nums' },
         },
       }}
