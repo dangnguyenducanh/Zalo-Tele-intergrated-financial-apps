@@ -137,7 +137,9 @@ for (const scheme of ['light', 'dark'] as const) {
         expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `${label} scrolls sideways`).toBe(true);
       };
 
-      for (const path of ['/login', '/register', '/no-such-page']) {
+      for (const path of ['/login', '/register', '/verify-email', '/no-such-page']) {
+        // /verify-email shows only while a sign-up is pending, so seed the entry Register keeps (docs/05 §5.11.1).
+        if (path === '/verify-email') await page.evaluate(() => sessionStorage.setItem('pendingSignup', JSON.stringify({ email: 'lan@example.com', maskedEmail: 'l***@example.com', name: 'Lan', signupToken: 't', resendAt: Date.now() + 60_000 })));
         await page.goto(path);
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
         await expect(page.locator('html')).toHaveCSS('color-scheme', scheme);
