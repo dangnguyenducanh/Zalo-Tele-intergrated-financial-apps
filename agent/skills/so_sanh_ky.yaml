@@ -1,0 +1,32 @@
+# The comparison (docs/02 §2.11.3, "One comparison rule"): a period's income and spending against the period one calendar unit before it, from MongoDB
+# with no model. "so với X" names the baseline, which the rule finds by itself; the period asked about is the first one named, else this month.
+code: so_sanh_ky
+labelVi: So sánh kỳ
+labelEn: Compare periods
+description: So thu và chi của một kỳ (ngày, tuần, tháng, năm) với kỳ liền trước, cùng số ngày. Income and spending of a period against the period before it, over the same days.
+examples:
+  - "tháng này so với tháng trước?"
+  - tuần này so với tuần trước
+  - hôm nay tiêu so với hôm qua
+triggers: [so với, so sánh, cùng kỳ, compare, compared, comparison, versus, vs]
+anchored: true
+mode: pipeline
+tools:
+  - {name: compare_periods, ord: 1, preset: {}}
+followups:
+  - {vi: "Tuần này so với tuần trước", en: "Compare with the period before"}
+  - {vi: "Hôm nay so với hôm qua", en: "Compare yesterday with the day before"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      So sánh {period}{filter} với kỳ liền trước, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: So sánh cùng kỳ {range}
+  en:
+    answer: |-
+      Comparing {period}{filter} with the period before, confirmed transactions only:
+      {facts}
+    sources: Same-days comparison {range}

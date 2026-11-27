@@ -59,8 +59,8 @@ def test_thu_chi_ky_answers_from_mongodb_with_no_model(seeded, agent_db):
     assert body['sources'] and all('11/2026' in s for s in body['sources']) and 'Nguồn' in body['text']
     assert 2 <= len(body['followups']) <= 3 and all(isinstance(f, str) and f for f in body['followups'])
     assert 'action' not in body and 'card' not in body
-    # No model. The embedder ran when the service started (the 3 skills, then the 3 tools) and once for this question (T46).
-    assert seeded.model.calls == 0 and [len(call) for call in seeded.app.state.embedder.calls] == [3, 3, 1] and seeded.app.state.embedder.calls[-1] == ['tháng này thu bao nhiêu?']
+    # No model. The embedder ran when the service started (the 8 skills, then the 8 tools) and once for this question (T46, T47).
+    assert seeded.model.calls == 0 and [len(call) for call in seeded.app.state.embedder.calls] == [8, 8, 1] and seeded.app.state.embedder.calls[-1] == ['tháng này thu bao nhiêu?']
 
     row = turn_row(agent_db, seeded.user, rid)
     assert agent_db['agentTurns'].count_documents({'userId': seeded.user}) == 1

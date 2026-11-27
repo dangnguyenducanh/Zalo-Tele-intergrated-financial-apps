@@ -26,8 +26,8 @@ from pymongo.errors import DuplicateKeyError
 
 from . import askback, lexicon, routing, texts
 from .routing import cosine
-from .tools.period import VN, default_period, find_period, period_in, words_of
-from .tools.registry import ToolContext
+from .tools.period import VN, count_in, default_period, find_period, period_in, unit_of, week_period, words_of
+from .tools.registry import MAX_LIMIT, ToolContext
 from .tools.scope import MAX_TIME_MS
 
 log = logging.getLogger('uvicorn.error')  # the container log (see app.py): ids, node names, times and error classes only
@@ -68,6 +68,7 @@ class TurnState(TypedDict, total=False):
     standalone: str | None
     period: Any
     periodNamed: bool  # the words named the period (else it is the default month)
+    count: int | None  # the N of "top N" or "N khoản" in the question
     entities: list  # the user's own categories and wallets the words named: {kind, id, name, type?}
     ties: list  # words that name more than one row: {phrase, entities}; linked to none
     reply: dict | None  # a bare 1-3 that answers an ask-back: {kind: run|expired|invalid, ...}
@@ -113,7 +114,7 @@ def new_state(request, turn_id, deps, started=None):
         trigger=request.trigger, text=request.text, actionId=ObjectId(request.actionId) if request.actionId else None, skill=request.skill,
         language=request.language, today=request.today, month=request.month, allowLlm=request.allowLlm,
         deadline=started + BUDGET_SECONDS.get(request.channel, 25), command=False, blocked=None, user=None, categories=[], wallets=[],
-        history=[], pendingAction=None, standalone=None, period=None, periodNamed=False, entities=[], ties=[], reply=None, queryVector=None,
+        history=[], pendingAction=None, standalone=None, period=None, periodNamed=False, count=None, entities=[], ties=[], reply=None, queryVector=None,
         memories=[], candidates=[], retrieval='none', skillCode=None, askBack=None, filters=[], skipped=[], plan=[], toolCalls=[], facts=[], answer='', sources=[], action=None, card=None, followups=[], route='rules',
         guard='pass', steps=[], timingsMs=[])
 
@@ -193,11 +194,11 @@ def rewrite_question(state, deps):
     reply = askback.read_reply(state, deps)
     if reply and reply['kind'] == 'run':
         return {'standalone': reply['question'], 'period': reply['period'], 'periodNamed': reply['named'], 'entities': reply['entities'],
-                'skillCode': reply['skill'], 'retrieval': 'direct', 'reply': reply}
+                'skillCode': reply['skill'], 'retrieval': 'direct', 'reply': reply, 'count': count_in(reply['question'])}
     named = period_in(state['text'], state['today'])
     entities, ties = lexicon.link(find_period(words_of(state['text'])).rest, state['categories'], state['wallets'], state['language'])
     return {'standalone': state['text'], 'period': named or default_period(state['today'], state['month']), 'periodNamed': named is not None,
-            'entities': entities, 'ties': ties, 'reply': reply}
+            'count': count_in(state['text']), 'entities': entities, 'ties': ties, 'reply': reply}
 
 
 def recall_memory(state, deps):
@@ -225,33 +226,48 @@ def find_skills(state, deps):
     return {'candidates': candidates, 'retrieval': retrieval, 'skillCode': candidates[0]['code'] if retrieval == 'direct' else None}
 
 
+def add_months(month, shift):
+    """'2026-11' + 1 → '2026-12', '2026-12' + 1 → '2027-01'."""
+    year, number = divmod(int(month[:4]) * 12 + int(month[5:]) - 1 + shift, 12)
+    return f'{year:04d}-{number + 1:02d}'
+
+
 def plan_skill(skill, state, deps):
-    """(plan, used, skipped): the skill's tool calls with the arguments each tool takes (its period, the linked categories and
-    wallets), the linked entities some tool took, and the conditions of the question no tool can use, in words: a linked
-    entity, a named period, words that name two rows. Those are said in the answer, never dropped silently."""
+    """(plan, used, skipped, period): the skill's tool calls with the arguments each tool takes (its period and the unit period.py knows it by, the month,
+    the count of a "top N", the linked categories and wallets), the linked entities some tool took, the conditions of the question no tool can use, in
+    words (a linked entity, a named period, words that name two rows, a count over the limit: said in the answer, never dropped silently), and the period
+    the answer is about (a month-only skill answers for a month, so a named week gives way to the month asked for, or this one)."""
     takes = [set(deps.registry.tools[tool.name].args.model_fields) for tool in skill.tools]
     uses = lambda argument: any(argument in fields for fields in takes)
-    language, period = state['language'], state['period']
+    language, period, today = state['language'], state['period'], state['today']
     used = [entity for entity in state['entities'] if uses(ACCEPTS[entity['kind']])]
     skipped = [texts.entity_label(entity, language) for entity in state['entities'] if entity not in used]
     skipped += [texts.tie_label(tie['entities'], language) for tie in state['ties']]
-    if state['periodNamed'] and not uses('start'):
+    if state['periodNamed'] and not (uses('start') or (uses('month') and period.unit == 'month')):
         skipped.append(texts.describe(period, language))
+        period = default_period(today, state['month']) if uses('month') else period
+    if state['count'] and state['count'] > MAX_LIMIT and uses('limit'):
+        skipped.append(texts.capped_count(state['count'], MAX_LIMIT, language))
+    values = {'start': period.start.isoformat(), 'end': period.end.isoformat(), 'unit': unit_of(period), 'limit': state['count'],
+              'month': f'{period.start:%Y-%m}' if period.unit == 'month' else f'{today:%Y-%m}'}  # a week or a day: the pace and the budgets are of today's month
     plan = []
     for tool, fields in zip(skill.tools, takes):
-        args = {'start': period.start.isoformat(), 'end': period.end.isoformat()} if 'start' in fields else {}
+        args = {key: value for key, value in values.items() if key in fields and value is not None}
+        if 'month' in args and tool.month_shift:
+            args['month'] = add_months(args['month'], tool.month_shift)
         for kind, argument in ACCEPTS.items():
             ids = [entity['id'] for entity in used if entity['kind'] == kind]
             if argument in fields and ids:
                 args[argument] = ids
         plan.append({'tool': tool.name, 'args': args, 'preset': tool.preset})
-    return plan, used, skipped
+    return plan, used, skipped, period
 
 
 def decide(state, deps):
     """A pipeline skill runs its tools in order with no model. The skill is the one find_skills chose, the one an ask-back
     reply picked, or the one the request names (a command, a scheduled message); one that is unknown, disabled or not a
-    pipeline skill runs nothing. When several skills fit (`choose`) and no model may pick, the turn asks back (T63: the model picks)."""
+    pipeline skill runs nothing. When several skills fit (`choose`) and no model may pick, the turn asks back (T63: the model picks).
+    A question that names no period gets the skill's own: this week for the weekly report, else the month the request asks for or this one."""
     code = state['skillCode'] or state['skill']
     if state['retrieval'] == 'choose' and not code:
         card, ask = askback.build(state, deps)
@@ -259,8 +275,13 @@ def decide(state, deps):
     skill = pipeline_skills(deps).get(code)
     if skill is None:
         return {'skillCode': None, 'retrieval': 'none', 'plan': []}
-    period = state['period'] or default_period(state['today'], state['month'])
-    plan, used, skipped = plan_skill(skill, {**state, 'period': period}, deps)
+    if state['periodNamed']:
+        period = state['period']
+    elif skill.default_period == 'week':
+        period = week_period(state['today'])
+    else:
+        period = state['period'] or default_period(state['today'], state['month'])
+    plan, used, skipped, period = plan_skill(skill, {**state, 'period': period}, deps)
     return {'skillCode': skill.code, 'retrieval': 'direct', 'period': period, 'plan': plan, 'filters': used, 'skipped': skipped}
 
 

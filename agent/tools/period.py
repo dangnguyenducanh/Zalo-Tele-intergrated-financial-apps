@@ -172,13 +172,49 @@ def meaning(kind, text, today):
     return None  # items and top are counts, not periods
 
 
+BASELINE = (('so', 'sanh', 'voi'), ('so', 'voi'), ('compared', 'to'), ('compare', 'to'), ('compare', 'with'), ('versus',), ('vs',))  # "so với tháng trước": the period to compare WITH
+
+
+def phrase_starts(found):
+    """Where each phrase of a PeriodSearch begins (an index into the words): a phrase takes the next words of `indexes` in order."""
+    taken, starts, at = sorted(found.indexes), [], 0
+    for phrase in found.phrases:
+        starts.append(taken[at])
+        at += len(phrase['text'].split())
+    return starts
+
+
 def period_in(text, today):
-    """The period the first period phrase of `text` means on `today`, or None. A date that does not exist is skipped."""
-    for phrase in find_period(words_of(text)).phrases:
+    """The period the first period phrase of `text` means on `today`, or None. A date that does not exist is skipped, and so is a phrase
+    that follows "so với" (or "vs", "compared to"): it names what the question compares with, not what it asks about."""
+    words = words_of(text)
+    keys, found = [to_key(word) for word in words], find_period(words)
+    for phrase, first in zip(found.phrases, phrase_starts(found)):
+        if any(tuple(keys[max(first - len(marker), 0):first]) == marker for marker in BASELINE):
+            continue
         period = meaning(phrase['kind'], phrase['text'], today)
         if period:
             return period
     return None
+
+
+def count_in(text):
+    """The N of the first "top N" or "N khoản" in a question ("5 khoản chi lớn nhất tuần trước" → 5), else None."""
+    for phrase in find_period(words_of(text)).phrases:
+        if phrase['kind'] in ('top', 'items'):
+            return int(re.search(r'[0-9]+', phrase['text'])[0])
+    return None
+
+
+def week_period(today):
+    """This week, Monday to Sunday: what "tổng kết tuần" means when the question names no period."""
+    return meaning('week', 'tuần này', today)
+
+
+def unit_of(period):
+    """The unit compare_periods is told (the model never sets it): day, week, month or year as the period is; a weekend goes back by a
+    week; a count of days (7 ngày qua) has none, so the dates decide."""
+    return 'week' if period.name == 'weekend' else period.unit if period.unit in ('day', 'week', 'month', 'year') else None
 
 
 def bounds(period):

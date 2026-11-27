@@ -113,3 +113,13 @@ def fixture_balance(scale=1):
     period), income minus expense."""
     live = [t for t in STATS['transactions'] if t.get('status', 'confirmed') == 'confirmed' and not t.get('deleted')]
     return sum((t['amount'] if t['type'] == 'income' else -t['amount']) * scale for t in live)
+
+
+# ---- T47: budgets, and the same figures worked out by day ----
+
+def seed_budgets(db, user_id, categories, month='2026-11', scale=1):
+    """The fixture's two budgets for `month`: overall 2.000.000 and Ăn uống 250.000 (spent 1.100.000 and 215.000 in November: 55 % and 86 %).
+    `categories` is seed_stats(...)['categories']; amounts times `scale`."""
+    for budget in STATS['budgets']:
+        db['budgets'].insert_one({'userId': user_id, 'month': month, 'categoryId': categories[budget['category']] if budget['category'] else None,
+                                  'limit': budget['limit'] * scale})

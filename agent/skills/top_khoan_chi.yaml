@@ -1,0 +1,32 @@
+# The biggest expenses (docs/02 §2.11.3): the largest confirmed expenses of a period, biggest first, from MongoDB with no model. "5 khoản" or "top 3" is the
+# count (5 with none, at most 20); a category or wallet the question names narrows them.
+code: top_khoan_chi
+labelVi: Khoản chi lớn nhất
+labelEn: Biggest expenses
+description: Các khoản chi lớn nhất trong một kỳ, xếp theo số tiền, từ các giao dịch đã xác nhận. The biggest expenses of a period, by amount.
+examples:
+  - 5 khoản chi lớn nhất tuần trước
+  - top 3 khoản chi lớn nhất tháng này
+  - khoản chi lớn nhất hôm qua
+triggers: [lớn nhất, to nhất, khoản lớn, biggest, largest, top expenses, big expenses]
+anchored: true
+mode: pipeline
+tools:
+  - {name: list_transactions, ord: 1, preset: {type: expense, order: biggest}}
+followups:
+  - {vi: "5 khoản chi lớn nhất tháng này", en: "Biggest expenses this month"}
+  - {vi: "3 khoản chi lớn nhất hôm qua", en: "Biggest expenses yesterday"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      Các khoản chi lớn nhất {period}{filter}, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: Giao dịch đã xác nhận {range}, xếp theo số tiền
+  en:
+    answer: |-
+      Biggest expenses for {period}{filter}, confirmed transactions only:
+      {facts}
+    sources: Confirmed transactions {range}, by amount

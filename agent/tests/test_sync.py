@@ -37,7 +37,7 @@ def test_the_start_copies_skills_and_tools_to_mongodb_with_their_embeddings(turn
     app = turn_app()
     fake = FakeEmbedder()
     rows = {row['code']: row for row in agent_db['agentSkills'].find()}
-    assert sorted(rows) == sorted(SKILLS) == ['chi_theo_danh_muc', 'so_du_vi', 'thu_chi_ky']
+    assert sorted(rows) == sorted(SKILLS) == ['chi_theo_danh_muc', 'ngan_sach_con_lai', 'so_du_vi', 'so_sanh_ky', 'thu_chi_ky', 'tong_ket_thang', 'tong_ket_tuan', 'top_khoan_chi']
     for code, skill in SKILLS.items():
         row = rows[code]
         assert row['userId'] is None and (row['mode'], row['enabled'], row['version'], row['maxSteps']) == ('pipeline', True, 1, 4)
@@ -47,7 +47,7 @@ def test_the_start_copies_skills_and_tools_to_mongodb_with_their_embeddings(turn
         assert row['embedding'] == fake.encode([embedded_text(skill)])[0]
         assert app.state.deps.vectors[code] == row['embedding']  # what find_skills searches, in memory
     tools = {row['name']: row for row in agent_db['agentTools'].find()}
-    assert sorted(tools) == ['get_category_totals', 'get_period_summary', 'get_wallet_balances']
+    assert sorted(tools) == ['compare_periods', 'get_budget_pace', 'get_budgets', 'get_category_totals', 'get_period_summary', 'get_wallet_balances', 'list_transactions', 'suggest_budgets']
     for name, row in tools.items():
         assert row['sideEffect'] == 'read' and row['timeoutMs'] == 5000 and row['enabled'] is True and row['description']
         assert row['embedHash'] == sha(f"{name}: {row['description']}") and len(row['embedding']) == DIMENSIONS
@@ -59,11 +59,11 @@ def test_a_second_start_embeds_nothing_and_a_changed_row_alone_is_embedded_again
     """TC-F14-62 Starting twice with the same files embeds nothing the second time; after one skill's examples change, only that skill is embedded (one text), its hash and vector change and no other row is rewritten with a new embedding"""
     app = turn_app()
     embedder = app.state.embedder
-    assert [len(call) for call in embedder.calls] == [3, 3]  # the first start: the three skills in one call, the three tools in another
+    assert [len(call) for call in embedder.calls] == [8, 8]  # the first start: the eight skills in one call, the eight tools in another
     before = {row['code']: row for row in agent_db['agentSkills'].find()}
     assert app.state.sync() == {'skills': 0, 'tools': 0} and len(embedder.calls) == 2
-    assert agent_db['agentSkills'].count_documents({}) == 3 == agent_db['agentSkills'].count_documents({'userId': None})  # an upsert, not an insert
-    assert agent_db['agentTools'].count_documents({}) == 3
+    assert agent_db['agentSkills'].count_documents({}) == 8 == agent_db['agentSkills'].count_documents({'userId': None})  # an upsert, not an insert
+    assert agent_db['agentTools'].count_documents({}) == 8
 
     changed = {**SKILLS, 'so_du_vi': replace(SKILLS['so_du_vi'], examples=['ví nào còn nhiều tiền nhất?'])}
     second = turn_app(skills=changed, embedder=FakeEmbedder())
@@ -93,7 +93,7 @@ def test_a_skill_taken_out_of_the_files_stays_in_the_collection_switched_off(tur
     second = turn_app(skills=fewer, embedder=FakeEmbedder())
     assert agent_db['agentSkills'].find_one({'code': 'so_du_vi'})['enabled'] is False
     assert agent_db['agentSkills'].find_one({'code': 'thu_chi_ky'})['enabled'] is True
-    assert sorted(second.state.deps.vectors) == ['chi_theo_danh_muc', 'thu_chi_ky'] and second.state.embedder.calls == []
+    assert sorted(second.state.deps.vectors) == sorted(code for code in SKILLS if code != 'so_du_vi') and second.state.embedder.calls == []
 
 
 def test_the_service_runs_the_sync_when_it_starts_and_stops_if_it_cannot(mongo, world, agent_db):
@@ -102,7 +102,7 @@ def test_the_service_runs_the_sync_when_it_starts_and_stops_if_it_cannot(mongo, 
     app = create_app(settings, FakeEmbedder(), now=lambda: NOW)
     assert agent_db['agentSkills'].count_documents({}) == 0 and app.state.deps.vectors == {}  # creating the app does not touch the database
     with TestClient(app) as client:
-        assert agent_db['agentSkills'].count_documents({}) == 3 and sorted(app.state.deps.vectors) == sorted(SKILLS)
+        assert agent_db['agentSkills'].count_documents({}) == len(SKILLS) and sorted(app.state.deps.vectors) == sorted(SKILLS)
         assert client.get('/health').status_code == 200
 
     class Broken(FakeEmbedder):

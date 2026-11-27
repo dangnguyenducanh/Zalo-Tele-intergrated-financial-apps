@@ -20,13 +20,14 @@ def skill_text(skill):
 def skill_fields(skill):
     return {'labelVi': skill.label_vi, 'labelEn': skill.label_en, 'description': skill.description, 'examples': skill.examples,
             'triggers': skill.triggers, 'mode': skill.mode, 'schedule': None, 'followups': skill.followups, 'maxSteps': skill.max_steps,
-            'tools': [{'name': tool.name, 'ord': tool.ord, 'preset': tool.preset} for tool in skill.tools], 'pairs': skill.pairs,
-            'enabled': skill.enabled, 'version': skill.version}
+            'tools': [{'name': tool.name, 'ord': tool.ord, 'preset': tool.preset, 'monthShift': tool.month_shift} for tool in skill.tools], 'pairs': skill.pairs,
+            'anchored': skill.anchored, 'defaultPeriod': skill.default_period, 'enabled': skill.enabled, 'version': skill.version}
 
 
 def tool_fields(tool):
     schema = tool.args.model_json_schema()
-    schema['properties'] = {key: value for key, value in schema.get('properties', {}).items() if key not in FORBIDDEN_ARGS}
+    unseen = FORBIDDEN_ARGS | set(tool.hidden)
+    schema['properties'] = {key: value for key, value in schema.get('properties', {}).items() if key not in unseen}
     return {'description': tool.description, 'parameters': schema, 'sideEffect': tool.side_effect, 'timeoutMs': tool.timeout_ms,
             'collections': list(tool.collections), 'enabled': True, 'version': 1}
 

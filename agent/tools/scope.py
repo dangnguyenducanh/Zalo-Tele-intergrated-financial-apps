@@ -7,6 +7,7 @@ from pydantic import StringConstraints
 
 MAX_TIME_MS = 5000
 ObjectIdText = Annotated[str, StringConstraints(pattern=r'^[0-9a-f]{24}$')]  # an id the way a tool argument carries it
+MonthText = Annotated[str, StringConstraints(pattern=r'^[0-9]{4}-(0[1-9]|1[0-2])$')]  # a Vietnamese month as budgets.month has it: 2026-11
 
 
 class NotYours(Exception):

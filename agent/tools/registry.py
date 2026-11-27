@@ -40,6 +40,7 @@ class Tool:
     timeout_ms: int = 5000
     side_effect: str = 'read'
     collections: tuple = ()
+    hidden: tuple = ()  # arguments the skill's code fills and the model must never see (compare_periods' `unit`): left out of the stored schema
 
 
 @dataclass

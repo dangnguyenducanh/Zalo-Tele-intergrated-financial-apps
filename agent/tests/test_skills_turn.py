@@ -206,7 +206,7 @@ def test_when_two_skills_fit_and_the_model_is_off_the_turn_asks_back_with_number
     assert (row['retrieval'], row['skill'], row['toolCalls'], row['facts'], row['route'], row['answer']) == ('choose', None, [], [], 'rules', body['text'])
     ask_back = row['askBack']
     assert ask_back['question'] == 'Bạn muốn hỏi ý nào?' and ask_back['expiresAt'] == NOW + timedelta(minutes=10) and ask_back['expiresAt'].tzinfo is not None
-    assert [o['skill'] for o in ask_back['options']][:2] in (['thu_chi_ky', 'so_du_vi'], ['so_du_vi', 'thu_chi_ky']) and {o['skill'] for o in ask_back['options']} == set(SKILLS)
+    assert [o['skill'] for o in ask_back['options']][:2] in (['thu_chi_ky', 'so_du_vi'], ['so_du_vi', 'thu_chi_ky']) and len({o['skill'] for o in ask_back['options']}) == 3  # the two the words fit, then the best of the others by vector
     assert [(o['n'], o['label']) for o in ask_back['options']] == [(o['n'], o['label']) for o in card['options']]
     first = ask_back['options'][0]
     assert first['period'] == {'start': '2026-11-01', 'end': '2026-11-30', 'unit': 'month', 'name': 'this_month', 'named': True} and first['categoryIds'] == first['walletIds'] == []
@@ -236,7 +236,7 @@ def test_a_question_nothing_fits_gets_the_help_text_with_three_examples_one_per_
     lines = body['text'].splitlines()
     examples = [line[2:] for line in lines if line.startswith('- ')]
     assert body['route'] == 'rules' and body['steps'] == [*FIND, *HELP_TAIL] and 'card' not in body and body['facts'] == []
-    assert len(examples) == 3 and {code for code in SKILLS for e in examples if e in SKILLS[code].examples} == set(SKILLS)
+    assert len(examples) == 3 and len({code for code in SKILLS for e in examples if e in SKILLS[code].examples}) == 3  # three different skills (T47: the first three of the eight)
     assert lines[-1].startswith('Lệnh: /today')
     row = turn_row(agent_db, rich.user, 'none-1')
     assert (row['retrieval'], row['skill'], row['toolCalls'], row['askBack'], row['card']) == ('none', None, [], None, None)
@@ -451,7 +451,7 @@ def test_a_disabled_or_removed_skill_in_the_option_is_not_run(rich, agent_db):
 
 def test_a_number_that_is_not_one_of_the_options_and_a_tampered_option_are_not_run(rich, agent_db):
     """TC-F14-66 With only 2 options a reply 3 is not one of them; an option whose period is not a period this service runs (inverted, more than 400 days, not a date) or whose ids are another user's is refused"""
-    two = {code: skill for code, skill in SKILLS.items() if code != 'chi_theo_danh_muc'}
+    two = {code: SKILLS[code] for code in ('thu_chi_ky', 'so_du_vi')}  # T47: two of the eight, as there were two left of three
     client = TestClient(rich.make(skills=two, now=lambda: NOW))
     ask(client, rich.auth, rich.user, text=CHOOSE, requestId='ask-2', threadKey='two')
     assert len(turn_row(agent_db, rich.user, 'ask-2')['askBack']['options']) == 2

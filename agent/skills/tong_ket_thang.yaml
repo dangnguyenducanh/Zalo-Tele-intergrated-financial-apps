@@ -1,0 +1,36 @@
+# The monthly report (docs/02 §2.11.3, B4): a month's income and spending, its biggest categories, its budgets and the suggested budgets for the month after
+# it (the median of the 3 months before that month, rounded up to 50.000 ₫), from MongoDB with no model. The cron runs it on day 1 with trigger: schedule.
+code: tong_ket_thang
+labelVi: Tổng kết tháng
+labelEn: Monthly summary
+description: Tổng kết một tháng gồm thu, chi, các danh mục chi nhiều nhất, ngân sách đã đặt và gợi ý ngân sách cho tháng sau. A month's income and spending, its biggest categories, its budgets and suggested budgets for the next month.
+examples:
+  - tổng kết tháng 10
+  - tổng kết tháng này
+  - tổng kết tháng trước
+triggers: [tổng kết tháng, tóm tắt tháng, báo cáo tháng, monthly summary, month summary, monthly report, summary of the month]
+anchored: true
+defaultPeriod: month
+mode: pipeline
+tools:
+  - {name: get_period_summary, ord: 1, preset: {}}
+  - {name: get_category_totals, ord: 2, preset: {top: 5}}
+  - {name: get_budgets, ord: 3, preset: {}}
+  - {name: suggest_budgets, ord: 4, preset: {}, monthShift: 1}
+followups:
+  - {vi: "Tổng kết tháng trước", en: "Monthly summary"}
+  - {vi: "Tổng kết tháng này", en: "Monthly report"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      Tổng kết {period}, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: Giao dịch đã xác nhận {range}; ngân sách đã đặt; gợi ý theo 3 tháng trước tháng sau
+  en:
+    answer: |-
+      Monthly summary for {period}, confirmed transactions only:
+      {facts}
+    sources: Confirmed transactions {range}; the budgets set; suggestions from the 3 months before the next month

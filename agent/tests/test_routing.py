@@ -108,14 +108,15 @@ def test_the_words_of_a_period_phrase_are_not_linked():
 # ---- skill ranking ----
 
 SKILLS = load_skills(default_registry())
-CODES = sorted(SKILLS)  # chi_theo_danh_muc, so_du_vi, thu_chi_ky
+CODES = sorted(SKILLS)  # the 8 v1 skills (T47)
+DIMENSIONS = len(CODES) + 1  # one place for each skill's own direction and one that no skill has: a query there is near nothing
 
 
-def unit(i, n=8):
+def unit(i, n=DIMENSIONS):
     return [1.0 if k == i else 0.0 for k in range(n)]
 
 
-def at_cosine(i, c, n=8):
+def at_cosine(i, c, n=DIMENSIONS):
     """A unit vector whose cosine with unit(i) is exactly c (the rest of it is in the last place)."""
     vector = [0.0] * n
     vector[i], vector[-1] = c, math.sqrt(1 - c * c)
@@ -127,7 +128,7 @@ ENTITY = {'category': {'kind': 'category', 'id': 'c1', 'name': 'Ăn uống'}, 'w
 
 
 def rank(text, entities=(), skills=SKILLS, vectors=VECTORS, query=None):
-    return routing.rank(text, [ENTITY[kind] for kind in entities], skills, vectors, query if query is not None else unit(7))  # unit(7): near nothing
+    return routing.rank(text, [ENTITY[kind] for kind in entities], skills, vectors, query if query is not None else unit(DIMENSIONS - 1))  # unit(DIMENSIONS - 1): near nothing
 
 
 def test_the_best_score_is_one_and_the_constants_are_the_ones_of_decision_d17():
@@ -182,7 +183,7 @@ def test_no_word_match_and_a_far_vector_is_none_and_a_near_one_is_choose():
     """TC-F14-61 The none threshold is reachable from both sides: with no word match, a best cosine just under the constant is none and exactly the constant is choose"""
     under = at_cosine(0, routing.MIN_COSINE - 1e-6)
     over = at_cosine(0, routing.MIN_COSINE)
-    assert rank('xin chào bạn', query=unit(7)) == ('none', [])
+    assert rank('xin chào bạn', query=unit(DIMENSIONS - 1)) == ('none', [])
     assert rank('xin chào bạn', query=under) == ('none', [])
     retrieval, candidates = rank('xin chào bạn', query=over)
     assert retrieval == 'choose' and candidates[0]['code'] == CODES[0]  # a vector alone never makes it direct: two skills are never 0.15 apart by rank
@@ -194,9 +195,9 @@ def test_no_word_match_and_a_far_vector_is_none_and_a_near_one_is_choose():
 def test_a_disabled_skill_is_never_a_candidate_and_a_single_skill_is_direct():
     """TC-F14-61 Only the skills passed in are ranked (find_skills passes the enabled pipeline ones): the trigger of one that is left out matches nothing; with one skill left a word match is direct"""
     only = {code: skill for code, skill in SKILLS.items() if code != 'thu_chi_ky'}
-    assert rank('hôm nay tiêu bao nhiêu', skills=only, query=unit(7))[0] == 'none'
+    assert rank('hôm nay tiêu bao nhiêu', skills=only, query=unit(DIMENSIONS - 1))[0] == 'none'
     for text in ('số dư', 'số dư bao nhiêu'):
-        retrieval, candidates = rank(text, skills={'so_du_vi': SKILLS['so_du_vi']}, query=unit(7))
+        retrieval, candidates = rank(text, skills={'so_du_vi': SKILLS['so_du_vi']}, query=unit(DIMENSIONS - 1))
         assert (retrieval, [c['code'] for c in candidates]) == ('direct', ['so_du_vi'])
     assert 'thu_chi_ky' not in [c['code'] for c in rank('thu bao nhiêu', skills=only, query=VECTORS['thu_chi_ky'])[1]]
 

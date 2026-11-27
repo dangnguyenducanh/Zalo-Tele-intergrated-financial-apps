@@ -4,7 +4,8 @@
 # A skill in both lists at rank 1 scores 2/61, and nothing scores more, so a fused score divided by that (BEST) is 0..1.
 # The lexical list holds only the skills with a word match, so a skill nothing matched is not carried up by its place in
 # the other list. Then:
-#   direct  an exact trigger, a decisive pair (a question phrase and a linked entity), or a first place at least GAP ahead
+#   direct  an exact trigger, else one skill whose own words are in the question (an anchored skill: "ngân sách", "tổng kết tuần"), else a decisive
+#           pair (a question phrase and a linked entity), or a first place at least GAP ahead
 #   none    no word matches and the best cosine is under MIN_COSINE
 #   choose  anything else: the top 3, and the model (T63) or an ask-back picks
 import re
@@ -32,6 +33,7 @@ class Match:
     words: int = 0  # the words of the triggers that were found
     exact: bool = False  # the whole question is a trigger
     decisive: bool = False  # a pair: a question phrase and an entity the question links
+    anchored: bool = False  # a trigger of a skill whose triggers are its own words was found
 
 
 def match_of(skill, text, kinds):
@@ -42,6 +44,7 @@ def match_of(skill, text, kinds):
         if folded in text:
             found.words += len(folded.split())
             found.exact |= folded == text
+            found.anchored |= skill.anchored
     for pair in skill.pairs:
         if pair['entity'] in kinds and any(fold(phrase) in text for phrase in pair['phrases']):
             found.words += 1
@@ -63,8 +66,11 @@ def rank(text, entities, skills, vectors, query):
     if not lexical and (not close or max(close.values()) < MIN_COSINE):
         return 'none', []
     exact = [code for code in lexical if found[code].exact]
+    anchored = [code for code in lexical if found[code].anchored]
     decisive = [code for code in lexical if found[code].decisive]
-    winner = exact[0] if len(exact) == 1 else decisive[0] if len(decisive) == 1 else None
+    # An anchor names the topic itself, so it outranks the generic question word of a pair ("ngân sách ăn uống còn bao nhiêu" is the budget, not the category).
+    # Two anchored skills in one question are not told apart by their anchors: the pairs then decide nothing either, so it is a choose.
+    winner = exact[0] if len(exact) == 1 else anchored[0] if len(anchored) == 1 else decisive[0] if len(decisive) == 1 and not anchored else None
     if winner is None and (len(top) == 1 or score[top[0]] - score[top[1]] >= GAP):
         winner = top[0]
     if winner:

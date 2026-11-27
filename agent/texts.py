@@ -113,6 +113,11 @@ def skipped(items, language):
     return f"{'Bỏ qua điều kiện' if language == 'vi' else 'Skipped conditions'}: {'; '.join(items)}"
 
 
+def capped_count(count, cap, language):
+    """"50 khoản (chỉ hiển thị tối đa 20)": the N of a "top N" that is more than a tool gives."""
+    return f'{count} khoản (chỉ hiển thị tối đa {cap})' if language == 'vi' else f'{count} items (showing at most {cap})'
+
+
 def tie_label(entities, language):
     """Words that name more than one row: "danh mục Momo / ví Momo (trùng tên, không đoán)"."""
     names = ' / '.join(entity_label(entity, language) for entity in entities)

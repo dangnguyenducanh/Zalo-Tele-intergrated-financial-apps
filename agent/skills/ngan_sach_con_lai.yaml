@@ -1,0 +1,33 @@
+# The budgets left (docs/02 §2.11.3): what is left of each budget of a month and where the month is heading, from MongoDB with no model. "ngân sách" is the
+# skill's own word, so it wins over "bao nhiêu" next to a category ("ngân sách ăn uống còn bao nhiêu" is the budget of that category, not its total).
+code: ngan_sach_con_lai
+labelVi: Ngân sách còn lại
+labelEn: Budget left
+description: Ngân sách của một tháng còn lại bao nhiêu, đã chi bao nhiêu và nhịp chi tiêu đến cuối tháng. What is left of the budgets of a month, what is spent and the pace to the month end.
+examples:
+  - ngân sách ăn uống còn bao nhiêu
+  - ngân sách tháng này
+  - ngân sách còn lại
+triggers: [ngân sách, hạn mức, budget, budgets]
+anchored: true
+mode: pipeline
+tools:
+  - {name: get_budgets, ord: 1, preset: {}}
+  - {name: get_budget_pace, ord: 2, preset: {}}
+followups:
+  - {vi: "Ngân sách còn lại", en: "Budget left"}
+  - {vi: "Ngân sách tháng trước còn bao nhiêu", en: "Budgets this month"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      Ngân sách {period}{filter}, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: Ngân sách đã đặt và chi tiêu đã xác nhận {range}
+  en:
+    answer: |-
+      Budgets for {period}{filter}, confirmed transactions only:
+      {facts}
+    sources: The budgets set and confirmed spending {range}
