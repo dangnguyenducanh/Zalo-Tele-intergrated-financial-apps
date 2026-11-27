@@ -10,7 +10,7 @@ import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
 import { maySend } from '../services/channelUsage.js';
 import { createClaimToken, redeemLinkCode } from '../services/chatLinks.js';
-import { listBudgets } from '../services/budgets.js';
+import { listBudgets, monthProgress, PACE_FROM_DAY } from '../services/budgets.js';
 import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
 import { confirmTransaction, parseTransactions, updateTransaction } from '../services/transactions.js';
@@ -131,7 +131,43 @@ export async function sendLinked(adapter, chatId, userId) {
   await reply(adapter, chatId, await linkedText(userId), 'link');
 }
 
-// /today, /month, /lang vi|en; anything else (/start, /help, unknown) gets the help text.
+// The daily limit of a budget's pace (docs/02 §2.11.2 A2) as money text; null when it has none (before day 5, or the limit is reached).
+const dailyText = (pace, m) => (pace?.perDay == null ? null : money(pace.perDay, m));
+
+// The month's budgets as the bot lists them: the overall one, then each category's, fullest first.
+function splitBudgets(budgets) {
+  return { overall: budgets.find((b) => !b.categoryId), byCategory: budgets.filter((b) => b.categoryId).sort((a, b) => b.percent - a.percent) };
+}
+
+// /dubao (docs/02 §2.11.2 A2): where each budget of this month is heading. Express answers it itself (decision D13), so it
+// works when the agent service is down. The figures are the ones listBudgets() gives the Budgets chip and /month.
+async function forecast(userId, m, now) {
+  const month = monthKey(now);
+  const { overall, byCategory } = splitBudgets(await listBudgets(userId, month, now));
+  if (!overall && byCategory.length === 0) return m.paceNoBudget;
+  const progress = monthProgress(month, now);
+  if (progress.day < PACE_FROM_DAY) return m.paceTooEarly({ day: progress.day, from: PACE_FROM_DAY });
+  const figures = ({ spent, limit, pace }) => ({
+    spent: money(spent, m),
+    limit: money(limit, m),
+    left: money(Math.max(limit - spent, 0), m),
+    daysLeft: pace.daysLeft,
+    perDay: pace.perDay === null ? null : money(pace.perDay, m),
+    projectedEnd: money(pace.projectedEnd, m),
+    overDate: pace.overDay === null ? null : m.paceDate(pace.overDay, Number(month.slice(5))),
+  });
+  return [
+    m.paceHeader({ month: `${month.slice(5)}/${month.slice(0, 4)}`, ...progress }),
+    overall && m.paceOverall({ name: m.overallBudget, ...figures(overall) }),
+    ...(await Promise.all(
+      byCategory.map(async (b) => m.paceCategory({ name: categoryName(await Category.findById(b.categoryId).lean(), m), ...figures(b) })),
+    )),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+// /today, /month, /dubao, /lang vi|en; anything else (/start, /help, unknown) gets the help text.
 // The totals come from the same statistics service as the dashboard, the budgets from the Budgets page's service.
 async function runCommand(link, user, command, arg) {
   const m = messagesFor(user.language);
@@ -142,10 +178,9 @@ async function runCommand(link, user, command, arg) {
   }
   if (command === 'month') {
     const month = monthKey(now);
-    const [{ expense, income }, budgets] = await Promise.all([monthSummary(link.userId, month), listBudgets(link.userId, month)]);
-    const usage = ({ percent, spent, limit }) => ({ percent, spent: money(spent, m), limit: money(limit, m) });
-    const overall = budgets.find((b) => !b.categoryId);
-    const byCategory = budgets.filter((b) => b.categoryId).sort((a, b) => b.percent - a.percent); // fullest first
+    const [{ expense, income }, budgets] = await Promise.all([monthSummary(link.userId, month), listBudgets(link.userId, month, now)]);
+    const usage = ({ percent, spent, limit, pace }) => ({ percent, spent: money(spent, m), limit: money(limit, m), daily: dailyText(pace, m) });
+    const { overall, byCategory } = splitBudgets(budgets);
     return m.month({
       month: `${month.slice(5)}/${month.slice(0, 4)}`,
       expense: money(expense, m),
@@ -154,6 +189,7 @@ async function runCommand(link, user, command, arg) {
       categoryBudgets: await Promise.all(byCategory.map(async (b) => ({ name: categoryName(await Category.findById(b.categoryId).lean(), m), ...usage(b) }))),
     });
   }
+  if (command === 'dubao') return forecast(link.userId, m, now);
   const language = arg.toLowerCase();
   if (command === 'lang' && (language === 'vi' || language === 'en')) {
     await updateMe(link.userId, { language }); // the same setting as on the web Settings page
@@ -301,8 +337,8 @@ function clearPending(link, transactionId) {
 }
 
 // budgetWarning from services/budgets.js → "⚠️ Ngân sách "Ăn uống" đã dùng 85% (85.000 ₫ / 100.000 ₫)".
-async function warningLine({ categoryId, percent, spent, limit, threshold }, m) {
+async function warningLine({ categoryId, percent, spent, limit, threshold, pace }, m) {
   const category = categoryId && (await Category.findById(categoryId).lean());
   const name = category ? categoryName(category, m) : m.overallBudget;
-  return m.budgetWarning({ name, percent, spent: money(spent, m), limit: money(limit, m), over: threshold === 100 });
+  return m.budgetWarning({ name, percent, spent: money(spent, m), limit: money(limit, m), over: threshold === 100, daily: dailyText(pace, m) });
 }

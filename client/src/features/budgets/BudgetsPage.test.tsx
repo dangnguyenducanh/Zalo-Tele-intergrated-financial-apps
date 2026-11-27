@@ -1,10 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { Category } from '@/features/categories/categoriesApi';
 import { LAN, resetFake, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
+import fixture from '../../../../shared/fixtures/pace.json';
 import type { Budget } from './budgetsApi';
 
 // An in-memory /api/budgets and /api/categories (MSW) with the docs/04 shapes. `spent` is fixed per budget,
@@ -37,14 +38,17 @@ const categories = [
 let budgets: Budget[] = [];
 let sent: { method: string; url: string; body?: unknown }[] = [];
 
-const budget = (id: string, month: string, categoryId: string | null, limit: number, spent = 0): Budget => ({
+const budget = (id: string, month: string, categoryId: string | null, limit: number, spent = 0, pace: Budget['pace'] = null): Budget => ({
   id,
   month,
   categoryId,
   limit,
   spent,
   percent: Math.round((spent * 100) / limit),
+  pace,
 });
+
+afterEach(() => vi.useRealTimers());
 
 beforeEach(() => {
   resetFake(LAN, true); // logged in as Lan, UI in Vietnamese
@@ -192,4 +196,44 @@ test('TC-F4-13 a budget limit over 10^13 ₫ is marked at the field with the max
   expect(limit).toHaveAccessibleDescription(/^Tối đa 10\.000\.000\.000\.000\s₫$/);
   expect(limit).toHaveFocus();
   expect(sent).toEqual([]);
+});
+
+// The server decides (docs/02 §2.11.2, A2): the page shows the daily limit it is given and works nothing out itself.
+// The rows are the shared fixture's, so the chip says what pace() says on the server and in the agent service.
+const paceRow = (name: string) => {
+  const row = fixture.pace.find((r) => r.name.startsWith(name));
+  if (!row) throw new Error(`no pace row "${name}"`);
+  return row;
+};
+const withPace = (id: string, categoryId: string, name: string) => {
+  const { input, pace } = paceRow(name);
+  return budget(id, THIS_MONTH, categoryId, input.limit, input.spent, pace);
+};
+
+test('TC-F14-33 the Budgets page shows the pace chip when the server sends one (day 5 on), not on day 4 or over the limit', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date(`${THIS_MONTH}-25T12:00:00+07:00`) }); // the clock says day 25 and must not matter
+  budgets = [
+    withPace('b1', 'c1', 'A2 example'), // day 25: 150.000 ₫ a day
+    withPace('b2', 'c2', 'the same spending on day 4'), // day 4: pace null, so no chip
+    withPace('b3', 'c3', 'day 5 is the first day'), // day 5: 269.230 ₫ a day
+    withPace('b4', 'c5', 'over the limit'), // spent > limit: pace without an allowance
+  ];
+  renderApp('/budgets');
+
+  const card = async (name: string) => within(await screen.findByRole('article', { name }));
+  expect((await card('Ăn uống')).getByText(/^tối đa 150\.000\s₫\/ngày$/)).toBeInTheDocument();
+  expect((await card('Mua sắm')).getByText(/^tối đa 269\.230\s₫\/ngày$/)).toBeInTheDocument();
+  expect((await card('Đi lại')).queryByText(/tối đa/)).not.toBeInTheDocument(); // the server said null; the client does not guess
+  expect((await card('Khác')).queryByText(/tối đa/)).not.toBeInTheDocument(); // already over: "Vượt …" says it, no negative allowance
+  expect(screen.getAllByText(/tối đa/)).toHaveLength(2);
+});
+
+test('TC-F14-33 the chip follows the language, and shows the server\'s figure even when it differs from the card\'s own numbers', async () => {
+  resetFake({ ...LAN, language: 'en' }, true);
+  // 1 ₫ of 1.000.000 ₫ spent, yet the server's daily limit is 12.345 ₫: the page does not divide anything.
+  budgets = [budget('b1', THIS_MONTH, 'c1', 1_000_000, 1, { daysLeft: 6, perDay: 12_345, projectedEnd: 6, overDay: null })];
+  renderApp('/budgets');
+
+  const food = within(await screen.findByRole('article', { name: 'Ăn uống' }));
+  expect(food.getByText(/^at most ₫12,345 a day$/)).toBeInTheDocument();
 });

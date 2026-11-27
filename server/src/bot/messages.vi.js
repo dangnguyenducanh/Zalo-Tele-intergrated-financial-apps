@@ -1,5 +1,8 @@
 // Every reply the bots send, in Vietnamese. messages.en.js has the same keys in English.
 // Amounts and dates arrive already formatted for `locale` by core.js.
+const paceDaily = (perDay) => `tối đa ${perDay}/ngày`; // the daily limit, the same words as the Budgets chip (client i18n budgets.pace)
+const dd = (n) => String(n).padStart(2, '0');
+
 export default {
   locale: 'vi-VN',
   pleaseLink: (appUrl) => `Vui lòng liên kết tài khoản: mở ${appUrl}/bot rồi gửi /link MÃ`,
@@ -14,7 +17,7 @@ export default {
     'grab 32k hôm qua mm',
     '+lương 15tr',
     'Câu hỏi (ví dụ: /hoi tháng này ăn uống hết bao nhiêu) không được ghi thành khoản chi.',
-    'Lệnh: /today (hôm nay), /month (tháng này), /hoi (câu hỏi), /lang vi|en, /help',
+    'Lệnh: /today (hôm nay), /month (tháng này), /dubao (dự báo ngân sách), /hoi (câu hỏi), /lang vi|en, /help',
   ].join('\n'),
   expense: 'Chi',
   income: 'Thu',
@@ -33,18 +36,31 @@ export default {
   alreadyConfirmed: 'Khoản này đã được lưu rồi.',
   nothingPending: 'Không có khoản nháp nào đang chờ.',
   overallBudget: 'Tổng',
-  budgetWarning: ({ name, percent, spent, limit, over }) =>
-    over ? `🚨 Vượt ngân sách "${name}": ${percent}% (${spent} / ${limit})` : `⚠️ Ngân sách "${name}" đã dùng ${percent}% (${spent} / ${limit})`,
+  // `daily` (the daily limit, docs/02 §2.11.2 A2) is null before day 5 and once the limit is reached.
+  budgetWarning: ({ name, percent, spent, limit, over, daily }) =>
+    (over ? `🚨 Vượt ngân sách "${name}": ${percent}% (${spent} / ${limit})` : `⚠️ Ngân sách "${name}" đã dùng ${percent}% (${spent} / ${limit})`) +
+    (daily ? ` · ${paceDaily(daily)}` : ''),
   today: ({ date, expense, income }) => `📅 Hôm nay ${date}\nChi: ${expense}\nThu: ${income}`,
   month: ({ month, expense, income, budget, categoryBudgets }) =>
     [
       `📅 Tháng ${month}`,
       `Chi: ${expense}`,
       `Thu: ${income}`,
-      budget && `Ngân sách: ${budget.percent}% (${budget.spent} / ${budget.limit})`,
-      ...categoryBudgets.map((b) => `Ngân sách "${b.name}": ${b.percent}% (${b.spent} / ${b.limit})`),
+      budget && `Ngân sách: ${budget.percent}% (${budget.spent} / ${budget.limit})${budget.daily ? ` · ${paceDaily(budget.daily)}` : ''}`,
+      ...categoryBudgets.map((b) => `Ngân sách "${b.name}": ${b.percent}% (${b.spent} / ${b.limit})${b.daily ? ` · ${paceDaily(b.daily)}` : ''}`),
     ]
       .filter(Boolean)
       .join('\n'),
+  // /dubao (docs/02 §2.11.2 A2). `perDay` is null once the limit is reached; `overDate` is null when the month never goes over.
+  paceHeader: ({ month, day, daysInMonth }) => `📊 Dự báo tháng ${month} (ngày ${day}/${daysInMonth})`,
+  paceOverall: ({ name, spent, limit, left, daysLeft, perDay, projectedEnd, overDate }) =>
+    `${name}: đã chi ${spent} / ${limit}. ` +
+    (perDay === null ? 'Đã vượt ngân sách. ' : `Còn ${left} cho ${daysLeft} ngày → ${paceDaily(perDay)}. `) +
+    `Theo nhịp này cuối tháng ≈ ${projectedEnd}${overDate ? `, vượt khoảng ${overDate}` : ''}.`,
+  paceCategory: ({ name, perDay, projectedEnd, overDate }) =>
+    `${name}: ${perDay === null ? 'đã vượt ngân sách' : paceDaily(perDay)}` + (overDate ? `. Cuối tháng ≈ ${projectedEnd}, vượt khoảng ${overDate}` : '') + '.',
+  paceDate: (day, month) => `${dd(day)}/${dd(month)}`,
+  paceTooEarly: ({ day, from }) => `Dự báo chỉ có từ ngày ${from} của tháng (hôm nay là ngày ${day}): mới vài ngày thì chưa đủ số liệu để đoán.`,
+  paceNoBudget: 'Tháng này chưa có ngân sách nên chưa có gì để dự báo. Hãy đặt ngân sách trên trang Ngân sách của web.',
   languageSet: 'Đã chuyển sang tiếng Việt.',
 };

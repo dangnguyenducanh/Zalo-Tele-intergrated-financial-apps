@@ -224,6 +224,7 @@ test('TC-F5-07 the dashboard lists category budgets past 80 % and 100 % and link
     limit,
     spent,
     percent: Math.round((spent / limit) * 100),
+    pace: null,
   });
   server.use(
     http.get('*/api/budgets', () =>

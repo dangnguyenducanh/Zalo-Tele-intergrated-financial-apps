@@ -18,6 +18,7 @@ import recorded from './fixtures/kie-analyze.json' with { type: 'json' };
 import fixtures from './fixtures/whatsapp-webhooks.json' with { type: 'json' };
 import { refresh, registerUser, resetLoginLimit } from './helpers/auth.js';
 import { clearTestDb, startTestDb, stopTestDb } from './helpers/db.js';
+import { A2_DUBAO_VI, novemberDay, plain, seedPaceMonth } from './helpers/pace.js';
 
 // KIE is mocked at a made-up host. (The NODE_ENV=test default KIE_URL uses port 9, which fetch refuses outright.)
 vi.hoisted(() => {
@@ -89,6 +90,7 @@ beforeEach(() => {
   errorLog = vi.spyOn(console, 'error');
 });
 afterEach(async () => {
+  vi.useRealTimers(); // the pace test pins the clock
   expect(errorLog).not.toHaveBeenCalled();
   errorLog.mockRestore();
   vi.restoreAllMocks();
@@ -770,4 +772,18 @@ test('TC-F8-40 /today, /month, /lang, /help, typed ok / huy and an admin lock wo
   expect(textOf((await say('phở 45k'))[0])).toBe(enText.locked);
   expect(textOf((await press(`c:${draft._id}`))[0])).toBe(enText.locked);
   expect(await Transaction.countDocuments({ status: 'draft', deletedAt: null })).toBe(1);
+});
+
+test('TC-F14-30 /dubao and /month give a WhatsApp chat the same pace as Telegram, in one reply each', async () => {
+  novemberDay(25);
+  const { user } = await linkedUser();
+  await seedPaceMonth({ userId: user.id, walletId: user.defaultWalletId });
+  graph.length = 0;
+
+  const dubao = await say('/dubao');
+  expect(dubao).toHaveLength(1);
+  expect(plain(textOf(dubao[0]))).toBe(A2_DUBAO_VI);
+  expect(plain(textOf((await say('/month'))[0]))).toContain('Ngân sách: 89% (7.100.000 ₫ / 8.000.000 ₫) · tối đa 150.000 ₫/ngày');
+  expect(textOf((await say('/help'))[0])).toContain('/dubao');
+  expect(await Transaction.countDocuments()).toBe(2); // only the two spendings seedPaceMonth() wrote: a forecast is not a draft
 });

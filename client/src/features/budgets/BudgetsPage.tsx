@@ -2,7 +2,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { alpha, Alert, Box, Button, Card, CardActions, CardContent, CircularProgress, Grid, IconButton, Stack, Typography } from '@mui/material';
+import { alpha, Alert, Box, Button, Card, CardActions, CardContent, Chip, CircularProgress, Grid, IconButton, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -191,6 +191,15 @@ function BudgetCard({ budget, name, onEdit, onDelete }: CardProps) {
           <Typography variant="body2" sx={left < 0 ? { color: 'error.main', fontWeight: 600 } : { color: 'text.secondary' }}>
             {left < 0 ? t('over', { amount: money(-left) }) : t('left', { amount: money(left) })}
           </Typography>
+          {/* The server's daily limit (docs/02 §2.11.2 A2): from day 5, and not once the limit is reached. The page works nothing out. */}
+          {budget.pace?.perDay != null && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={t('pace', { amount: money(budget.pace.perDay) })}
+              sx={{ mt: 1, height: 'auto', py: 0.25, '& .MuiChip-label': { whiteSpace: 'normal' } }}
+            />
+          )}
         </CardContent>
         <CardActions sx={{ px: 1.5, pt: 0 }}>
           <IconButton aria-label={t('actions.edit', { name })} onClick={onEdit}>
