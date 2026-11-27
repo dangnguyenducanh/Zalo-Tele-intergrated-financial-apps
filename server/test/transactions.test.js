@@ -355,6 +355,39 @@ test('TC-F9-05 confirm with edits applies them to a draft only; a draft confirme
   expect(await balanceOf(me, walletId)).toBe(-85_000);
 });
 
+test('TC-F14-53 POST /transactions/parse splits "chia N" like the bots do: a share of 300.000 ₫, the split in the note, no `guessed` leaked', async () => {
+  const { me, food } = await newUser();
+  const res = await me.post('/transactions/parse', { text: 'cơm 1tr2 chia 4\nphở 45k' });
+  expect(res.status).toBe(200);
+  expect(res.body.drafts).toEqual([
+    expect.objectContaining({ amount: 300_000, categoryId: food, note: 'cơm (1.200.000 ₫ ÷ 4)' }),
+    expect.objectContaining({ amount: 45_000, note: 'phở' }),
+  ]);
+  expect(res.body.drafts.flatMap(Object.keys)).not.toContain('guessed');
+  expect(res.body.drafts.flatMap(Object.keys)).not.toContain('hints'); // no hints: no key (the shape of TC-F13-01)
+
+  // A lone "chia 3" is a divisor, not 3.000 ₫: no amount.
+  const lone = await me.post('/transactions/parse', { text: 'chia 3' });
+  expect([lone.status, lone.body.error.code]).toEqual([422, 'NO_AMOUNT_FOUND']);
+});
+
+test('TC-F14-55 POST /transactions/parse gives each draft its `hints`: a "big" one for an amount far above the usual, a "duplicate" one for a repeat in 10 minutes', async () => {
+  const { me, user, walletId, food } = await newUser();
+  await Transaction.insertMany(
+    [55_000, 55_000, 55_000, 55_000, 55_000].map((amount) => ({
+      userId: user.id, walletId, categoryId: food, type: 'expense', amount, occurredAt: new Date(Date.now() - 24 * 60 * 60 * 1000), status: 'confirmed',
+    })),
+  );
+
+  const typo = await me.post('/transactions/parse', { text: 'phở 450\ngrab 32k\nphở 275k' });
+  expect(typo.body.drafts.map((d) => d.hints)).toEqual([[{ code: 'big', times: 8, median: 55_000 }], undefined, [{ code: 'big', times: 5, median: 55_000 }]]);
+
+  // The preview saves nothing, so a repeat of it is no duplicate; a saved one is.
+  expect((await me.post('/transactions/parse', { text: 'phở 45k' })).body.drafts[0].hints).toBeUndefined();
+  await me.post('/transactions', { type: 'expense', amount: 45_000, walletId, categoryId: food, occurredAt: new Date().toISOString(), note: 'phở' });
+  expect((await me.post('/transactions/parse', { text: 'phở 45k' })).body.drafts[0].hints).toEqual([{ code: 'duplicate' }]);
+});
+
 test('TC-F13-05 POST /transactions/parse names the lines it cannot save: no amount, or past the 10-line limit', async () => {
   const { me } = await newUser();
 

@@ -1,4 +1,4 @@
-import { Box, Button, Chip, Paper, Stack, TextField } from '@mui/material';
+import { Box, Button, Chip, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -11,15 +11,18 @@ import {
   useCreateTransactionMutation,
   useLazyParseTransactionsQuery,
   useParseTransactionsQuery,
+  type DraftHint,
   type ParsedDraft,
   type ParseResult,
   type TransactionInput,
 } from '@/features/transactions/transactionsApi';
 import { useDebounced } from '@/features/transactions/useDebounced';
 import { useGetWalletsQuery } from '@/features/wallets/walletsApi';
-import { formatDate } from '@/i18n/format';
+import { formatDate, formatMoney } from '@/i18n/format';
 
 const isComplete = (draft: ParsedDraft): draft is TransactionInput => Boolean(draft.walletId && draft.categoryId);
+// What the API takes: a preview line also carries its hints, which are not data to save.
+const toInput = ({ type, amount, walletId, categoryId, occurredAt, note }: TransactionInput): TransactionInput => ({ type, amount, walletId, categoryId, occurredAt, note });
 
 // Which dialog is open: "apply" edits one preview line, "save" is the full add form (Shift+Enter).
 type OpenForm = { mode: 'apply'; index: number; draft: ParsedDraft } | { mode: 'save'; draft: Partial<ParsedDraft> };
@@ -85,7 +88,7 @@ export default function QuickAdd() {
       const drafts = withEdits(result.drafts, value);
       if (!drafts.every(isComplete)) return setError(t('quickAdd.incomplete'));
       // ponytail: one request per line; if one fails midway the earlier lines stay saved and the text stays.
-      for (const draft of drafts) await createTransaction(draft).unwrap();
+      for (const draft of drafts) await createTransaction(toInput(draft)).unwrap();
       reset(drafts.length);
     } catch (failure) {
       setError(apiErrorMessage(failure)); // e.g. NO_AMOUNT_FOUND, in the user's language
@@ -176,12 +179,22 @@ export default function QuickAdd() {
           {shown.map((draft, i) => {
             const category = categories.find((c) => c.id === draft.categoryId);
             const wallet = wallets.find((w) => w.id === draft.walletId);
+            const name = category ? categoryName(category, language) : '';
+            const hintText = (hint: DraftHint) =>
+              hint.code === 'big'
+                ? t('quickAdd.hintBig', { times: hint.times, category: name, median: formatMoney(hint.median, language) })
+                : t('quickAdd.hintDuplicate', { category: name });
             return (
               <Stack component="li" key={i} direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
                 {chip(signedMoney(draft.type, draft.amount, language), i, draft)}
                 {chip(category ? categoryName(category, language) : t('quickAdd.noCategory'), i, draft)}
                 {chip(wallet?.name ?? t('quickAdd.noWallet'), i, draft)}
                 {chip(formatDate(draft.occurredAt, language), i, draft)}
+                {draft.hints?.map((hint) => (
+                  <Typography key={hint.code} variant="caption" sx={{ flexBasis: '100%', color: 'warning.dark' }}>
+                    {hintText(hint)}
+                  </Typography>
+                ))}
               </Stack>
             );
           })}

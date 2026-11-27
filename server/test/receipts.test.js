@@ -224,6 +224,38 @@ test('TC-F8-08 a Zalo photo is read by KIE into a receipt draft: amount = total 
   expect((await Transaction.findById(draft._id)).status).toBe('confirmed');
 });
 
+test('TC-F14-51 a receipt draft is split like any draft: photo → "chia 3" → the total ÷ 3 rounded up to 1.000 ₫, the receipt data kept', async () => {
+  await linkedZaloUser();
+  await zaloPhoto();
+  const [draft] = await Transaction.find().lean();
+  expect(draft.amount).toBe(116_000);
+
+  await zaloText('chia 3');
+  expect(zaloSent.at(-1)).toMatch(/39\.000.*HÓA ĐON BÁN HANG \(116\.000 ₫ ÷ 3\)/); // 38.667 rounds up
+  const [split] = await Transaction.find().lean();
+  expect(split).toMatchObject({ _id: draft._id, amount: 39_000, note: 'HÓA ĐON BÁN HANG (116.000 ₫ ÷ 3)', status: 'draft' });
+  expect(split.receipt).toEqual(draft.receipt); // the reading of the receipt is untouched: its total is still 116.000
+
+  await zaloText('ok');
+  expect((await Transaction.findById(draft._id)).status).toBe('confirmed');
+});
+
+test('TC-F14-55 a receipt draft far above the category\'s usual amount carries the check line after the item line', async () => {
+  const { user, food } = await linkedZaloUser();
+  await Transaction.insertMany(
+    [10_000, 10_000, 10_000, 10_000, 10_000].map((amount) => ({
+      userId: user.id, walletId: user.defaultWalletId, categoryId: food, type: 'expense', amount, occurredAt: new Date(Date.now() - 24 * 60 * 60 * 1000), status: 'confirmed',
+    })),
+  );
+  await zaloPhoto();
+
+  const lines = zaloSent.at(-1).split('\n');
+  expect(lines[0]).toMatch(/^📝 Chi 116\.000\s₫/);
+  expect(lines[1]).toBe(viText.receiptItems({ count: 6, reconciled: true }));
+  expect(lines[2]).toMatch(/gấp 11 lần.*Ăn uống.*10\.000/); // 116.000 ÷ 10.000, rounded down
+  expect(lines).toHaveLength(3); // nothing after it: this stand-in adapter adds no reply hint
+});
+
 test('TC-F8-08 a Telegram photo goes through getFile and KIE to a draft with ✅/❌ buttons, once even if delivered twice', async () => {
   const owner = await newUser();
   const { body } = await api(owner.accessToken).post('/chat-links/code');

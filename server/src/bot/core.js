@@ -11,6 +11,7 @@ import { Wallet } from '../models/Wallet.js';
 import { maySend } from '../services/channelUsage.js';
 import { createClaimToken, redeemLinkCode } from '../services/chatLinks.js';
 import { listBudgets } from '../services/budgets.js';
+import { draftHints } from '../services/draftHints.js';
 import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
 import { confirmTransaction, parseTransactions, updateTransaction } from '../services/transactions.js';
@@ -19,6 +20,7 @@ import { AppError } from '../utils/AppError.js';
 import { normalize } from '../utils/normalize.js';
 import { monthKey, vnParts } from '../utils/vnTime.js';
 import { classify } from './ask.js';
+import { loneSplit, splitBill } from './parser.js';
 import en from './messages.en.js';
 import vi from './messages.vi.js';
 
@@ -77,7 +79,7 @@ function readCommand(text) {
 // Without a link, a valid "/start CODE" or "/link CODE" links the chat; anything else gets a claim link, the only
 // thing ever stored for an unlinked chat (no message text, no transaction).
 // For a linked, active chat the first match wins, in the order of docs/02 §2.11.1: a photo, "/hoi", any other command,
-// "ok" / "huy", then classify(): a question or a capture. A question never reaches createDrafts.
+// "ok" / "huy" / a lone "chia N" (reserved words), then classify(): a question or a capture. A question never reaches createDrafts.
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
   const [command, arg] = readCommand(message.text);
@@ -91,6 +93,8 @@ export async function handleMessage(adapter, message) {
   if (command) return reply(adapter, message.chatId, await runCommand(link, user, command, arg));
   const word = normalize(message.text);
   if (word === 'ok' || word === 'huy') return reply(adapter, message.chatId, await answerPending(link, word), 'capture');
+  const people = loneSplit(message.text); // before classify, so a follow-up never reads "chia 3" as a question (D11)
+  if (people) return splitPending(adapter, link, user.language, message.chatId, people);
   // followUp is false until the assistant's answers are remembered per chat (T50).
   if (classify(message.text, { followUp: false }) === 'question') return answerQuestion(adapter, message.chatId, user.language);
   return createDrafts(adapter, link, user.language, message);
@@ -199,13 +203,16 @@ async function createDrafts(adapter, link, language, message) {
   // Zalo has no ✏️ button, so a reply that is only an amount ("55k") corrects the waiting draft (docs/02 §2.4).
   if (adapter.platform === 'zalo' && drafts.length === 1 && drafts[0].note === '') {
     const pending = await pendingDraft(link);
-    if (pending) return correctDraft(adapter, link, language, message.chatId, pending, drafts[0].amount);
+    if (pending) return correctDraft(adapter, link, language, message.chatId, pending, { amount: drafts[0].amount }, drafts[0].guessed);
   }
   const saved = [];
-  for (const [i, draft] of drafts.entries()) {
+  const guessed = new Map(); // draft id → the parser read a bare number as thousands (the draft check is stricter then)
+  for (const [i, { guessed: bare, ...draft }] of drafts.entries()) {
     const chatRef = { platform: adapter.platform, chatId: message.chatId, messageId: `${message.messageId}:${i + 1}` };
     try {
-      saved.push(await Transaction.create({ ...draft, userId: link.userId, status: 'draft', source: adapter.platform, chatRef }));
+      const transaction = await Transaction.create({ ...draft, userId: link.userId, status: 'draft', source: adapter.platform, chatRef });
+      guessed.set(transaction.id, bare);
+      saved.push(transaction);
     } catch (err) {
       if (err.code === 11000) continue; // delivered again: this line's draft exists already
       throw err;
@@ -215,7 +222,7 @@ async function createDrafts(adapter, link, language, message) {
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: saved.at(-1)._id });
   let failed = null;
   for (const transaction of saved) {
-    const text = m.draft(await describe(transaction, m));
+    const text = await draftText(transaction, m, { guessed: guessed.get(transaction.id) });
     await adapter.sendDraft(message.chatId, { id: transaction.id, text }, language).catch((err) => {
       failed ??= err; // still reply to the other lines
     });
@@ -229,13 +236,35 @@ async function createDrafts(adapter, link, language, message) {
   if (failed) throw failed; // the webhook logs it
 }
 
-// A Zalo correction: the new amount goes through the same service as the web Bot inbox edit (PATCH /transactions/:id).
-// Note, category, wallet and date stay. The draft is sent again, and "ok" / "huy" still act on it.
-async function correctDraft(adapter, link, language, chatId, draft, amount) {
+// A Zalo correction, or a lone "chia N": `changes` (an amount, or an amount and a note) go through the same service as the
+// web Bot inbox edit (PATCH /transactions/:id). Category, wallet and date stay. The draft is sent again, checked again
+// for a typo or a repeat (A6), and "ok" / "huy" still act on it.
+async function correctDraft(adapter, link, language, chatId, draft, changes, guessed = false) {
   const m = messagesFor(language);
-  const updated = await updateTransaction(link.userId, draft._id, { amount });
+  const updated = await updateTransaction(link.userId, draft._id, changes);
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: updated._id });
-  return adapter.sendDraft(chatId, { id: updated.id, text: m.draft(await describe(updated, m)) }, language);
+  return adapter.sendDraft(chatId, { id: updated.id, text: await draftText(updated, m, { guessed }) }, language);
+}
+
+// "chia 3" alone (docs/02 §2.11.2, A5): the waiting draft, a receipt draft too, becomes one share of its amount.
+// With no draft waiting nothing changes, and the reply says so.
+async function splitPending(adapter, link, language, chatId, people) {
+  const draft = await pendingDraft(link);
+  if (!draft) return reply(adapter, chatId, messagesFor(language).nothingToSplit, 'capture');
+  const { amount, note } = splitBill(draft.amount, people, draft.note);
+  return correctDraft(adapter, link, language, chatId, draft, { amount, note });
+}
+
+// The draft's one line of text, then what to double-check (A6) in the draft message itself, so Zalo pays for no extra send.
+// A failed check never costs the draft its reply: it is only advice.
+async function draftText(transaction, m, { guessed = false, lines = [] } = {}) {
+  const hints = await draftHints(transaction.userId, { amount: transaction.amount, categoryId: transaction.categoryId, id: transaction._id }, { guessed }).catch((err) => {
+    console.error('draftHints failed', err);
+    return [];
+  });
+  const name = hints.length > 0 && categoryName(await Category.findById(transaction.categoryId).lean(), m);
+  const hintLines = hints.map((hint) => (hint.code === 'big' ? m.hintBig({ name, times: hint.times, median: money(hint.median, m) }) : m.hintDuplicate({ name })));
+  return [m.draft(await describe(transaction, m)), ...lines, ...hintLines].join('\n');
 }
 
 // A receipt photo (docs/02 §2.6): "Reading receipt…", then KIE (about 20 s), then a draft with its buttons that
@@ -260,10 +289,9 @@ async function readReceipt(adapter, link, language, message) {
     throw err; // anything else (a failed download, a bug) is logged by the webhook
   }
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: transaction._id });
-  const lines = [m.draft(await describe(transaction, m))];
   const { items, reconciled } = transaction.receipt;
-  if (items.length > 0) lines.push(m.receiptItems({ count: items.length, reconciled }));
-  await adapter.sendDraft(message.chatId, { id: transaction.id, text: lines.join('\n') }, language);
+  const lines = items.length > 0 ? [m.receiptItems({ count: items.length, reconciled })] : [];
+  await adapter.sendDraft(message.chatId, { id: transaction.id, text: await draftText(transaction, m, { lines }) }, language);
 }
 
 // Confirm a draft through the same service as POST /transactions/:id/confirm, plus the budget warning line.

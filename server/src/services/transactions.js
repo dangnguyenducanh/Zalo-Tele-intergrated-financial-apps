@@ -7,6 +7,7 @@ import { Wallet } from '../models/Wallet.js';
 import { AppError } from '../utils/AppError.js';
 import { monthKey, vnDate } from '../utils/vnTime.js';
 import { budgetWarning } from './budgets.js';
+import { draftHints } from './draftHints.js';
 
 const notFound = () => new AppError(404, 'NOT_FOUND', 'Transaction not found');
 
@@ -137,4 +138,17 @@ export async function parseTransactions(userId, text, now = new Date()) {
   const lineNumbers = text.split(/\r?\n/).flatMap((line, i) => (line.trim() ? [i + 1] : []));
   const noAmountLines = results.flatMap((result, i) => (result ? [] : [lineNumbers[i]]));
   return { drafts, noAmountLines, truncated: lineNumbers.length > results.length }; // the parser reads 10 lines at most
+}
+
+// POST /transactions/parse: parseTransactions() with the draft check (A6) on every draft as `hints`; nothing is saved.
+// The key is left out when there is nothing to warn about, and the parser's `guessed` flag stays inside.
+export async function previewTransactions(userId, text, now = new Date()) {
+  const result = await parseTransactions(userId, text, now);
+  const drafts = await Promise.all(
+    result.drafts.map(async ({ guessed, ...draft }) => {
+      const hints = await draftHints(userId, draft, { guessed, now });
+      return hints.length > 0 ? { ...draft, hints } : draft;
+    }),
+  );
+  return { ...result, drafts };
 }

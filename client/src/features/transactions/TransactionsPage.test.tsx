@@ -404,6 +404,58 @@ test('TC-F13-09 quick add: the question notice and its hint are in English too',
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
+// The server's answer for "phở 450\ncafe 45k": a typo hint on the first line, a repeat hint on the second (docs/02 §2.11.2, A6).
+function answerWithHints() {
+  server.use(
+    http.post('*/api/transactions/parse', () =>
+      HttpResponse.json({
+        drafts: [
+          { type: 'expense', amount: 450000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'phở', hints: [{ code: 'big', times: 8, median: 55000 }, { code: 'duplicate' }] },
+          { type: 'expense', amount: 45000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'cafe' },
+        ],
+        noAmountLines: [],
+        truncated: false,
+      }),
+    ),
+  );
+}
+
+test('TC-F14-56 quick add: a draft the server flags shows its check lines under its chips; Enter still saves it, without the hints', async () => {
+  answerWithHints();
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  await screen.findByRole('row', { name: /grab/ });
+
+  await user.type(quickAdd(), 'phở 450');
+  const preview = await screen.findByRole('list', { name: 'Xem trước' });
+  const rows = within(preview).getAllByRole('listitem');
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toHaveTextContent(/Lớn gấp 8 lần khoản Ăn uống thường ngày \(55\.000\s₫\)\. Gõ nhầm\?/);
+  expect(rows[0]).toHaveTextContent('Giống một khoản Ăn uống vừa nhập trong 10 phút qua. Nhập trùng?');
+  expect(rows[1]).not.toHaveTextContent('Lớn gấp'); // the second line has no hints
+  expect(rows[1]).not.toHaveTextContent('Giống một khoản');
+
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(quickAdd()).toHaveValue(''));
+  expect(posted()).toEqual([
+    { type: 'expense', amount: 450000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'phở' }, // hints are not data to save
+    { type: 'expense', amount: 45000, categoryId: 'c1', walletId: 'w1', occurredAt: NOW, note: 'cafe' },
+  ]);
+});
+
+test('TC-F14-56 quick add: the check lines are in English too, with the category named in English', async () => {
+  resetFake({ ...LAN, language: 'en' }, true);
+  answerWithHints();
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  const box = await screen.findByRole('textbox', { name: 'Quick add' });
+
+  await user.type(box, 'pho 450');
+  const preview = await screen.findByRole('list', { name: 'Preview' });
+  expect(within(preview).getAllByRole('listitem')[0]).toHaveTextContent(/8 times your usual Food & drinks amount \(₫55,000\)\. A typo\?/);
+  expect(within(preview).getAllByRole('listitem')[0]).toHaveTextContent('Same amount as a recent Food & drinks entry in the last 10 minutes. Entered twice?');
+});
+
 test('TC-F13-04 quick add: a chip changes the draft before saving; Shift+Enter opens the full form pre-filled', async () => {
   const user = userEvent.setup();
   renderApp('/transactions');

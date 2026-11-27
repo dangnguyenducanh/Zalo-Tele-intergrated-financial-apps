@@ -13,6 +13,7 @@ export default {
     'grab 32k yesterday mm',
     '+salary 15tr',
     'A question (e.g. /hoi how much did I spend on food this month) is never recorded as an expense.',
+    'Split a bill: "dinner 1tr2 chia 4", or send "chia 3" while a draft is waiting.',
     'Commands: /today, /month, /hoi (a question), /lang vi|en, /help',
   ].join('\n'),
   expense: 'Expense',
@@ -46,4 +47,7 @@ export default {
       .filter(Boolean)
       .join('\n'),
   languageSet: 'Switched to English.',
+  nothingToSplit: 'There is no draft waiting to split. Send the item first, e.g. dinner 1tr2 chia 4',
+  hintBig: ({ name, times, median }) => `⚠️ ${times} times your usual "${name}" amount (${median}). A typo?`,
+  hintDuplicate: ({ name }) => `⚠️ Same amount as a recent "${name}" entry in the last 10 minutes. Entered twice?`,
 };

@@ -14,6 +14,7 @@ export default {
     'grab 32k hôm qua mm',
     '+lương 15tr',
     'Câu hỏi (ví dụ: /hoi tháng này ăn uống hết bao nhiêu) không được ghi thành khoản chi.',
+    'Chia hoá đơn: "cơm 1tr2 chia 4", hoặc gửi "chia 3" khi có khoản nháp đang chờ.',
     'Lệnh: /today (hôm nay), /month (tháng này), /hoi (câu hỏi), /lang vi|en, /help',
   ].join('\n'),
   expense: 'Chi',
@@ -47,4 +48,7 @@ export default {
       .filter(Boolean)
       .join('\n'),
   languageSet: 'Đã chuyển sang tiếng Việt.',
+  nothingToSplit: 'Không có khoản nháp nào đang chờ để chia. Hãy gửi khoản trước, ví dụ: cơm 1tr2 chia 4',
+  hintBig: ({ name, times, median }) => `⚠️ Lớn gấp ${times} lần khoản "${name}" thường ngày (${median}). Gõ nhầm?`,
+  hintDuplicate: ({ name }) => `⚠️ Giống một khoản "${name}" vừa nhập trong 10 phút qua. Nhập trùng?`,
 };

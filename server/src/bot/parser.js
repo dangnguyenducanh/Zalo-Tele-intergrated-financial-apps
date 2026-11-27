@@ -9,16 +9,26 @@ const MAX_LINES = 10;
 const NOTE_MAX = 200;
 const DAY_MS = 24 * 60 * 60 * 1000; // exact in Vietnam: no daylight saving
 const INCOME_WORDS = ['luong', 'thuong', 'nhan', 'salary', 'bonus', 'received'];
+const SPLIT_MIN = 2; // "chia N": N people share the bill (docs/02 §2.11.2 A5)
+const SPLIT_MAX = 50;
 const YESTERDAY_WORDS = ['hqua', 'yesterday']; // plus the two words "hom qua"
 
 // A message → one result per non-empty line (first 10 lines only); null where a line has no amount.
 export function parseText(text, ctx) {
   const lines = String(text ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  return lines.slice(0, MAX_LINES).map((line) => parseLine(line, ctx));
+  return lines.slice(0, MAX_LINES).map((line) => readLine(line, ctx));
 }
 
 // One line → { type, amount, categoryId, walletId, occurredAt, note }, or null when there is no amount.
-export function parseLine(text, { categories = [], wallets = [], defaultWalletId, now = new Date() } = {}) {
+export function parseLine(text, ctx) {
+  const draft = readLine(text, ctx);
+  if (draft) delete draft.guessed;
+  return draft;
+}
+
+// parseLine() plus `guessed`: the amount was a bare number read as thousands ("phở 45"), which the draft check
+// watches more closely (A6). parseText() keeps it for the services; parseLine() leaves it out.
+export function readLine(text, { categories = [], wallets = [], defaultWalletId, now = new Date() } = {}) {
   const line = String(text ?? '').trim();
   const words = wordsOf(line); // original words, kept for the note
   const keys = words.map(toKey); // the same words, normalized for matching
@@ -26,8 +36,9 @@ export function parseLine(text, { categories = [], wallets = [], defaultWalletId
 
   const occurredAt = findDate(keys, used, now);
   const walletId = findWallet(keys, used, wallets) ?? defaultWalletId ?? wallets[0]?._id ?? null;
-  const amount = findAmount(keys, used, findPeriod(words).indexes);
-  if (amount === null) return null;
+  const people = findSplit(keys, used); // before the amount, so the N is never read as money (A5)
+  const found = findAmount(keys, used, findPeriod(words).indexes);
+  if (found === null) return null;
 
   const rest = keys.filter((_, i) => !used.has(i));
   const matchText = ` ${rest.join(' ').replace(/[^a-z0-9]+/g, ' ').trim()} `; // padded so keywords match whole words
@@ -39,9 +50,37 @@ export function parseLine(text, { categories = [], wallets = [], defaultWalletId
   const type = isIncome ? 'income' : 'expense';
   const ofType = categories.filter((c) => c.type === type);
   const category = bestCategory(ofType, matchText) ?? ofType.find((c) => c.isFallback) ?? null;
-  const note = words.filter((_, i) => !used.has(i)).join(' ').slice(0, NOTE_MAX);
+  const left = words.filter((_, i) => !used.has(i)).join(' ');
+  const split = people ? splitBill(found.value, people, left) : { amount: found.value, note: left.slice(0, NOTE_MAX) };
 
-  return { type, amount, categoryId: category?._id ?? null, walletId, occurredAt, note };
+  return { type, amount: split.amount, categoryId: category?._id ?? null, walletId, occurredAt, note: split.note, guessed: found.guessed };
+}
+
+// "chia 4" → 4: the words "chia" and a whole number from 2 to 50 are used up, so the N is never an amount
+// ("chia 1" and "chia 51" are not a split and stay in the note). null when there is no such pair.
+function findSplit(keys, used) {
+  for (let i = 0; i < keys.length - 1; i++) {
+    const people = /^\d{1,2}$/.test(keys[i + 1]) ? Number(keys[i + 1]) : 0;
+    if (keys[i] === 'chia' && !used.has(i) && !used.has(i + 1) && people >= SPLIT_MIN && people <= SPLIT_MAX) {
+      used.add(i).add(i + 1);
+      return people;
+    }
+  }
+  return null;
+}
+
+// A total shared by `people` → { amount, note }: each share rounded up to the next 1.000 ₫, and the note with
+// "(1.200.000 ₫ ÷ 4)" at its end (the note is cut short, not the label, to stay within 200 characters).
+// The chat's lone "chia N" divides a waiting draft with the same function.
+export function splitBill(total, people, note = '') {
+  const label = `(${total.toLocaleString('vi-VN')} ₫ ÷ ${people})`;
+  return { amount: Math.ceil(total / people / 1000) * 1000, note: `${note.slice(0, NOTE_MAX - label.length - 1)} ${label}`.trim() };
+}
+
+// A message that is only "chia 4" (case, accents and spaces ignored) → 4; null for anything else, or an N outside 2-50.
+export function loneSplit(text) {
+  const people = Number(/^chia (\d{1,2})$/.exec(normalize(text))?.[1]);
+  return people >= SPLIT_MIN && people <= SPLIT_MAX ? people : null;
 }
 
 // "hôm qua" / "hqua" / "yesterday" → now − 1 day; "dd/mm" or "dd/mm/yyyy" → that day; otherwise now.
@@ -102,14 +141,14 @@ export function amountCandidates(keys, used, never) {
   return found;
 }
 
-// The amount in VND. An amount with a unit or separators ("50k", "150.000") beats a bare
+// The amount in VND ({ value, guessed, … }). An amount with a unit or separators ("50k", "150.000") beats a bare
 // number read as thousands ("2" in "2 ly trà sữa 50k"); otherwise the first one wins.
 function findAmount(keys, used, never) {
   const found = amountCandidates(keys, used, never);
   const pick = found.find((a) => !a.guessed) ?? found[0];
   if (!pick) return null;
   pick.indexes.forEach((i) => used.add(i));
-  return pick.value;
+  return pick;
 }
 
 // One normalized word → { value, guessed } or null. See the table in docs/02 §2.5.

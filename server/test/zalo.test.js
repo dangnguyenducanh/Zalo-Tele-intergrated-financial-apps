@@ -6,6 +6,7 @@ import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import app from '../src/app.js';
 import viText from '../src/bot/messages.vi.js';
+import { Category } from '../src/models/Category.js';
 import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
@@ -291,6 +292,44 @@ test('TC-F8-20 Zalo: a reply with only an amount ("55k") corrects the pending dr
   // With nothing pending, an amount alone is a new draft, as before.
   await say('40k');
   expect(await Transaction.countDocuments({ amount: 40_000, status: 'draft' })).toBe(1);
+});
+
+test('TC-F14-51 Zalo: "chia 3" after a draft divides it, and the reply still ends with the "ok / huy / amount" hint', async () => {
+  await linkedUser();
+  await say('cơm nhà hàng 1tr2');
+  const draft = await Transaction.findOne().lean();
+
+  const split = await say('chia 4');
+  expect(split).toHaveLength(1);
+  expect(textOf(split[0])).toMatch(/300\.000.*cơm nhà hàng \(1\.200\.000 ₫ ÷ 4\)/);
+  expect(textOf(split[0]).endsWith(`\n${viText.replyHint}`)).toBe(true);
+  expect(await Transaction.find().lean()).toMatchObject([{ _id: draft._id, amount: 300_000, status: 'draft' }]);
+  expect((await ChatLink.findOne()).pendingTransactionId).toEqual(draft._id);
+
+  // With the draft saved, nothing waits: the same text says so and a "ok" has nothing to do either.
+  await say('ok');
+  expect(textOf((await say('chia 3'))[0])).toBe(viText.nothingToSplit);
+  expect(await Transaction.countDocuments({ amount: 100_000 })).toBe(0); // "chia 3" was not turned into a 3.000 ₫ draft
+  expect((await Transaction.findOne().lean()).amount).toBe(300_000);
+});
+
+test('TC-F14-55 Zalo: the check line sits between the draft and the reply hint, and a corrected amount ("300k") is checked again', async () => {
+  const owner = await linkedUser();
+  const transport = (await Category.findOne({ userId: owner.id, 'names.vi': 'Đi lại' }))._id;
+  await Transaction.insertMany(
+    [30_000, 30_000, 30_000, 30_000, 30_000].map((amount) => ({
+      userId: owner.id, walletId: owner.defaultWalletId, categoryId: transport, type: 'expense', amount, occurredAt: new Date(Date.now() - 24 * 60 * 60 * 1000), status: 'confirmed',
+    })),
+  );
+
+  const first = textOf((await say('grab 32k'))[0]).split('\n');
+  expect(first).toHaveLength(2); // the draft, then the reply hint: nothing to warn about
+  expect(first[1]).toBe(viText.replyHint);
+
+  const corrected = textOf((await say('300k'))[0]).split('\n');
+  expect(corrected).toHaveLength(3);
+  expect(corrected[1]).toMatch(/gấp 10 lần.*Đi lại/);
+  expect(corrected[2]).toBe(viText.replyHint);
 });
 
 test('TC-F8-21 Zalo: after a multi-line message, each "ok"/"huy" reaches the next waiting draft, newest first (BUG-028)', async () => {

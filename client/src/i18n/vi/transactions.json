@@ -92,6 +92,8 @@
     "question": "Đây là câu hỏi",
     "questionHint": "Câu hỏi không được lưu thành giao dịch: Enter và Lưu không lưu gì.",
     "tooManyLines": "Mỗi lần chỉ lưu được 10 dòng. Hãy lưu phần còn lại sau.",
+    "hintBig": "Lớn gấp {{times}} lần khoản {{category}} thường ngày ({{median}}). Gõ nhầm?",
+    "hintDuplicate": "Giống một khoản {{category}} vừa nhập trong 10 phút qua. Nhập trùng?",
     "saved": "Đã lưu giao dịch: {{count}}"
   }
 }
