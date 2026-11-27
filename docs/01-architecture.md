@@ -14,7 +14,7 @@ Telegram and Zalo push messages to **webhooks** on the same Vercel API.
 
 **Planned ([§2.11](02-features.md#211-assistant-and-agent-features-planned), not built yet):** the bots and the web answer questions about the user's own money, read receipt photos with a local model, and suggest a category when the rules fall back to Khác/Other. A fourth runtime piece does this: an **agent service** (Python 3.12, FastAPI + LangGraph) next to a **vLLM** server that serves **Qwen3.5-2B**, both on the team's GPU host and reached server-to-server through a Cloudflare tunnel, like KIE. Express stays the only public API. It keeps capture (text parser, drafts, ok/huy, buttons), `classify`, the plain commands, auth, **every write** and the cron entry point. A **daily Vercel cron** asks the agent service for the opted-in digests and reports. The rules from §2.11 hold everywhere: nothing goes to a third-party model; a typed amount is parsed only by the rule parser; the bot never saves or changes money data without the user's confirmation; every number in a reply comes from our code and MongoDB. KIE is retired once the local model passes the receipt eval ([§2.11.4 "Local model layer (Qwen3.5-2B on vLLM)"](02-features.md#2114-local-model-layer-qwen35-2b-on-vllm)). The agent design is in §1.9.
 
-**Planned ([§2.12](02-features.md#212-email-codes-verified-sign-up-and-password-reset-planned), not built yet):** the API sends 6-digit email codes for sign-up and password reset through **Gmail SMTP**.
+**Planned ([§2.12](02-features.md#212-email-codes-verified-sign-up-and-password-reset-planned); only the mailer is built, T35, and nothing calls it yet):** the API sends 6-digit email codes for sign-up and password reset through **Gmail SMTP**.
 
 ```mermaid
 flowchart LR
@@ -76,7 +76,7 @@ flowchart LR
 | **Agent service (planned, §2.11, `agent/`)** | Python 3.12, FastAPI + LangGraph on the GPU host. One compiled graph for turns (chat, confirm, schedule, event) and two small graphs for receipts and categories. Skills and tools are registries in MongoDB; the bge-m3 embedder runs in the same process. Details in §1.9 | Its MongoDB user reads app data and writes only `agent*` collections and `pendingActions` proposals. Every endpoint except `GET /health` needs `Bearer AGENT_SECRET` |
 | **vLLM (planned, §2.11)** | Serves `Qwen/Qwen3.5-2B` as `qwen3.5-2b` on `127.0.0.1:8300` (OpenAI-compatible API), non-thinking mode, guided JSON for structured answers | Only the agent service reaches it. It is never on the tunnel |
 | **Daily cron and notices (planned, §2.11.2)** | One Vercel cron calls `GET /api/cron/daily` once a day. It loops over opted-in users, asks the agent service for each message due today (`/v1/turn`, `trigger: schedule`, §1.3), and sends it. Recurring-bill drafts (B3) are built in Express. A `notices` row (unique `(userId, kind, key)`) is inserted before each send, and `channelUsage` counts Zalo and WhatsApp sends (Zalo built in T49, WhatsApp with T70) | Checked with `CRON_SECRET` through the existing `sameSecret()`. Admins can run it by hand with `POST /api/admin/cron/daily`, because crons don't fire locally |
-| **Mailer and email codes (planned, §2.12)** | `services/mail.js` sends one plain-text + simple-HTML mail, `sendCode({ to, purpose, code, language })`, through Gmail SMTP with `nodemailer`. `emailCodes` holds a pending sign-up or a reset: the code's SHA-256 hash, tries, send times, and for sign-up the bcrypt hash of the password | No account exists until the code is right (§2.12.2). Without the Gmail settings, development logs the code and production registers as today (§2.12.4) |
+| **Mailer (built, T35) and email codes (planned, §2.12)** | `services/mail.js` (built; nothing calls it yet) sends one plain-text + simple-HTML mail, `sendCode({ to, purpose, code, language })`, through Gmail SMTP with `nodemailer`. `emailCodes` holds a pending sign-up or a reset: the code's SHA-256 hash, tries, send times, and for sign-up the bcrypt hash of the password | No account exists until the code is right (§2.12.2). Without the Gmail settings, development logs the code and production registers as today (§2.12.4) |
 | **Text parser** | Rule-based Vietnamese/English parsing of `phở 45k`, `+lương 15tr`, `grab 32k hôm qua` | **No AI fallback**: if nothing parses, the bot replies with usage help |
 | **KIE client** | Sends an image to the KIE service and maps its result to a draft transaction | 120 s timeout. When it fails, the bot asks the user to type the amount. Planned: used only while `RECEIPT_READER=kie`, removed when KIE is retired (§2.11) |
 | **KIE service** | OpenCV preprocessing → PaddleOCR → spatial KIE → line items → total reconciliation | We only call `POST /analyze`, which saves nothing. Its own SQLite and UI are unused. Planned: retired after the receipt eval passes (§2.11) |
@@ -466,7 +466,7 @@ Versions are pinned exactly in the `package.json` files (root, `client/`, `serve
 | Telegram / Zalo | plain `fetch` (no SDK) | — | Both are small HTTP APIs (Telegram: `sendMessage`, `getFile`, `editMessageText`, `answerCallbackQuery`; Zalo: `sendMessage`); about 50 to 70 lines each, so nothing extra to explain at the defense |
 | WhatsApp (§2.10) | Meta's WhatsApp Cloud API, called directly | Graph API `v26.0`, pinned in `bot/whatsapp.js` | One more adapter behind the same bot core and webhook pattern; no provider such as Twilio, no unofficial library. Calls: `POST /<WHATSAPP_PHONE_NUMBER_ID>/messages` (text and reply buttons), `GET /<image.id>` then the media download |
 | Agent client (planned, §2.11) | plain `fetch` (no SDK) | — | `services/agent.js` calls the agent service's four endpoints (§1.9). Express loads no model and no AI SDK |
-| Email (planned, §2.12.5) | nodemailer | pinned at build time | Gmail SMTP on port 465 with an app password; one module, `services/mail.js` |
+| Email (§2.12.5; the mailer is built, T35) | nodemailer | 10.6.1, exact | Gmail SMTP on port 465 with an app password; one module, `services/mail.js` |
 
 ### Agent service (`agent/`, §2.11)
 
@@ -522,7 +522,7 @@ Zalo-Tele-intergrated-financial-apps/
 │   │   ├── models/         # User, Session, Wallet, Category, Transaction, Budget, ChatLink, LinkCode
 │   │   ├── middleware/     # auth.js, requireRole.js, connectDb.js, rateLimit.js, requestId.js, error.js, notFound.js
 │   │   ├── routes/         # one router per resource; request bodies are parsed with zod inline (no controllers/)
-│   │   ├── services/       # admin, auth, budgets, categories, chatLinks, receipts (KIE client), sessions, stats, transactions, users, wallets
+│   │   ├── services/       # admin, auth, budgets, categories, chatLinks, mail (sendCode, not called yet), receipts (KIE client), sessions, stats, transactions, users, wallets
 │   │   ├── bot/            # core.js, parser.js, messages.{vi,en}.js, telegram.js, zalo.js
 │   │   ├── utils/          # AppError.js, normalize.js, vnTime.js
 │   │   ├── scripts/        # setWebhooks.js: points both bots at a deployed URL
@@ -534,12 +534,12 @@ Zalo-Tele-intergrated-financial-apps/
 ├── tools/
 │   ├── deploy.sh           # deploy the checkout to staging or production (pinned Vercel CLI)
 │   ├── vercel-env-push.sh  # copy server/.env into a Vercel project's env vars (values never printed)
-│   ├── set-secret.sh       # paste a secret into server/.env without showing it, then push it
+│   ├── set-secret.sh       # paste a secret into server/.env without showing it, then push it; --remove KEY... switches one off
 │   ├── wt-env.sh           # per-worktree ports and dev database
 │   ├── bot-e2e/            # real-chat bot checker: bot-e2e.mjs, scenarios.json
 │   └── test-report/        # build-report.mjs: JSON + test results → Excel
-├── .github/workflows/ci.yml # npm ci, typecheck, lint, test, then the agent's pytest, on every PR and push to main
-├── .claude/agents/         # coder, reviewer, merger agent definitions
+├── .github/workflows/ci.yml # npm ci, typecheck, lint, test, then the agent's pytest, on every PR and on pushes to main and staging
+├── .claude/agents/         # orchestrator, coder, reviewer, merger agent definitions
 ├── playwright.config.ts    # e2e: client/e2e against a test API + Vite
 ├── eslint.config.js
 ├── treehouse.toml          # worktree pool settings
@@ -555,9 +555,9 @@ Planned (§2.11), in Express: `server/src/bot/ask.js` (`classify`), `services/ag
 
 A top-level `agent/` folder (Python, runs on the GPU host, not on Vercel; `.vercelignore` keeps it out of Vercel uploads). **Built (T44, the scaffold):** `app.py` (FastAPI: `/health`, the bearer check, Express's error shape, the log line), `config.py` (settings; the service refuses to start without `AGENT_SECRET`, which must be at least 32 characters, or `MONGODB_URI_AGENT`), `embedder.py` (the `Embedder` interface, a fake for tests, and the bge-m3 loader that imports sentence-transformers lazily at the `models.lock` revision), `setup.py` (`python -m agent.setup`: collections, indexes and the `usersForAgent` view), `role.json` (the one definition of the `sochitieu_agent` role), `models.lock`, `requirements*.txt`, `Dockerfile`, `docker-compose.yml` (`agent` and `tunnel`), `.env.example` and `tests/` (pytest, run by `npm run test:agent` and by CI). **Planned (§2.11), later cards:** the graphs, `tools/` (one handler per tool), `skills/*.yaml` (the skill registry's seed), `prompts/` (one system prompt per node, vi and en) and `eval/` (skill, receipt and categorizer evals). File names of the planned parts are left to the builder.
 
-Planned (§2.12): `services/mail.js`, the `emailCodes` model, the auth routes `register/verify`, `register/resend`, `password/forgot` and `password/reset`, and the `/verify-email` and `/forgot-password` screens. New variables: `GMAIL_USER` and `GMAIL_APP_PASSWORD`, both optional and both needed for mail (§2.12.4).
+Built (T35, not called yet): `services/mail.js`, the two optional variables `GMAIL_USER` and `GMAIL_APP_PASSWORD` (both needed for mail, §2.12.4), and `tools/set-secret.sh --remove`. Planned (§2.12): the `emailCodes` model, the auth routes `register/verify`, `register/resend`, `password/forgot` and `password/reset`, and the `/verify-email` and `/forgot-password` screens.
 
-File layout inside these folders is left to the builder. **Where the new secrets live:** like the bot tokens, only in `server/.env` (git-ignored) and in the environment variables of the two Vercel projects, put there by `tools/set-secret.sh` ([06-deployment.md §6.13–6.14](06-deployment.md#613-agent-service-and-local-model-planned-211)). They are read only by the server; none of them reaches the client bundle, and none is logged. The agent service's own secrets (`AGENT_SECRET` again, `MONGODB_URI_AGENT`) live only in `agent/.env` on the GPU host.
+File layout inside these folders is left to the builder. **Where the new secrets live:** like the bot tokens, only in `server/.env` (git-ignored) and in the environment variables of the two Vercel projects, put there by `tools/set-secret.sh` ([06-deployment.md §6.13](06-deployment.md#613-agent-service-and-local-model-planned-211)). **The Gmail pair is the exception:** `GMAIL_USER` and `GMAIL_APP_PASSWORD` live only in the Vercel dashboard of the two projects and never in `server/.env`, because every worktree gets a copy of that file and would send real mail (decision D8, [06-deployment.md §6.14](06-deployment.md#614-gmail-smtp-for-email-codes-212)). They are read only by the server; none of them reaches the client bundle, and none is logged. The agent service's own secrets (`AGENT_SECRET` again, `MONGODB_URI_AGENT`) live only in `agent/.env` on the GPU host.
 
 ## 1.6 Key decisions
 

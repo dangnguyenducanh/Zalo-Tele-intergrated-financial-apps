@@ -1,15 +1,15 @@
 # 8. Multi-agent workflow (coders, reviewer, merger on treehouse worktrees)
 
-Several Claude agents build the app in parallel. Each works in its **own git worktree** from a [treehouse](https://github.com/kunchenguid/treehouse) pool, so they never step on each other's files, ports or dev database. Nothing reaches `main` without an independent review, green CI and your OK.
+Several Claude agents build the app in parallel. Each works in its **own git worktree** from a [treehouse](https://github.com/kunchenguid/treehouse) pool, so they never step on each other's files, ports or dev database. Every PR gets an independent review and green CI before it merges. Cards merge into `staging`; `main` and production change only through a release, after `main` has passed every test level.
 
 ## 8.1 Roles and scope
 
 | Agent | Who | Does | Never does | Definition |
 |---|---|---|---|---|
-| **Orchestrator** | the main Claude session, with you | Turns the plan into task cards (issues), leases worktrees, spawns agents, routes results, hands approved PRs to the merger (standing auto-merge policy, §8.8), runs recorded manual charters, logs bugs, returns the worktrees of abandoned tasks (the merger returns the coder's worktree after a merge) | Write feature code itself | this document |
-| **Coder** (up to 3 at once) | `coder` subagent | Implements ONE task card in its leased worktree: tests first, local gates, opens a PR to `main`, addresses review | Edit outside the card's scope, push anything but its own branch, merge, weaken tests | [`.claude/agents/coder.md`](../.claude/agents/coder.md) |
-| **Reviewer** | `reviewer` subagent | Leases its **own fresh worktree**, checks out the PR, re-runs every gate, reviews against spec + security + modern-web-guidance, posts the verdict and the `agent-review` status | Edit code, commit, push, merge | [`.claude/agents/reviewer.md`](../.claude/agents/reviewer.md) |
-| **Merger** (1, serial) | `merger` subagent | Merge queue: checks CI + `agent-review` + your approval, squash-merges, verifies `main` in a fresh worktree and on Vercel, opens a revert PR if `main` broke | Merge more than one PR at a time, resolve conflicts, push to `main` | [`.claude/agents/merger.md`](../.claude/agents/merger.md) |
+| **Orchestrator** | the main Claude session, with you | Turns the plan into task cards (issues), leases worktrees, spawns agents, routes results, hands approved PRs to the merger (standing auto-merge policy, §8.8), runs recorded manual charters, logs bugs, opens the release PR and, when needed, the sync PR (§8.4), returns the worktrees of abandoned tasks (the merger returns the coder's worktree after a merge) | Write feature code itself | [`.claude/agents/orchestrator.md`](../.claude/agents/orchestrator.md) (run with `claude --agent orchestrator`) |
+| **Coder** (as many as there are independent cards) | `coder` subagent | Implements ONE task card in its leased worktree: tests first, local gates, opens a PR into `staging`, addresses review | Edit outside the card's scope, push anything but its own branch, merge, weaken tests | [`.claude/agents/coder.md`](../.claude/agents/coder.md) |
+| **Reviewer** | `reviewer` subagent | Leases its **own fresh worktree** and re-runs every gate. Modes: `review` and `review-docs` (a card, docs or revert PR into `staging`: spec, security, modern-web-guidance; posts the verdict and the `agent-review` status), `re-verify` (the same diff on a newer base, and the sync PR), `verify-branch` (the newest `staging` or `main` commit, no PR, full test levels; a PASS on `main` also posts the `agent-review` success status on that commit, which is what lets the merger's fast-forward of `staging` through the protection, R4 and R5 in §8.4), `review-release` (the release PR, which has no card: its scope is the run's merged PRs). The `agent-review` status goes on the commit the reviewer tested; if the PR's head moved while it ran (an `update-branch` refresh), it posts nothing and reports `REVIEW: STALE` | Edit code, commit, push, merge | [`.claude/agents/reviewer.md`](../.claude/agents/reviewer.md) |
+| **Merger** (1, serial) | `merger` subagent | Merge queue, one PR at a time, after CI + `agent-review` + your approval. Modes: `merge` (a card PR: squash-merge into `staging`, close the card, deploy the staging site, open a revert PR into `staging` if that broke), `release` (merge the release PR `staging → main`, or a sync PR into `staging`, with a merge commit; no deploy), `deploy-production` (only after `main` verified, and only with your approval or the standing policy: deploy, smoke, fast-forward `staging` to `main`) | Merge more than one PR at a time, resolve conflicts, push to `staging` or `main` (except that one fast-forward), squash a release, revert on `main` | [`.claude/agents/merger.md`](../.claude/agents/merger.md) |
 | **You** | the student | Approve the task list; read each PR's "How it works" and approve the merge; do the phone steps (Telegram/Zalo) during manual charters | n/a | n/a |
 
 Why the reviewer gets a separate worktree: it rebuilds from the pushed branch with no leftovers from the coder's machine state. "It works in my worktree" can't pass review.
@@ -17,16 +17,19 @@ Why the reviewer gets a separate worktree: it rebuilds from the pushed branch wi
 ## 8.2 Worktrees with treehouse
 
 One-time config (committed):
-- `treehouse.toml` sets `base_branch = "main"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 9` (3 coders, up to 3 reviewers, 1 merger, 2 spare).
+- `treehouse.toml` sets `base_branch = "staging"`, `unique_leaf = true` (slots are named `<repo>-<n>`), and `max_trees = 32` (no fixed number of agents; the orchestrator raises it when the pool is full).
 - `.worktreeinclude` lists `server/.env`, so each worktree gets the secrets copied in. They stay git-ignored.
 
 | Who | Command (run from the main checkout) | Lease holder | Released |
 |---|---|---|---|
-| Coder for issue #12 | `treehouse get --lease --lease-holder coder-12 -b feat/12-wallets-api --json` | `coder-12` | by the merger after the PR is merged (the orchestrator passes it as `CODER_WT`); by the orchestrator only if the task is abandoned |
+| Coder for issue #12 | `treehouse get --lease --lease-holder coder-12 --base staging -b feat/12-wallets-api --json` | `coder-12` | by the merger after the PR is merged (the orchestrator passes it as `CODER_WT`); by the orchestrator if the task is abandoned, or if the merger reports `coder_wt=kept` (the slot was dirty or on another commit) |
 | Reviewer for PR #20 | `treehouse get --lease --lease-holder reviewer-pr20 --json`, then `gh pr checkout 20 --detach` (the coder's worktree holds the branch) | `reviewer-pr20` | by the reviewer at the end of its run |
-| Merger for PR #20 | `treehouse get --lease --lease-holder merger-pr20 --json` (latest `main`) | `merger-pr20` | by the merger at the end of its run |
+| Merger for PR #20 | `treehouse get --lease --lease-holder merger-pr20 --base staging --json` (latest `staging` for `merge`; `--base main` for `release` of the release PR, to build `main`, and for `deploy-production`). The sync PR needs no merger lease: it builds and deploys nothing | `merger-pr20` | by the merger at the end of its run |
+| Reviewer verifying the newest `staging` commit (`verify-branch`) | `treehouse get --lease --lease-holder verify-staging-<sha7> --base staging --json`, then `git checkout --detach <sha>` (`--base main` and `verify-main-<sha7>` for `main`) | `verify-<branch>-<sha7>` | by the reviewer at the end of its run |
+| Orchestrator for a sync branch cut at `main`'s tip `<sha7>` | `treehouse get --lease --lease-holder sync-<sha7> --base staging -b sync/main-into-staging-<sha7> --json` | `sync-<sha7>` | by the orchestrator once the sync PR has merged, or if it is abandoned; a coder who resolves a conflict works in it |
 
-- **Isolation per worktree:** `eval "$(tools/wt-env.sh)"` gives slot *n* its own API port (`4100+10n`), Vite port (`5300+10n`) and dev database (`MONGODB_DB=finance_wt<n>` on the same Atlas cluster). Automated tests use mongodb-memory-server, so they share nothing at all.
+- **The sync PR's reviewer** leases as `reviewer-sync-pr<N>` with `--base staging` (not `reviewer-pr<N>`), then `gh pr checkout <N> --detach`. In `treehouse status` its lease is then told apart from the card reviewers' and from the orchestrator's `sync-<sha7>` lease on the same branch.
+- **Isolation per worktree:** `eval "$(tools/wt-env.sh)"` gives slot *n* its own API port (`4100+10n`), Vite port (`5300+10n`) and dev database (`MONGODB_DB=finance_wt<n>` on the same Atlas cluster). Automated tests use mongodb-memory-server, so they share nothing at all. Run the script once per shell, before you start the slot's servers: a port another program holds moves to the next free one, so running it again while the slot's own servers are listening moves the ports.
 - **Pool hygiene:** `treehouse status` shows who holds what. Never `return --force` a slot with uncommitted work. Treehouse keeps `node_modules` between uses, so a reused slot starts fast.
 
 ## 8.3 Lifecycle of one task
@@ -42,7 +45,7 @@ sequenceDiagram
     O->>G: issue #12 ready (status:ready)
     O->>O: treehouse lease A, branch feat/12-…
     O->>C: spawn coder(ISSUE=12, WT=A)
-    C->>G: push feat/12, PR #20 (status:in-review) → CI runs
+    C->>G: push feat/12, PR #20 into staging (status:in-review) → CI runs
     O->>R: spawn reviewer(PR=20)
     R->>R: lease B, gh pr checkout, re-run gates
     alt blockers found
@@ -54,35 +57,78 @@ sequenceDiagram
     R->>G: REVIEW: APPROVE + agent-review=success (on that SHA)
     Note over O: standing auto-merge policy (§8.8)
     O->>M: spawn merger(PR=20, USER_APPROVED=true, CODER_WT=A)
-    M->>G: squash-merge → closes #12
-    M->>M: lease C on main, full suite + build, deploy staging → smoke → production
+    M->>G: squash-merge into staging, then close #12 (Closes only fires on main)
+    M->>M: lease C on staging, build, deploy the staging site → smoke
     alt post-merge failure
-        M->>G: revert PR + bug logged
+        M->>G: revert PR into staging + bug logged
     end
     M->>M: treehouse return C and A (coder's worktree)
+    O->>G: update-branch the other approved PRs (not the release PR), wait for the new head
+    O->>R: re-verify each
+    O->>R: verify-branch on the new staging commit (every level, full)
 ```
+
+A release is a separate run through the same agents. Steps R1 to R6 are the numbered steps in §8.4; production is touched only in R5, after R4 has passed on `main`:
+
+```mermaid
+sequenceDiagram
+    participant O as Orchestrator
+    participant R as Reviewer
+    participant M as Merger
+    participant G as GitHub (+ CI, Vercel)
+    O->>G: R1 release gate holds → release PR staging → main
+    O->>R: R2 review-release (L0–L4 full on the head)
+    R->>G: REVIEW: APPROVE + agent-review=success
+    O->>M: R3 release: merge commit into main, build, no deploy
+    O->>R: R4 verify-branch on main (L0–L4 full, whole e2e suite), a PASS posts agent-review on main's tip
+    alt verify or build failed on main
+        O->>G: no production deploy, fix card into staging, sync PR into staging
+    else verify passed
+        O->>M: R5 deploy-production (with USER_APPROVED): deploy, smoke, fast-forward staging to main
+        M->>G: production live (or the previous release stays)
+        O->>O: R6 production tests (bots, real chats, demo rehearsal)
+    end
+```
+
+**Branches:** card PRs target `staging`, and the merger deploys the staging site after each merge; a reviewer then verifies the newest `staging` commit (every test level in full). When a run's cards are all in `staging` and it is clean, one release PR `staging → main` is reviewed, merged with a merge commit, verified on `main`, and only then deployed to production; `staging` is then fast-forwarded to `main`. Every PR, docs included, is reviewed. Details: §8.4 and [`.claude/agents/orchestrator.md`](../.claude/agents/orchestrator.md) ("Branches"). `main` stays the default branch.
+
+**Closing cards:** a `Closes #12` line in a PR into `staging` does not close the issue, because GitHub only acts on it when the PR merges into the default branch (`main`). So the merger closes the card itself after the squash-merge, with a comment "Merged into staging in #<PR>; ships with the next release". The board shows the card as merged, and as released after R5.
 
 **Labels** (created once): `status:ready`, `status:in-progress`, `status:in-review`, `status:changes-requested`, `review:approved`, `review:changes-requested`, `needs-update`, `auto-merge`, `revert`, `bug`.
 
-**Required checks on `main`** (branch protection, set once): PR required, no direct pushes or force-pushes, status checks `ci` (GitHub Actions) and `agent-review` (set by the reviewer) must pass on the head commit, and the branch must be up to date. The `ci` job also runs the agent service's pytest (`npm run test:agent`, from T44), so the one required `ci` check covers both the npm gates and the Python gate. A card that changes `agent/` runs it locally too (Python 3.12 in `agent/.venv`, see [06-deployment.md §6.10](06-deployment.md#610-ci)).
+**Required checks on `main` and `staging`** (branch protection, set once for each): the status checks `ci` (GitHub Actions) and `agent-review` (set by the reviewer) must pass on the head commit, the branch must be up to date, and the rules apply to admins too. There is no "require a pull request" or required-reviews setting: the agents' rule is that nobody pushes to either branch, except the merger's one fast-forward of `staging` to `main`, and the two required checks keep any commit that was not reviewed off both branches. That fast-forward passes the protection only because `main`'s tip has both checks: a green `ci` from the push to `main`, and `agent-review`, which the reviewer posts on that commit when `verify-branch` passes on `main` (R4). If either is missing, GitHub refuses the fast-forward. The `ci` job also runs the agent service's pytest (`npm run test:agent`, from T44), so the one required `ci` check covers both the npm gates and the Python gate. A card that changes `agent/` runs it locally too (Python 3.12 in `agent/.venv`, see [06-deployment.md §6.10](06-deployment.md#610-ci)).
 
 ## 8.4 Orchestrator procedure (main session)
 
 1. **Plan:** keep the task cards (§8.7) as GitHub issues with label `status:ready`. Only tasks whose dependencies are merged are dispatchable.
-2. **Dispatch** up to 3 ready tasks whose **scopes don't overlap**. For each:
-   - lease a worktree (`-b feat/<issue>-<slug>`)
+2. **Dispatch continuously, not in waves:** a coder on every ready task whose **scope doesn't overlap** a running one, highest critical path first (rules in [`.claude/agents/orchestrator.md`](../.claude/agents/orchestrator.md)). For each:
+   - lease a worktree cut from `staging` (`--base staging -b feat/<issue>-<slug>`)
    - set `status:in-progress`
    - spawn `coder` (background, `ISSUE`, `WT`, `MODE=implement`)
 3. **On `CODER: DONE`:** spawn `reviewer` for the PR. **On `CODER: BLOCKED`:** read the reason. Either widen the scope (by editing the card, after you agree) or split off a new task.
-4. **On `REVIEW: REQUEST_CHANGES`:** re-spawn the same coder with `MODE=address-review` and `PR`, in the same worktree. **On `REVIEW: APPROVE`:** spawn `merger` with `PR`, `CODER_WT` (the coder's worktree) and `USER_APPROVED=true`. That is the standing auto-merge policy (§8.8); without it, first ask you to merge, quoting the PR's "How it works" and test results.
-5. **Handle the merger's result:**
-   - `NEEDS_UPDATE` or `CI_FAILED` → coder `address-review` with `PR` and the merger's reason (merge `main` in, or read the failed CI log and fix it), then review again.
-   - `WAITING_FOR_USER` → only without the standing policy: ask you, quoting the merger's 3-line summary.
-   - `MERGED` → the merger has already returned the coder's worktree (check `treehouse status`); dispatch the next unblocked task. With `deploy=PENDING_SECRETS` the code is on `main` but the deploy waits for the student's secrets: once they are in, deploy from a fresh lease cut from the latest `main`, never from the main checkout (it may be on another branch or stale): `WT=$(treehouse get --lease --lease-holder deploy --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["path"])')`, then `cd "$WT" && tools/deploy.sh staging`, smoke it, `tools/deploy.sh production`, smoke it, and `treehouse return "$WT"`.
-   - `REVERT_OPENED` → log the bug and send the task back to its coder.
+4. **On `REVIEW: REQUEST_CHANGES`:** re-spawn the same coder with `MODE=address-review` and `PR`, in the same worktree. A docs or `chore(report)` PR has no coder: the orchestrator fixes it itself (docs only) and a reviewer checks it again. A revert PR has no coder either: it goes to you as `blocked`. **On `REVIEW: APPROVE`:** spawn `merger` (`MODE=merge`) with `PR`, `CODER_WT` (the coder's worktree) and `USER_APPROVED=true`. That is the standing auto-merge policy (§8.8); without it, first ask you to merge, quoting the PR's "How it works" and test results.
+5. **Handle the merger's result** (card, docs and revert PRs into `staging`; the release PR and the sync PR have their own route in step 7):
+   - `MERGED` into `staging` → the merger has already closed the card (if it had one). Its line ends with `coder_wt=returned`, `kept` or `none`: `kept` means the coder's worktree was dirty or on another commit, so the orchestrator owns that lease now and returns it only after a look (`treehouse status`). `staging` moved, so every other approved PR is now behind it, **except the release PR**: its head is `staging`, so `update-branch` on it would be a direct push (step 7). The orchestrator refreshes the queue: it reads each PR's `mergeStateStatus` and calls `update-branch` only on a `BEHIND` one. A PR that is already up to date answers HTTP 422 "no new commits", which is a no-op and never a reason to send a coder back. A `DIRTY` PR conflicts: a card PR goes back to its coder (`address-review`, "merge `staging`"). The call answers 202 and the head moves a moment later, so the orchestrator waits until the PR's head SHA has changed before it fast-forwards the coder's slot and spawns the `re-verify` reviewer on the new head. Until that re-verify returns `APPROVE` the PR stays out of the merge queue: the merger never meets a PR with no `agent-review` on its head, and no second reviewer starts next to the re-verify. Then spawn a `verify-branch` reviewer on the new `staging` commit and dispatch the next unblocked task. With `deploy=PENDING_SECRETS` the code is on `staging` but the staging deploy waits for your secrets: once they are in, deploy from a fresh lease cut from the latest `staging`, never from the main checkout (it may be on another branch or stale): `WT=$(treehouse get --lease --lease-holder deploy --base staging --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["path"])')`, then `cd "$WT" && tools/deploy.sh staging`, smoke it, and `treehouse return "$WT"`. Production is not deployed here; see step 7.
+   - `NEEDS_UPDATE` (any PR into `staging` but the release PR: card, revert, docs, `chore(report)` or sync PR) → the fallback, for a PR that fell behind before the refresh above reached it: the same refresh for that one PR (`update-branch`, wait for the new head, re-verify); on a conflict, a card PR goes to its coder (`address-review` with `PR`, merge `staging` in), the sync PR to a coder `address-review` on its own branch, a docs or `chore(report)` PR to the orchestrator, a revert PR to you as `blocked`. The release PR never gets `update-branch`: see step 7.
+   - `CI_FAILED` (card PR) → coder `address-review` with the failed CI log, then review again. A docs or `chore(report)` PR: the orchestrator fixes the failing step itself and a reviewer checks it again. A revert PR: `blocked` with the failing step.
+   - `REFUSED` → the reason names the failed gate. Not approved, or no `agent-review` on the head: spawn the reviewer again (`review-release` for the release PR, `re-verify` for the sync PR), unless a re-verify of that PR is already pending because it was refreshed: then wait for it. A `mergeStateStatus` other than `CLEAN` (`BLOCKED`, `UNSTABLE`, `HAS_HOOKS`) while both are fine: read it once more, then mark the PR `blocked` and tell you, because a new review can't fix it. Wrong base or head, draft or closed: `blocked`.
+   - `WAITING_FOR_USER` (a merge, or `deploy-production`) → only without the standing policy: ask you, quoting the merger's 3-line summary. Under the policy the orchestrator passes `USER_APPROVED=true` to every merger run (`merge`, `release` and `deploy-production`), because the merger's gate checks it in all three.
+   - `REVIEW: STALE` (from a reviewer) → the PR's head moved while it ran, and it posted nothing. If a re-verify of the new head is already pending, wait for it; otherwise spawn the same review step again on the new head.
+   - `REVERT_OPENED` → log the bug, and handle `coder_wt` as for `MERGED`. The merger's revert PR goes into `staging` and is routed like a card PR: reviewer (`review`), then merger (`merge`). The card goes back to a coder after the revert merges. Nothing is ever reverted on `main`. If `REVERT_OPENED` arrives during a release freeze (step 7), the freeze ends: the broken commit is in `staging`, the release head, so the release approval is stale, and a revert PR can't merge under a freeze. The revert merges first, and R2 runs again after it.
    - A task that is abandoned or closed without merging → the orchestrator returns its coder's worktree. Each worktree has exactly one owner that returns it, so a slot is never released after it has been leased again.
-6. **After each wave:** run the manual charters from [07-testing.md §7.4](07-testing.md) that the wave unlocked, recorded in your Chrome. Log any bugs in `docs/testing/bugs.json` and regenerate the Excel report. Report changes reach `main` through a small `chore(report)` PR (label `auto-merge` allowed, docs-only).
-7. **Never** leave a lease without an owner: `treehouse status` should match the open PRs.
+6. **Verify and test staging.** After each merge, a reviewer in `verify-branch` mode runs every test level in full on the newest `staging` commit (older commits are skipped). `VERIFY: FAIL` is a bug: log it in `docs/testing/bugs.json` and file a fix card into `staging`. A sync PR merge (step 7) moves `staging` like any merge, so the newest commit gets its `verify-branch`; while a release PR is open, `review-release` on its new head runs the same levels instead. Run the manual charters from [07-testing.md §7.4](07-testing.md) that the merges unlocked on the staging site, recorded in your Chrome, then regenerate the Excel report. Report changes reach `staging` through a small `chore(report)` PR (label `auto-merge` allowed, docs-only) and ship with the next release.
+7. **Release.** It opens only when every card of the run is merged into `staging`, the newest `staging` commit has `VERIFY: PASS`, the staging charters are done, no S1 or S2 bug is open, and no earlier release is still waiting for secrets or for your yes. Steps R1 to R6 run one release at a time:
+   - **R1** The orchestrator opens the release PR `staging → main` (`gh pr create --base main --head staging`), listing the merged PRs and the fixed bugs. It gives the reviewer `SINCE`, the commit date of `main`'s tip: that is the previous release, because nothing else changes `main`.
+   - **R2** A reviewer (`review-release`) runs every test level in full on its head. A release PR has no card, so the card's Scope list does not apply. The diff may hold only this run's merged PRs: those merged into `staging` since `SINCE`, sync PRs not counted.
+   - **R3** The merger (`release`, with `USER_APPROVED=true` like every merger run) merges it with a **merge commit** (never a squash, never deleting `staging`) and builds `main`. Nothing is deployed to production yet.
+   - **R4** A reviewer (`verify-branch`, `BRANCH=main`) runs every level in full, the whole end-to-end suite included. On a PASS it also posts the `agent-review` success status on `main`'s tip. Without that status, and a green `ci` from the push to `main`, the protected `staging` refuses R5's fast-forward.
+   - **R5** Only if R4 passed, and only with `USER_APPROVED=true` (the standing policy, or your yes; without it the merger prints `DEPLOY: WAITING_FOR_USER` and the orchestrator asks you), the merger (`deploy-production`) deploys production, smokes it, and fast-forwards `staging` to `main`. If `main` moved since R4, it stops with `reason=main moved`, with no `staging=` field: the orchestrator verifies the new tip and calls it again. If the deploy fails, Vercel keeps the previous release live. If it lacks a secret of yours (`DEPLOY: PENDING_SECRETS`), production keeps the previous release and the orchestrator lists the missing names under "Needs you"; once they are in, it calls `deploy-production` again. A refused fast-forward means `staging` got commits after the release was cut, or `ci` or `agent-review` is missing on `main`'s tip; the merger waits for a `ci` run that is still going, re-runs a completed failed one once (gh 2.4 can only rerun a completed run), and otherwise reports `staging=left`.
+   - **R6** The orchestrator runs the production charters that staging can't: bots and real chats, the assistant, the digest, the cron, and the demo rehearsal.
+   - **Fixed forward:** if R3's build or R4 fails, nothing is deployed and nothing is reverted on `main`. The bug gets a fix card into `staging`, and the fix ships in the next release.
+   - **Release PR sent back:** the reasons differ, and so does the route. `REQUEST_CHANGES` from R2: each finding becomes a fix card into `staging`, and R2 runs again after the fixes merge. `MERGE: CI_FAILED`: the failing step is logged as a bug and gets a fix card, and R2 runs again after it merges. `MERGE: REFUSED` goes by its reason: no approval or no `agent-review` on the head → a fresh `review-release`, with no findings and no fix card; a `mergeStateStatus` other than `CLEAN` (`BLOCKED`, `UNSTABLE`, `HAS_HOOKS`) → the release is `blocked` and the value goes under "Needs you"; a wrong base or head, a draft or a closed PR → `blocked`. Each of these ends the freeze (below), and the next approval starts it again. `NEEDS_UPDATE` on it means `main` has a commit `staging` lacks: open the sync PR, and run R2 again when it merges.
+   - **Sync PR:** `main` can hold commits `staging` lacks, and then the release PR is `BEHIND`. When `staging` can't be fast-forwarded to `main` (R3 or R4 failed, or the fast-forward was refused), and when the release PR comes back `NEEDS_UPDATE`, the orchestrator brings them over without ever opening a PR with head `main`: strict mode wants a PR head that contains the `staging` tip, and `main`'s tip stops doing that once `staging` has moved. Instead it cuts the branch `sync/main-into-staging-<main sha7>` from `origin/staging` in a leased worktree (§8.2), runs `git merge --no-edit origin/main`, pushes it and opens a PR into `staging`. A merge conflict goes to a coder (`address-review`) on that branch. The head contains the `staging` tip, so strict mode accepts it, and it is refreshed like any other PR if `staging` moves. A reviewer (`re-verify`) checks that it holds the tips of both branches and only `main`'s commits, and that the whole suite is green. The merger merges it with a merge commit (never a squash; deleting the `sync/…` branch is fine) and needs no lease. Afterwards the release PR is no longer `BEHIND`, and R2 runs again. Never `update-branch` the release PR: its head is `staging`, so that would be a direct push. If the sync PR's `ci` fails, the orchestrator waits for the run if it is still going, re-runs a completed failed one once (`gh run rerun`), then asks you.
+   - **Freeze:** from the release PR's approval until the freeze ends, no card PR merges into `staging`: a card merge moves `staging`, which is the release head, and makes the approval stale. A sync PR is the exception. The freeze ends when a `DEPLOY:` line (`OK`, `FAILED` or `PENDING_SECRETS`) ends with `staging=fast-forwarded` or `already`, or when a sync PR has merged while no release PR is open. A line with no `staging=` field (`main moved`, `WAITING_FOR_USER`) stopped before the fast-forward, so the freeze stays. Approved PRs wait; coders and reviewers keep working. If a card merge is already running when the release PR is approved, it lands first and moves `staging`, so that approval is stale: R2 runs again before the merger releases. If that merge broke `staging`, the merger answers `REVERT_OPENED` instead: the release head holds the broken commit and the revert PR can't merge under a freeze, so the freeze ends, the revert merges first, and R2 runs again after it. **Ending the freeze restarts the merge queue.** A fast-forward or a sync merge leaves every approved PR behind `staging`, so the orchestrator refreshes them as in step 5 (`update-branch` on a `BEHIND` one, wait for the new head, `re-verify`) and spawns the merger for the next queued PR, instead of letting each PR find out through `NEEDS_UPDATE` and a wasted merger run.
+8. **Never** leave a lease without an owner: `treehouse status` should match the open PRs.
 
 ## 8.5 Conflict-avoidance rules (so parallel PRs merge cleanly)
 
@@ -96,10 +142,13 @@ sequenceDiagram
 | Mongoose models | One file per model; only the owning task edits it, and changes to another task's model go through that task's card |
 | `package.json` dependencies | Added only by T01, unless a card lists the dependency |
 | `docs/testing/test-cases.json` | Append-only; new IDs use the card's feature prefix |
+| `docs/FEATURE_MAP.md` | Each card edits only its own features' sections; new features add a section and a Quick reference row; on merge conflicts keep both sides |
 
-These one-line registrations (routes index, i18n namespace, router, navigation entry, test-case append) count as in scope for every card, so a coder never stops with `BLOCKED` for them (orchestrator decision, 2026-11-20). When merging `main`, a conflict on these lines is resolved by keeping both sides.
+These one-line registrations (routes index, i18n namespace, router, navigation entry, test-case append) count as in scope for every card, so a coder never stops with `BLOCKED` for them (orchestrator decision, 2026-11-20). When merging `staging` into a branch, a conflict on these lines is resolved by keeping both sides.
 
 ## 8.6 PR template (filled in by the coder)
+
+The PR targets `staging`. The `Closes` line is for the merger, which reads the card number from it and closes the card after the merge (§8.3).
 
 ```markdown
 Closes #<issue>
@@ -129,7 +178,7 @@ Changed paths are all inside the card's scope: ✅  (or: justification for excep
 
 ## 8.7 Task cards (initial backlog)
 
-Each card becomes one GitHub issue: Goal, Spec sections, Scope (paths the coder may change), Test case IDs, Depends on, Done when. **T01 must merge first.** The orchestrator then dispatches up to three unblocked cards at a time.
+Each card becomes one GitHub issue: Goal, Spec sections, Scope (paths the coder may change), Test case IDs, Depends on, Done when. **T01 must merge first.** The orchestrator then keeps every unblocked, non-overlapping card in progress at once.
 
 | ID | Task | Depends on | Scope (paths) | Test IDs |
 |---|---|---|---|---|
@@ -276,18 +325,27 @@ These cards change or extend the spec in the places below. On 2026-11-25 the own
 | D30 | T73 | Which KIE result is the baseline when deciding to retire KIE. | The T30 reading if PR #70 is merged by then, else today's. |
 
 
-## 8.8 Decisions recorded (2026-11-20)
+## 8.8 Decisions recorded
 
-- **Auto-merge:** a PR that the reviewer approved and CI passed is merged by the merger without asking each time. Every PR still keeps its "How it works" section for the defense, and a broken `main` gets a revert PR.
+**2026-11-20**
+
+- **Auto-merge:** a PR that the reviewer approved and CI passed is merged by the merger without asking each time. Every PR still keeps its "How it works" section for the defense. (The rule for a broken `main` changed on 2026-11-27, below.)
 - **Scope of the unattended run:** all task cards T01–T16, then the full test run, recorded charters and the Excel report.
 - **Hosting:** Vercel projects `sochitieu-btl` (production, DB `finance`) and `sochitieu-btl-staging` (test site, DB `finance_staging`). Recorded browser sessions in your Chrome run on **staging only**, with test accounts. Deploys go through `tools/deploy.sh` (CLI), because the repo isn't Git-connected to Vercel. `tools/vercel-env-push.sh` copies `server/.env` into each project's env vars without printing the values.
 - **Ports on the dev server:** the API uses `4100+10n` and Vite `5300+10n`, because 3000/5173/8000 are taken.
 
+**2026-11-27 (staging-first flow, PR #133)**
+
+- **Two branches:** card PRs merge into `staging`; `main` changes only through a release PR after `staging` has passed every test level, and production deploys only after `main` has passed them too (§8.4).
+- **Auto-merge scope:** the standing policy covers the card merges into `staging`, the release merge and `deploy-production`: the orchestrator passes `USER_APPROVED=true` to each, because the merger checks it in every mode. A merge that breaks `staging` gets a revert PR into `staging`. A broken `main` is never reverted: it is fixed forward (a fix card into `staging`, then a sync PR), because production deploys only after `main` has passed every test level.
+- **Deploys:** the merger deploys the staging site after each merge into `staging`, and production only after `main` has verified (R5). Recorded browser sessions still run on staging only.
+
 ## 8.9 One-time setup checklist
 
-- [ ] First commit on `main` and push. Treehouse needs a default branch to cut worktrees from.
+- [ ] `main` first: the first commit, pushed (`main` stays the default branch). Then `staging`, cut from it (next item) and protected (the branch-protection item). Treehouse cuts every worktree from `staging`, not from `main`.
+- [ ] Create `staging` from `main`: `gh api repos/{owner}/{repo}/git/refs -f ref=refs/heads/staging -f sha=<main's commit SHA>`. Card PRs target it, and `treehouse.toml` cuts worktrees from it. Open card PRs that still target `main` move over with `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -f base=staging`.
 - [ ] Create the labels in §8.3. gh 2.4 has no `gh label`, so use the API: `gh api repos/{owner}/{repo}/labels -f name=<label> -f color=<hex>`.
-- [ ] Branch protection on `main` with required checks `ci` + `agent-review`. Do this after T01 merges, so the `ci` check exists.
+- [ ] Branch protection on `main` and on `staging`, the same on both: required status checks `ci` + `agent-review`, branch up to date, applies to admins. Do this after T01 merges, so the `ci` check exists. For each branch: `gh api -X PUT repos/{owner}/{repo}/branches/<branch>/protection --input protection.json`, with `{"required_status_checks":{"strict":true,"contexts":["ci","agent-review"]},"enforce_admins":true,"required_pull_request_reviews":null,"restrictions":null}` in the file. `.github/workflows/ci.yml` already runs on pushes to both branches.
 - [ ] Two Vercel projects (`sochitieu-btl`, `sochitieu-btl-staging`) linked by ID in `server/.env`. Do **not** Git-connect them: deploys go through `tools/deploy.sh`, staging first (§8.8).
 - [ ] Turn the task cards in §8.7 into issues (`gh issue create`, label `status:ready` for T01).
 - [ ] Start a **new Claude session** in the repo, so the project agents in `.claude/agents/` load.
