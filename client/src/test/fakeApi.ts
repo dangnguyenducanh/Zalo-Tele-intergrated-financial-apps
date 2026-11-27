@@ -15,9 +15,13 @@ export const LAN: User = {
   defaultWalletId: null,
 };
 export const PASSWORD = 'secret123';
+export const NEW_PASSWORD = 'brand-new-pass';
 
 // A sign-up waiting for its emailed code (docs/04 §4.4): what the server keeps after a 202.
 type PendingSignup = { name: string; email: string; language: User['language']; code: string; signupToken: string; attemptsLeft: number };
+
+// A password reset waiting for its emailed code (docs/04 §4.4): what the server keeps after forgot.
+type PendingReset = { email: string; code: string; attemptsLeft: number };
 
 export const fake = {
   account: null as User | null, // the registered user, if any
@@ -27,6 +31,10 @@ export const fake = {
   pending: null as PendingSignup | null,
   verifyBodies: [] as unknown[], // bodies sent to POST /auth/register/verify
   resendBodies: [] as unknown[], // bodies sent to POST /auth/register/resend
+  password: PASSWORD, // what the account logs in with; a reset changes it
+  reset: null as PendingReset | null,
+  forgotBodies: [] as unknown[], // bodies sent to POST /auth/password/forgot
+  resetBodies: [] as unknown[], // bodies sent to POST /auth/password/reset
 };
 
 export const CODE = '123456'; // the code the fake "mails"
@@ -39,6 +47,10 @@ export function resetFake(account: User | null = LAN, loggedIn = false) {
   fake.pending = null;
   fake.verifyBodies = [];
   fake.resendBodies = [];
+  fake.password = PASSWORD;
+  fake.reset = null;
+  fake.forgotBodies = [];
+  fake.resetBodies = [];
 }
 
 const fail = (status: number, code: string, details?: unknown) => HttpResponse.json({ error: { code, message: code, details } }, { status });
@@ -48,7 +60,7 @@ export const server = setupServer(
   http.post('*/api/auth/refresh', () => (fake.loggedIn && fake.account ? session() : fail(401, 'INVALID_REFRESH'))),
   http.post('*/api/auth/login', async ({ request }) => {
     const { email, password } = (await request.json()) as { email: string; password: string };
-    if (email !== fake.account?.email || password !== PASSWORD) return fail(401, 'INVALID_CREDENTIALS');
+    if (email !== fake.account?.email || password !== fake.password) return fail(401, 'INVALID_CREDENTIALS');
     fake.loggedIn = true;
     return session();
   }),
@@ -82,6 +94,28 @@ export const server = setupServer(
     fake.resendBodies.push(await request.json());
     if (fake.pending) fake.pending.code = CODE; // a resend replaces the code
     return HttpResponse.json({ resendAfter: 60 }, { status: 202 }); // the same answer whether or not a sign-up is pending (D6)
+  }),
+  http.post('*/api/auth/password/forgot', async ({ request }) => {
+    const body = (await request.json()) as { email: string };
+    fake.forgotBodies.push(body);
+    if (!fake.mailOn) return fail(503, 'FEATURE_NOT_CONFIGURED'); // production without GMAIL_*
+    if (body.email === fake.account?.email) fake.reset = { email: body.email, code: CODE, attemptsLeft: 5 }; // only a real account gets a code
+    return HttpResponse.json({ resendAfter: 60 }, { status: 202 }); // the same answer for every address
+  }),
+  http.post('*/api/auth/password/reset', async ({ request }) => {
+    const body = (await request.json()) as { email: string; code: string; newPassword: string };
+    fake.resetBodies.push(body);
+    if (body.newPassword.length < 8) return fail(400, 'VALIDATION_ERROR', [{ path: 'newPassword', issue: 'too_small' }]);
+    const { reset } = fake;
+    if (!reset || reset.email !== body.email || reset.attemptsLeft === 0) return fail(400, 'CODE_EXPIRED');
+    if (body.code !== reset.code) {
+      reset.attemptsLeft -= 1;
+      return reset.attemptsLeft === 0 ? fail(400, 'CODE_EXPIRED') : fail(400, 'CODE_INVALID', { attemptsLeft: reset.attemptsLeft });
+    }
+    fake.password = body.newPassword;
+    fake.loggedIn = false; // every session of the account is revoked
+    fake.reset = null;
+    return new HttpResponse(null, { status: 204 });
   }),
   http.post('*/api/auth/logout', () => {
     fake.loggedIn = false;

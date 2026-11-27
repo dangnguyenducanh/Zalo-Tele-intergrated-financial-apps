@@ -139,13 +139,21 @@ for (const scheme of ['light', 'dark'] as const) {
         expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `${label} scrolls sideways`).toBe(true);
       };
 
-      for (const path of ['/login', '/register', '/verify-email', '/no-such-page']) {
-        // /verify-email shows only while a sign-up is pending, so seed the entry Register keeps (docs/05 §5.11.1).
-        if (path === '/verify-email') await page.evaluate(() => sessionStorage.setItem('pendingSignup', JSON.stringify({ email: 'lan@example.com', maskedEmail: 'l***@example.com', name: 'Lan', signupToken: 't', resendAt: Date.now() + 60_000 })));
+      // The pages in front of the login. A page that shows only with a pending entry gets it seeded (docs/05 §5.11): the
+      // sign-up for /verify-email, and the reset for step 2 of /forgot-password (step 1 is visited before the seed).
+      const resendAt = Date.now() + 60_000;
+      const seeds: Record<string, [string, object]> = {
+        'verify-email': ['pendingSignup', { email: 'lan@example.com', maskedEmail: 'l***@example.com', name: 'Lan', signupToken: 't', resendAt }],
+        'forgot-password-code': ['pendingReset', { email: 'lan@example.com', resendAt, sent: true }],
+      };
+      const pages: [path: string, label: string][] = [['/login', 'login'], ['/register', 'register'], ['/verify-email', 'verify-email'], ['/forgot-password', 'forgot-password'], ['/forgot-password', 'forgot-password-code'], ['/no-such-page', 'no-such-page']];
+      for (const [path, label] of pages) {
+        const seed = seeds[label];
+        if (seed) await page.evaluate(([key, value]) => sessionStorage.setItem(key as string, JSON.stringify(value)), seed);
         await page.goto(path);
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
         await expect(page.locator('html')).toHaveCSS('color-scheme', scheme);
-        await noHorizontalScroll(path.slice(1));
+        await noHorizontalScroll(label);
       }
 
       await logIn(page, email);

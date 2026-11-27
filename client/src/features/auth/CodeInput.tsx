@@ -5,7 +5,7 @@ export const CODE_LENGTH = 6;
 
 const digitsOnly = (text: string) => text.replace(/\D/g, '').slice(0, CODE_LENGTH);
 
-type Props = Pick<TextFieldProps, 'label' | 'error' | 'helperText' | 'autoFocus' | 'disabled'> & {
+type Props = Pick<TextFieldProps, 'name' | 'label' | 'error' | 'helperText' | 'autoFocus' | 'disabled'> & {
   value: string;
   onChange: (value: string) => void;
   // Called with the code once its 6th digit is typed or pasted. Leave it out (or pass autoSubmit={false}) for a
