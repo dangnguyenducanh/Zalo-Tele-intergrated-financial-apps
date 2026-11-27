@@ -326,6 +326,84 @@ test('TC-F13-06 quick add names a line with no amount, or past the 10th, and sav
   expect(posted()).toEqual([]);
 });
 
+// The server answers a question like this (docs/04 §4.4); the stand-in recognises "bao nhiêu" and "?" and lets every other text fall
+// through to the parse handler of beforeEach.
+function answerQuestions() {
+  server.use(
+    http.post('*/api/transactions/parse', async ({ request }) => {
+      const { text } = (await request.clone().json()) as { text: string };
+      if (!/bao nhiêu|how much|\?$/.test(text)) return undefined;
+      parseCalls.push(text);
+      return HttpResponse.json({ question: true, drafts: [], noAmountLines: [], truncated: false });
+    }),
+  );
+}
+
+test('TC-F13-09 quick add: a question shows a notice instead of the preview; Enter, Save, Shift+Enter and the full-form button save and open nothing', async () => {
+  answerQuestions();
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  await screen.findByRole('row', { name: /grab/ });
+
+  await user.type(quickAdd(), 'tháng 10 thu bao nhiêu');
+  const notice = await screen.findByText('Đây là câu hỏi');
+  expect(notice.closest('button, a, [role="button"]')).toBeNull(); // not clickable: T51 turns it into the drawer button
+  expect(screen.queryByRole('list', { name: 'Xem trước' })).not.toBeInTheDocument();
+  expect(quickAdd()).toHaveAccessibleDescription('Câu hỏi không được lưu thành giao dịch: Enter và Lưu không lưu gì.');
+  expect(quickAdd()).not.toHaveAttribute('aria-invalid', 'true');
+
+  await user.keyboard('{Enter}');
+  await user.click(screen.getByRole('button', { name: 'Lưu' }));
+  await user.click(quickAdd());
+  await user.keyboard('{Shift>}{Enter}{/Shift}');
+  await user.click(screen.getByRole('button', { name: 'Mở form đầy đủ' }));
+  await new Promise((resolve) => setTimeout(resolve, 50)); // let any wrongly started save or form show itself
+  expect(posted()).toEqual([]);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); // no form with the question as its note
+  expect(quickAdd()).toHaveValue('tháng 10 thu bao nhiêu'); // the box is not cleared
+  expect(screen.queryByText(/Đã lưu giao dịch/)).not.toBeInTheDocument();
+  expect(screen.getByText('Đây là câu hỏi')).toBeInTheDocument();
+
+  // Typing on makes it a capture again: the notice goes, the preview comes back, and Enter saves.
+  await user.clear(quickAdd());
+  await user.type(quickAdd(), 'phở 45k');
+  expect(await screen.findByRole('list', { name: 'Xem trước' })).toBeInTheDocument();
+  expect(screen.queryByText('Đây là câu hỏi')).not.toBeInTheDocument();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(posted()).toHaveLength(1));
+});
+
+test('TC-F13-09 quick add: Enter pressed before the preview has settled saves nothing for a question either, and the box keeps its text', async () => {
+  answerQuestions();
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  await screen.findByRole('row', { name: /grab/ });
+
+  await user.type(quickAdd(), 'hôm nay ăn gì?{Enter}');
+  expect(await screen.findByText('Đây là câu hỏi')).toBeInTheDocument();
+  expect(posted()).toEqual([]);
+  expect(quickAdd()).toHaveValue('hôm nay ăn gì?');
+  expect(screen.queryByText(/Đã lưu giao dịch/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('TC-F13-09 quick add: the question notice and its hint are in English too', async () => {
+  resetFake({ ...LAN, language: 'en' }, true);
+  answerQuestions();
+  const user = userEvent.setup();
+  renderApp('/transactions');
+  const box = await screen.findByRole('textbox', { name: 'Quick add' });
+
+  await user.type(box, 'how much did I spend in October');
+  expect(await screen.findByText('This is a question')).toBeInTheDocument();
+  expect(box).toHaveAccessibleDescription('A question is not saved as a transaction: Enter and Save store nothing.');
+  await user.keyboard('{Enter}');
+  await user.click(screen.getByRole('button', { name: 'Open full form' }));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(posted()).toEqual([]);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
 test('TC-F13-04 quick add: a chip changes the draft before saving; Shift+Enter opens the full form pre-filled', async () => {
   const user = userEvent.setup();
   renderApp('/transactions');

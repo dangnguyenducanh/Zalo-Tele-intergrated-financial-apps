@@ -3,13 +3,13 @@
 import { MAX_MONEY } from '../models/Transaction.js';
 import { normalize } from '../utils/normalize.js';
 import { dayRange, vnDate, vnParts } from '../utils/vnTime.js';
+import { UNIT_WORD, findPeriod, toKey, wordsOf } from './period.js';
 
 const MAX_LINES = 10;
 const NOTE_MAX = 200;
 const DAY_MS = 24 * 60 * 60 * 1000; // exact in Vietnam: no daylight saving
 const INCOME_WORDS = ['luong', 'thuong', 'nhan', 'salary', 'bonus', 'received'];
 const YESTERDAY_WORDS = ['hqua', 'yesterday']; // plus the two words "hom qua"
-const UNIT_WORD = /^(k|nghin|ngan|ng|tr|trieu|m|d|vnd)$/; // a unit written apart: "45 k", "1 triệu"
 
 // A message → one result per non-empty line (first 10 lines only); null where a line has no amount.
 export function parseText(text, ctx) {
@@ -20,13 +20,13 @@ export function parseText(text, ctx) {
 // One line → { type, amount, categoryId, walletId, occurredAt, note }, or null when there is no amount.
 export function parseLine(text, { categories = [], wallets = [], defaultWalletId, now = new Date() } = {}) {
   const line = String(text ?? '').trim();
-  const words = line.replace(/^\+/, '').split(/\s+/).filter(Boolean); // original words, kept for the note
+  const words = wordsOf(line); // original words, kept for the note
   const keys = words.map(toKey); // the same words, normalized for matching
   const used = new Set(); // indexes of words that were dates, wallets or the amount
 
   const occurredAt = findDate(keys, used, now);
   const walletId = findWallet(keys, used, wallets) ?? defaultWalletId ?? wallets[0]?._id ?? null;
-  const amount = findAmount(keys, used);
+  const amount = findAmount(keys, used, findPeriod(words).indexes);
   if (amount === null) return null;
 
   const rest = keys.filter((_, i) => !used.has(i));
@@ -42,11 +42,6 @@ export function parseLine(text, { categories = [], wallets = [], defaultWalletId
   const note = words.filter((_, i) => !used.has(i)).join(' ').slice(0, NOTE_MAX);
 
   return { type, amount, categoryId: category?._id ?? null, walletId, occurredAt, note };
-}
-
-// "Phở," → "pho": normalized, without punctuation around it.
-function toKey(word) {
-  return normalize(word).replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
 }
 
 // "hôm qua" / "hqua" / "yesterday" → now − 1 day; "dd/mm" or "dd/mm/yyyy" → that day; otherwise now.
@@ -91,32 +86,30 @@ function findWallet(keys, used, wallets) {
   return null;
 }
 
-// The amount in VND. An amount with a unit or separators ("50k", "150.000") beats a bare
-// number read as thousands ("2" in "2 ly trà sữa 50k"); otherwise the first one wins.
-// A bare year or month after "năm" / "tháng" is a date, never the amount (BUG-039).
-function findAmount(keys, used) {
+// Every amount the words could be, in the order written: { value, guessed, explicit, indexes }. A number that is
+// part of a time word or a count (`never`, from findPeriod(): "tháng 10", "năm 2026", "7 ngày qua", "top 3", "5 khoản";
+// BUG-039, D9) is not one, unless a money unit follows it ("tháng 10k", "tháng 10 k"). `explicit` is an amount nobody had
+// to guess (docs/02 §2.11.1 rule 5): a unit, thousands separators or 5+ digits; a bare 1-4 digit number is not.
+export function amountCandidates(keys, used, never) {
   const found = [];
   for (let i = 0; i < keys.length; i++) {
     if (used.has(i)) continue;
     const next = keys[i + 1];
     const withUnit = next && !used.has(i + 1) && UNIT_WORD.test(next) ? readAmount(keys[i] + next) : null;
-    const amount = withUnit ?? (isYearOrMonth(keys, i) ? null : readAmount(keys[i]));
-    if (amount) found.push({ ...amount, indexes: withUnit ? [i, i + 1] : [i] });
+    const amount = withUnit ?? (never.has(i) ? null : readAmount(keys[i]));
+    if (amount) found.push({ ...amount, explicit: Boolean(withUnit) || !/^\d{1,4}$/.test(keys[i]), indexes: withUnit ? [i, i + 1] : [i] });
   }
+  return found;
+}
+
+// The amount in VND. An amount with a unit or separators ("50k", "150.000") beats a bare
+// number read as thousands ("2" in "2 ly trà sữa 50k"); otherwise the first one wins.
+function findAmount(keys, used, never) {
+  const found = amountCandidates(keys, used, never);
   const pick = found.find((a) => !a.guessed) ?? found[0];
   if (!pick) return null;
   pick.indexes.forEach((i) => used.add(i));
   return pick.value;
-}
-
-// "năm 2026" (year 1900–2099) or "tháng 10" (month 1–12): the plain number at keys[i] is a date.
-// "50k" and "2.026" are not plain numbers, so they stay money.
-function isYearOrMonth(keys, i) {
-  const [before, key] = [keys[i - 1], keys[i]];
-  const n = Number(key);
-  if (before === 'nam') return /^\d{4}$/.test(key) && n >= 1900 && n <= 2099;
-  if (before === 'thang') return /^\d{1,2}$/.test(key) && n >= 1 && n <= 12;
-  return false;
 }
 
 // One normalized word → { value, guessed } or null. See the table in docs/02 §2.5.

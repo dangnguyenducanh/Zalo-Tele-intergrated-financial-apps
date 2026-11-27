@@ -1,5 +1,6 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { registerByApi } from './helpers';
+import { noHorizontalScroll, registerByApi } from './helpers';
 
 // Transactions screen and quick add in a real browser against the real API and parser (in-memory MongoDB,
 // see playwright.config.ts). Every account is new, so each test starts with no transactions.
@@ -128,4 +129,26 @@ test('TC-F2-05 wallet card updates after a quick add, without reloading the page
   await page.getByRole('link', { name: 'Ví' }).click(); // client-side navigation, no reload
   await expect(page.getByRole('article', { name: 'Momo' })).toContainText(/470\.000\s₫/);
   await page.screenshot({ path: testInfo.outputPath('wallet-after-quick-add.png'), fullPage: true, animations: 'disabled' });
+});
+
+test('TC-F13-10 quick add question notice: phone and desktop, light and dark, no sideways scroll, no axe violation, nothing saved', async ({ page, request }) => {
+  const account = await createAccount(request);
+  await logIn(page, account.email);
+  for (const [width, height, scheme] of [[375, 812, 'light'], [375, 812, 'dark'], [1280, 800, 'light'], [1280, 800, 'dark']] as const) {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto('/transactions');
+    const box = page.getByRole('textbox', { name: 'Thêm nhanh' });
+    await box.fill('tháng 10 thu bao nhiêu');
+    await expect(page.getByRole('status').filter({ hasText: 'Đây là câu hỏi' })).toBeVisible();
+    await expect(box).toHaveAccessibleDescription(/Câu hỏi không được lưu/);
+    expect(await noHorizontalScroll(page)).toBe(true);
+    const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+    await box.press('Enter');
+    await box.press('Shift+Enter');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(box).toHaveValue('tháng 10 thu bao nhiêu');
+  }
+  expect(await countSaved(request, account.headers)).toBe(0);
 });

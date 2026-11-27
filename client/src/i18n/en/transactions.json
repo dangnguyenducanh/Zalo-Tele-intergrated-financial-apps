@@ -89,6 +89,8 @@
     "noWallet": "No wallet",
     "incomplete": "Choose a wallet and a category: click a preview chip to change it.",
     "noAmountLines": "Lines without an amount: {{lines}}. Fix or remove them, then save.",
+    "question": "This is a question",
+    "questionHint": "A question is not saved as a transaction: Enter and Save store nothing.",
     "tooManyLines": "Up to 10 lines can be saved at once. Save the rest afterwards.",
     "saved": "Transactions saved: {{count}}"
   }
