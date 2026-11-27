@@ -66,9 +66,10 @@ TASKS = {
     'receipt': (Receipt, 3000,
         'Đây là ảnh hoá đơn/phiếu của Việt Nam (có thể bị xoay ngang hoặc rách). Read the receipt photo: the shop name, '
         'its address, the date as printed and the line items. '
-        'total_payable = số tiền cuối cùng khách phải trả, after VAT and discounts (labels such as "Tổng cộng tiền thanh toán", '
-        '"Tiền cần thanh toán", "Khách phải trả", "Số tiền"). Never use invoice or voucher numbers, dates, years, phone numbers, '
-        'tax codes, cash handed over or change. If the total is not visible (torn or cut off), set total_payable to null. '
+        'total_payable = số tiền cuối cùng khách phải trả: the LAST amount to pay at the bottom of the totals, after any VAT, '
+        'discount, voucher or loyalty points taken off the goods subtotal. If points or a discount are taken off, it is the '
+        'smaller figure after them. Never use invoice or voucher numbers, dates, years, phone numbers, tax codes, cash handed '
+        'over or change. If the total is not visible (torn or cut off), set total_payable to null. '
         'items = the line items you can read, with quantity, unit price and line amount. All amounts are VND integers.'),
     # No label words are named here ("subtotal, VAT, cash…"): a 2B model echoes the words of its prompt as labels and shifts
     # the printed amounts onto them (it named the cash "amount to pay"). It copies the labels as printed instead.

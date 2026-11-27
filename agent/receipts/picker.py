@@ -1,5 +1,5 @@
-# Pure rules (no model, no I/O) for the payable total of a receipt (docs/02 §2.6): which of the copied money lines
-# is the amount to pay, and whether a verbatim re-read shows that amount printed on the paper.
+# Pure rules (no model, no I/O) for the payable total of a receipt (docs/02 §2.6): a total is shown only when the direct read
+# and the line copy agree on it and nothing disputes it; and whether a verbatim re-read shows that amount printed on the paper.
 import datetime
 import re
 import unicodedata
@@ -45,10 +45,12 @@ DEBT = r'cong no\b|\b(con|tong|tien) no\b|\bno cu\b|\bdu no\b|\bso du\b'
 BEFORE = (r'\b(chua|khong)( bao)?( gom| co)?( \d{1,2} ?%)? (thue|vat|gtgt)\b|'
           r'truoc (khi )?(thue|vat|gtgt|giam|chiet khau|ck\b|khuyen mai)|'
           r'\b(excl\w*\.?|before|not incl\w*)( of)? (vat|tax|discount)|(vat|tax) excl')
-NEVER = '|'.join([CHANGE, RECEIVED, SAVINGS, DEBT, BEFORE])
+FOREIGN = r'\b(usd|eur|jpy|cny|krw|sgd|aud)\b|\$'  # another currency, not VND
+NEVER = '|'.join([CHANGE, RECEIVED, SAVINGS, DEBT, BEFORE, FOREIGN])
 
 # A printed goods subtotal ("Thanh toán tiền hàng đợt 2", the reason on a voucher, is not one).
 GOODS_SUBTOTAL = r'(tong|cong) tien hang|cong hang|tam tinh|sub ?total|truoc thue|chua thue'
+COUNTS = r'so luong|tong sl\b|so mon|\bqty\b|quantity|total items?'
 # Also not the amount to pay, unless the label is PAYABLE.
 NOT_THE_TOTAL = '|'.join([
     r'tien hang|' + GOODS_SUBTOTAL,                                            # goods subtotals
@@ -56,8 +58,7 @@ NOT_THE_TOTAL = '|'.join([
     r'giam|chiet khau|khuyen mai|uu dai|voucher|coupon|discount',              # discounts
     r'\bdiem\b|\bpoints?\b',                                                   # loyalty points
     r'tien mat|\bcash\b',                                                      # cash
-    r'so luong|tong sl\b|so mon|\bqty\b|quantity|total items?',                # counts, not money
-    r'\b(usd|eur|jpy|cny|krw|sgd|aud)\b|\$',                                     # another currency, not VND
+    COUNTS,                                                                    # counts, not money
 ])
 # "(đã bao gồm VAT)", "(giá đã có VAT)", "(gồm 8% VAT)", "(incl. VAT)", "VAT included": a note on a total.
 _THE_TAX = r'(\d{1,2} ?% )?(thue )?(\d{1,2} ?% )?(gtgt|vat|tax|thue)\b( \d{1,2} ?%)?'
@@ -77,6 +78,8 @@ VAT = r'\b(vat|gtgt|thue|tax)\b'
 VAT_NOT_ADDED = r'trong do|\bgom\b|da co|\bincl|\binc\b|tien hang|chiu thue|taxable|truoc|before|chua|excl'
 PAID = (r'(khach (hang )?|\bkh )(dua|gui|tra\b|thanh toan)|tien (khach |kh )?(dua|nhan)|da nhan|tien mat|chuyen khoan|'
         r'\bck\b|\bthe\b|momo|zalo ?pay|vnpay|\bqr\b|\bcash\b|\bcard\b|tendered|received|customer paid')
+
+BEFORE_VAT = '|'.join([GOODS_SUBTOTAL, BEFORE, r'chiu thue|taxable|truoc'])
 
 # Lines that hold an identifier, a phone number or a date: their numbers are never money.
 IDENTIFIER = (r'\b(mst|ma so thue|tax code|so (hd|hoa don|ct|gd|phieu|tk|tai khoan)|tai khoan|stk|sdt|dien thoai|dt:|'
@@ -127,80 +130,9 @@ def _amounts(lines, pattern):
     return {abs(line['amount']) for line in lines if re.search(pattern, fold(line['label']))} - {0}
 
 
-def _handed_over(lines):
-    """Positions of the lines that are the cash handed over, whatever they say ("Thanh toán", "Khách nộp", even "Số tiền
-    cần thanh toán"): less the printed change, they give a printed total."""
-    change = _amounts(lines, CHANGE)
-    totals = _amounts(lines, TOTAL + '|thanh tien')
-    paid = _amounts(lines, PAID)
-    return {at for at, line in enumerate(lines)
-            if any(line['amount'] - c in totals for c in change)
-            and not any(cash - c == line['amount'] for cash in paid for c in change)}
-
-
-def _explained(other, at, lines):
-    """Whether the difference between lines[at] and the smaller lines[other] is the amount of a line printed between them."""
-    return lines[at]['amount'] - lines[other]['amount'] in {line['amount'] for line in lines[other + 1:at]}
-
-
-def _candidates(lines):
-    """{position: rank} of the lines that may be the amount to pay. A total line whose amount is also printed on a cash line
-    is that cash again ("Tổng tiền 189.000" above "Tiền khách trả 189.000"), and gives way to a smaller total line of the same
-    rank above it, unless a printed line explains the difference (a service charge)."""
-    handed_over = _handed_over(lines)
-    ranks = {at: _rank(line['label']) for at, line in enumerate(lines)
-             if at not in handed_over and is_money(line['amount']) and not _is_identifier(line['label'])}
-    ranks = {at: rank for at, rank in ranks.items() if rank is not None}
-    cash = {line['amount'] for line in lines if re.search(RECEIVED + r'|tien mat|\bcash\b', fold(line['label']))}
-
-    def repeats_cash(at, rank):
-        smaller_above = [other for other, other_rank in ranks.items()
-                         if other < at and other_rank == rank and lines[other]['amount'] < lines[at]['amount']]
-        return lines[at]['amount'] in cash and any(not _explained(other, at, lines) for other in smaller_above)
-
-    return {at: rank for at, rank in ranks.items() if not repeats_cash(at, rank)}
-
-
 def _in_words(line):
     """"Số tiền bằng chữ" carries the model's own conversion of the words."""
     return 'bang chu' in fold(line['label'])
-
-
-def _best(candidates, lines):
-    """The position of the last line of the best rank, or None. An amount in words only when nothing else matches."""
-    if not candidates:
-        return None
-    hits = [at for at, rank in candidates.items() if rank == min(candidates.values())]
-    return ([at for at in hits if not _in_words(lines[at])] or hits)[-1]
-
-
-def _holds_it(other, at, lines):
-    """Whether lines[at] is lines[other] plus the VAT, less the discounts, printed between them: it is that figure's
-    total after them, not a rival."""
-    return other < at and lines[other]['amount'] + sum({_adjustment(line) for line in lines[other + 1:at]}) == lines[at]['amount']
-
-
-def _names_another_total(direct_total, at, candidates, lines, printed):
-    """Whether the pick is disputed by another total line (not a figure that the pick only adds its VAT and discounts to):
-    - a line of the same rank that holds the direct read's total;
-    - when the pick's label is a weak one, any line that holds it and is not known as something else;
-    - when the pick is an amount to pay (rank 0), any worse total line of another amount, unless the paper shows the pick
-      is the later, adjusted total: the re-read prints it next to an amount-to-pay label. (The model's labels alone are
-      not proof: it can name the cash "amount to pay".)"""
-    pick = lines[at]['amount']
-    confirmed = any(_rank(label) == 0 for label in printed.get(pick, []))
-    for other, line in enumerate(lines):
-        if other == at or line['amount'] == pick or _in_words(line) or _holds_it(other, at, lines):
-            continue
-        if other not in candidates:
-            if line['amount'] == direct_total and candidates[at] == WEAK and not _is_something_else(line['label']):
-                return True
-        elif candidates[other] <= candidates[at]:
-            if line['amount'] == direct_total:
-                return True
-        elif candidates[at] == 0 and not confirmed:
-            return True
-    return False
 
 
 def _adjustment(line):
@@ -229,10 +161,9 @@ def _changed_below(at, lines):
     if re.search(VAT_INCLUDED + r'|\b(sau|after)\b.*\b(thue|vat|gtgt|tax)\b', label):
         adjustments = {amount for amount in adjustments if amount < 0}
     if added := sum(adjustments):
-        elsewhere = [line for line in lines
-                     if not re.search('|'.join([PAID, CHANGE, RECEIVED, SAVINGS, DEBT]), fold(line['label']))]
+        before = [line for line in lines if re.search(BEFORE_VAT, fold(line['label']))]  # the figure the VAT is added to
         change = max(_amounts(lines, CHANGE), default=0)
-        adds_up = any(line['amount'] + added == total for line in elsewhere)
+        adds_up = any(line['amount'] + added == total for line in before)
         if not adds_up and total not in {cash - change for cash in _amounts(lines, PAID)}:
             return added
     # "Tổng giảm giá" repeats what the total already holds, unless the figure it leaves is printed below.
@@ -243,20 +174,12 @@ def _changed_below(at, lines):
 
 
 def is_foot_line(name):
-    """Whether an "item" name is a line of the receipt's foot: a total, the cash handed over or the change."""
-    return _rank(name) is not None or re.search('|'.join([CHANGE, RECEIVED, r'tien mat|\bcash\b']), fold(name)) is not None
-
-
-def _is_something_else(label):
-    """Whether the label names something that is not a total: an identifier, a subtotal, VAT, cash, change, savings…"""
-    return _is_identifier(label) or (_rank(label) is None and _is_not_the_total(label))
-
-
-def pick_total(lines):
-    """The amount to pay among the copied {label, amount} lines, or None. The last line of the best rank wins, unless
-    a VAT or discount line below it changes it."""
-    at = _best(_candidates(lines), lines)
-    return None if at is None or _changed_below(at, lines) is not None else lines[at]['amount']
+    """Whether an "item" name is a line of the receipt's foot: a total, the cash handed over or the change. A name that
+    only has "total" somewhere in it is a product ("Kem đánh răng Colgate Total")."""
+    rank = _rank(name)
+    if rank == WEAK and not re.match(r'\W*(tong|total)\b', fold(name)):
+        rank = None
+    return rank is not None or re.search('|'.join([CHANGE, RECEIVED, r'tien mat|\bcash\b']), fold(name)) is not None
 
 
 CASH_LIKE = '|'.join([CHANGE, RECEIVED, r'tien mat|\bcash\b'])  # cash handed over, change, cash received
@@ -276,62 +199,162 @@ def _only_cash(amount, printed):
     return bool(labels) and all(re.search(CASH_LIKE, fold(label)) for label in labels)
 
 
-def _relabelled(lines, printed):
-    """The copied lines, where one whose amount the re-read prints only as cash handed over or change takes the printed
-    label. The model's own label for it is a guess: on a short receipt it echoed the words of its prompt and put the cash
-    on "amount to pay"."""
-    return [{**line, 'label': printed[abs(line['amount'])][0] if _only_cash(line['amount'], printed) else line['label']}
-            for line in lines]
+def _relabelled(lines, printed, direct_total):
+    """The copied lines, where the label the model gave is a guess that the verbatim re-read can correct. It can take a total
+    away: an amount the re-read prints only as cash handed over or change takes that printed label (on a short receipt the
+    model echoed the words of its prompt and put the cash on "amount to pay"). It lends a total label only to a label that
+    names nothing (the copy misread "cần" as "chờ"), on the direct read's amount, when the re-read prints that amount only next
+    to total labels and no copied line calls it cash."""
+    cash = {line['amount'] for line in lines if re.search(CASH_LIKE + '|' + PAYMENT, fold(line['label']))}
+
+    def label(line):
+        shown = printed.get(abs(line['amount']), []) if isinstance(line['amount'], int) else []
+        if _only_cash(line['amount'], printed):
+            return shown[0]
+        names_nothing = _rank(line['label']) is None and not _is_not_the_total(line['label']) and not _is_identifier(line['label'])
+        if line['amount'] == direct_total and names_nothing and line['amount'] not in cash and shown \
+                and all(_rank(text) is not None for text in shown):
+            return shown[0]
+        return line['label']
+    return [{**line, 'label': label(line)} for line in lines]
 
 
-def _paid_for(lines, handed_over):
-    """The amount of a line, under any label that is not something else ("Tổng", "Thành tiền", "Tiền chờ thanh toán"), that
-    plus a printed change is the amount of another line: the cash handed over. The paper shows what that line was paid for.
-    The cash line is one whose label names cash, change or the like (any place in the copy), or the last plain line with the
-    line right before it; so the items cannot prove each other. None when there is no such line, or two with different
-    amounts. (ponytail: two last items that differ by exactly the printed change, with the total torn off, would pass.)"""
-    change = _amounts(lines, CHANGE)
-    plain = [at for at, line in enumerate(lines)
-             if at not in handed_over and is_money(line['amount']) and not _is_something_else(line['label'])]
-    paid_for = set()
-    for cash_at, cash in enumerate(lines):
-        if _is_something_else(cash['label']):
-            candidates = plain
+def _has_words(text):
+    return re.search(r'[a-z]{2}', re.sub(r'vnd|dong', ' ', fold(text))) is not None
+
+
+def _paired(lines):
+    """The copied lines, where a number copied on its own line (a label with no words) takes the label of the label-only line
+    right above it, but only if that is a lone label: labels listed in a block before their numbers pair nothing."""
+    paired, above, before, above_label = [], '', '', ''  # the kinds of the last two lines with words or money
+    for line in lines:
+        words, money = _has_words(line['label']), bool(line['amount'])
+        if words or money:
+            lone = above == 'label' and before != 'label'
+            paired.append({**line, 'label': above_label} if money and not words and lone else line)
+            above, before, above_label = ('full' if words and money else 'label' if words else 'number'), above, line['label']
         else:
-            candidates = [at for at in plain if at < cash_at][-1:] if not any(at > cash_at for at in plain) else []
-        paid_for |= {lines[at]['amount'] for at in candidates if any(lines[at]['amount'] + c == cash['amount'] for c in change)}
-    return paid_for.pop() if len(paid_for) == 1 else None
+            paired.append(line)
+    return paired
+
+
+def _totals(lines):
+    """{position: rank} of the money lines whose label names a total or an amount to pay (never the model's own conversion
+    of an amount in words)."""
+    return {at: rank for at, line in enumerate(lines)
+            if is_money(line['amount']) and not _is_identifier(line['label']) and not _in_words(line)
+            and (rank := _rank(line['label'])) is not None}
+
+
+def _explained(other, at, lines):
+    """Whether the difference between lines[at] and the smaller lines[other] is the sum of some of the lines printed between
+    them (a service charge, a delivery fee, a surcharge, a rounding)."""
+    gap, sums = lines[at]['amount'] - lines[other]['amount'], {0}
+    between = [line['amount'] for line in lines[other + 1:at] if is_money(line['amount'])]
+    for amount in between[:20]:  # ponytail: only the first 20 lines between are tried; more is "not explained" (blank, never wrong)
+        sums |= {total + amount for total in sums if total + amount <= gap}
+    return gap in sums
+
+
+def _echoes(totals, lines):
+    """Positions of the total lines that only repeat the cash handed over: the amount is also printed on a cash line, and a
+    smaller total line of the same rank is not explained by the lines printed between them (a smaller one printed below it
+    never is)."""
+    cash = {line['amount'] for line in lines if re.search(RECEIVED + r'|tien mat|\bcash\b', fold(line['label']))}
+    return {at for at, rank in totals.items()
+            if lines[at]['amount'] in cash and any(
+                totals[other] == rank and lines[other]['amount'] < lines[at]['amount']
+                and not (other < at and _explained(other, at, lines)) for other in totals)}
+
+
+# Money lines that can follow the amount to pay without changing it: the change, savings, a debt, another currency, a count;
+# a VAT, discount or points line is _changed_below's call; cash, card or transfer only when it pays the figure in full
+# (a smaller one may be a part payment or a card fee).
+LEAVES_ALONE = '|'.join([CHANGE, SAVINGS, DEBT, FOREIGN, COUNTS, DISCOUNT, POINTS, POINTS_SPENT, DISCOUNT_SUM, VAT])
+PAYMENT = '|'.join([RECEIVED, PAID, r'tien mat|\bcash\b'])
+SMALLEST_FEE = 1000  # VND: a smaller number below a total is a rate or a count, never money to pay
+FEE = (r'\bphi\b|phu thu|\bfee\b|\bcharge|\bservice|delivery|\bship(ping|per)?\b|giao hang|van chuyen|dong goi|packag|'
+       r'lam tron|\bround|\btip\b|\bboa\b')  # a fee, a surcharge, a delivery or a rounding: money added to the figure
+
+
+def _leaves_alone(line, total):
+    """Whether a money line printed below a figure is known not to change it."""
+    text = fold(line['label'])
+    return (re.search(LEAVES_ALONE, text) is not None or _is_identifier(line['label']) or _in_words(line)
+            or (re.search(PAYMENT, text) is not None and abs(line['amount']) >= total))
+
+
+def _may_change(at, totals, lines, same):
+    """Whether something printed below lines[at] may change its figure: a VAT or discount line that does (_changed_below),
+    or a money line that is not known to leave it alone, such as a fee, a surcharge or a rounding. `same` are the amounts
+    that are no change to it: the figure itself and the cash it was paid with."""
+    if _changed_below(at, lines) is not None:
+        return True
+    return any(abs(line['amount']) >= SMALLEST_FEE and other not in totals and not _leaves_alone(line, lines[at]['amount'])
+               and not (line['amount'] in same and not re.search(FEE, fold(line['label'])))  # a repeat of the figure or its cash
+               for other, line in enumerate(lines) if other > at)
+
+
+NOT_CASH = '|'.join([GOODS_SUBTOTAL, VAT, DISCOUNT, POINTS, COUNTS, SAVINGS, DEBT, CHANGE])  # figures that are no cash handed over
+
+
+def _cash_is_printed(at, copy, change):
+    """With a change printed, the figure needs its cash (figure + change) printed too: without it the figure is most likely
+    that cash itself. The cash is a line that says cash or payment, or one printed after the figure (a line before it whose
+    label names nothing can be a subtotal that happens to fit). The cash and the change can only take a candidate away;
+    they never pick one."""
+    total = copy[at]['amount']
+    return not change or any(
+        total + c == line['amount'] and not _is_identifier(line['label']) and not re.search(NOT_CASH, fold(line['label']))
+        and (other > at or re.search(PAYMENT + '|' + CASH_LIKE, fold(line['label'])) or _rank(line['label']) is not None)
+        for c in change for other, line in enumerate(copy))
+
+
+def _moves(line):
+    """What a line does to a figure it follows: a fee, a surcharge or VAT adds its amount, a discount or spent points take it off."""
+    if re.search(FEE, fold(line['label'])) and is_money(line['amount']) and _rank(line['label']) is None:
+        return line['amount']
+    return _adjustment(line)
+
+
+def _held(at, totals, lines):
+    """Whether another total line, as well labelled or better, is this figure plus the fees, VAT and discounts printed anywhere
+    on the receipt: this one is then the figure before them, wherever the copy lists the lines."""
+    moves = [move for other, line in enumerate(lines) if other not in totals and (move := _moves(line))]
+    sums = {0}
+    for move in moves[:12]:  # ponytail: only the first 12 fee, VAT and discount lines are tried
+        sums |= {total + move for total in sums}
+    return any(lines[other]['amount'] - lines[at]['amount'] in sums for other, rank in totals.items()
+               if other != at and rank <= totals[at] and lines[other]['amount'] != lines[at]['amount'])
+
+
+def _undisputed(at, totals, lines, copy):
+    """Whether nothing in the copy or the paper argues against lines[at] being the amount to pay: no other total line
+    of another amount below it or better labelled than it, nothing below it that may change it, and the cash is no echo.
+    `lines` are the copied lines as the re-read relabels them (it can only take a line away: a relabelled cash is no total);
+    `copy` are the copied lines with their own labels, which say what the change is."""
+    total, echoes, change = lines[at]['amount'], _echoes(totals, lines), _amounts(copy, CHANGE)
+    if at in echoes or not _cash_is_printed(at, copy, change) or _held(at, totals, lines):
+        return False
+    same = {total} | {total + c for c in change}  # the figure, and the cash it was paid with
+    if any(lines[other]['amount'] not in same and other not in echoes and (other > at or rank < totals[at])
+           for other, rank in totals.items()):
+        return False
+    return not _may_change(at, totals, lines, same)
 
 
 def choose_total(direct_total, lines, reread=()):
-    """The amount to pay from the reads, or None when they do not settle it. `reread` is the verbatim re-read: its labels
-    are the printed ones, which the copy's can disagree with."""
-    printed = _shown(reread)
-    lines = _relabelled(lines, printed)
-    candidates = _candidates(lines)
-    at = _best(candidates, lines)
-    if at is not None:
-        total = lines[at]['amount']
-        if direct_total != total and _names_another_total(direct_total, at, candidates, lines, printed):
-            return None  # each read names another total line, and the paper does not show the pick as the better one
-        added = _changed_below(at, lines)
-        if added is None:
-            return total
-        return direct_total if direct_total == total + added else None  # subtotal + VAT - discounts confirms it
-    # No line is ranked as a total. Under any other label, the printed change can prove which line was paid for.
-    handed_over = _handed_over(lines)
-    if (paid_for := _paid_for(lines, handed_over)) is not None:
-        return paid_for  # the printed change is the proof, not the direct read
-    # Else the direct total, unless the paper shows it only as something else, or as a figure that changes, or (with a
-    # change printed) as a figure whose cash is not printed: it is then that cash itself.
-    change = _amounts(lines, CHANGE)
-    if change and is_money(direct_total) and not any(direct_total + c == line['amount'] for c in change for line in lines):
+    """The amount to pay, or None. It is shown only when the direct read and the line copy agree: a copied line whose label
+    names a total holds the direct read's amount, nothing in the copy disputes it, and nothing printed below it changes it.
+    A receipt in doubt gives None: the owner types the amount. `reread` is the verbatim re-read: an amount it prints only
+    next to cash or change words is cash, whatever label the copy gave it."""
+    if not is_money(direct_total):
         return None
-    on_lines = [at for at, line in enumerate(lines) if line['amount'] == direct_total]
-    as_total = [at for at in on_lines if at not in handed_over and not _is_something_else(lines[at]['label'])]
-    if (on_lines and not as_total) or (as_total and _changed_below(as_total[-1], lines) is not None):
-        return None
-    return direct_total if is_money(direct_total) and not _only_cash(direct_total, printed) else None
+    copy = _paired(lines)
+    lines = _relabelled(copy, _shown(reread), direct_total)
+    totals = _totals(lines)
+    holders = [at for at in totals if lines[at]['amount'] == direct_total]
+    return direct_total if holders and _undisputed(holders[-1], totals, lines, copy) else None
 
 
 # Parts of a line that hold digits but no money.

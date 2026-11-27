@@ -37,7 +37,7 @@ def test_a_recorded_echoed_copy_never_gives_the_cash_as_the_total(case):
     assert total in (str(case['expected']), ''), f"{total} is not {case['expected']}"
 
 
-def test_most_recorded_echoed_copies_are_read_right():
-    """TC-F10-24 the re-read lets the reader give the right total, not only none, on most of the recorded echoed copies (PR #124 round 2)"""
+def test_half_of_the_recorded_echoed_copies_are_still_read_right():
+    """TC-F10-24 the reader gives the right total, not only none, on about half of the recorded echoed copies: the direct read and the copy agree on it (PR #124 round 4)"""
     right = sum(asyncio.run(read_receipt(RecordedModel(case), 'data:'))['fields']['total'] == str(case['expected']) for case in ECHOED)
-    assert right >= 18, right
+    assert right >= 14, right  # 15 of 28 (18 under the rules of round 3, which let the re-read and the cash pick a total)

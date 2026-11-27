@@ -1,5 +1,5 @@
-# The reading method: three reads of the photo at once, the picker over the copied lines, then the check that the
-# chosen total is really printed. A total no verbatim re-read shows is not returned: the app asks the user to type it.
+# The reading method: three reads of the photo at once, the picker (the direct read and the copied lines must agree), then
+# the check that the chosen total is really printed. A total no verbatim re-read shows is not returned: the app asks the user to type it.
 import asyncio
 import time
 

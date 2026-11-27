@@ -215,7 +215,7 @@ vLLM may keep running (it listens on loopback only); `docker stop sochitieu-vllm
 
 - `/health` answers 503: vLLM is down or still loading. Photos get "the receipt reader is not answering" until it is back. Both containers restart by themselves after a reboot (`restart: unless-stopped`).
 - `docker logs qwen-receipts` shows one line per request: whether a total was found and how long the reads took, or why it failed. It never holds the key, the photo or anything read from the receipt.
-- A total of `""` is a normal answer: no payable total is printed (for example a torn receipt), and the app asks the user to type the amount.
+- A total of `""` is a normal answer: no payable total is printed (for example a torn receipt), or the direct read and the line copy do not agree on one (§2.6: a sideways or blurred photo, a total label the picker does not know, a fee printed below the total). The app asks the user to type the amount.
 
 ### The tunnel
 
@@ -230,7 +230,7 @@ How the `kie-receipts` container was set up, on any machine with Docker and abou
 3. Build and run: `docker compose up -d --build`. The first build downloads PaddleOCR models into the image, which takes several minutes. Map port 8000 to host port 8290 (or the port the tunnel points at).
 4. Check locally: `curl -s localhost:<port>/health` → `{"status":"ok"}`.
 
-KIE handles **one image at a time** (~20 s each in its own benchmark). In the spike on 16 receipts (2026-11-25) it read 8 payable totals correctly; the Qwen reader read all 16. KIE and its container are removed only by a later card.
+KIE handles **one image at a time** (~20 s each in its own benchmark). In the spike on 16 receipts (2026-11-25) it read 8 payable totals correctly; the Qwen reader read all 16 by taking the total from the line copy alone. The service as shipped shows a total only when the direct read and the line copy agree (§2.6), so it reads 11 of the 14 printed totals and gives `""` on the other 3 (two sideways photos and one degraded printout), both torn receipts included, with no wrong total in any live run. KIE and its container are removed only by a later card.
 
 ## 6.7 Seed the database
 

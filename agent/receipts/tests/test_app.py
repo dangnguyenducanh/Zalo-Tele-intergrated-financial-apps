@@ -312,10 +312,12 @@ def test_a_direct_read_the_model_answers_badly_reads_nothing(client, model, answ
     assert res.json()['line_items'] == []
 
 
-def test_a_bad_direct_read_does_not_hide_the_copied_total(client, model):
-    """TC-F10-30 the copy and the re-read still give the total when only the direct read is unreadable"""
+def test_a_bad_direct_read_leaves_the_copied_total_unconfirmed(client, model):
+    """TC-F10-30 with the direct read unreadable the copy has no second read to agree with: total "", the copy alone picks nothing (PR #124 round 4)"""
     model.answers = {**GOOD, 'receipt': 'not json'}
-    assert analyze(client, photo()).json()['fields']['total'] == '63000'
+    res = analyze(client, photo())
+    assert res.status_code == 200
+    assert res.json()['fields']['total'] == ''
 
 
 @pytest.mark.parametrize('task, answer', [('lines', '{"lines": [{"label": "Tổng')], ids=['cut off line copy'])
