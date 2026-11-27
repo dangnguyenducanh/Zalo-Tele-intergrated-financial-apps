@@ -136,13 +136,17 @@ describe('--remove', () => {
     expect(r.out).not.toMatch(/made-up/);
   });
 
-  test('TC-NF-22 a bad key name, no key, or an unknown target stops before anything is deleted or sent', () => {
+  test('TC-NF-22 a bad key name, a misplaced or misspelled --remove, no key, or an unknown target stops before anything is deleted or sent', () => {
     for (const [script, args] of [
       ['set-secret.sh', ['--remove', 'GMAIL_USER', 'gmail_user']],
       ['set-secret.sh', ['--remove', 'GMAIL_USER;ls']],
       ['set-secret.sh', ['--remove']],
       ['vercel-env-push.sh', ['staging', '--remove']],
       ['vercel-env-push.sh', ['staging', '--remove', 'bad key']],
+      // A misplaced or misspelled --remove must not be pushed as a key (it would re-push the very value being removed).
+      ['vercel-env-push.sh', ['staging', 'GMAIL_USER', '--remove']],
+      ['vercel-env-push.sh', ['staging', '--remve', 'GMAIL_USER']],
+      ['vercel-env-push.sh', ['staging', 'GMAIL_USER', 'bad key']],
       ['vercel-env-push.sh', ['nowhere', '--remove', 'GMAIL_USER']],
     ]) {
       const r = run(script, args);

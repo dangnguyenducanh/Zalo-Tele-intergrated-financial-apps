@@ -25,8 +25,9 @@ remove=0
 if [ "${1:-}" = "--remove" ]; then
   remove=1; shift
   [ $# -gt 0 ] || { usage >&2; exit 2; }
-  for key in "$@"; do [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || { echo "bad key name: $key" >&2; exit 2; }; done
 fi
+# Every argument left is a key, in both modes: a misplaced or misspelled --remove is refused, never pushed as a key.
+for key in "$@"; do [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || { echo "bad key name: $key" >&2; usage >&2; exit 2; }; done
 root="$(git rev-parse --show-toplevel)"
 env_file="$root/server/.env"
 # The pinned Vercel CLI, from its one definition in tools/deploy.sh.

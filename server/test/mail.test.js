@@ -151,11 +151,23 @@ describe('code email', () => {
     mailOn();
     const sender = vi.fn();
     setMailSender(sender);
-    for (const bad of [{ code: '<img src=x>' }, { code: '12345' }, { code: '1234567' }, { code: 123456 }, { purpose: 'login' }, { purpose: undefined }]) {
-      await expect(sendCode(ask(bad)), JSON.stringify(bad)).rejects.toThrow();
+    const notSixDigits = 'a code is 6 digits';
+    const notAPurpose = 'unknown purpose';
+    for (const [bad, message] of [
+      [{ code: '<img src=x>' }, notSixDigits],
+      [{ code: '12345' }, notSixDigits],
+      [{ code: '1234567' }, notSixDigits],
+      [{ code: 123456 }, notSixDigits],
+      [{ purpose: 'login' }, notAPurpose],
+      [{ purpose: undefined }, notAPurpose],
+    ]) {
+      const error = await sendCode(ask(bad)).catch((err) => err);
+      expect(error, JSON.stringify(bad)).toBeInstanceOf(Error);
+      expect(error.message, JSON.stringify(bad)).toBe(message); // a fixed text: it repeats nothing the caller sent
     }
     expect(sender).not.toHaveBeenCalled();
     expect(smtp.transports).toHaveLength(0);
+    expect(logged()).toBe(''); // and nothing was logged, so the bad code is not in a log either
   });
 });
 
@@ -268,8 +280,7 @@ describe('a failed send', () => {
     expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toMatch(/123456|an\.nguyen|does not exist/);
     const out = logged();
     expect(out).not.toMatch(/123456|an\.nguyen|does not exist/);
-    expect(out).toContain('a***@gmail.com');
-    expect(out).toMatch(/EENVELOPE|550/);
+    expect(out).toContain('[mail] send failed for a***@gmail.com: EENVELOPE 550');
   });
 
   test('TC-F1-30 an error code or text that is not a code is not copied into the log', async () => {
@@ -280,7 +291,7 @@ describe('a failed send', () => {
     await expect(sendCode(ask())).rejects.toThrow();
 
     expect(logged()).not.toMatch(/123456|an\.nguyen/);
-    expect(logged()).toContain('a***@gmail.com');
+    expect(logged()).toContain('[mail] send failed for a***@gmail.com: unknown');
   });
 
   test('TC-F1-30 a failure that has no code at all still logs the masked address, and a send that works logs no code', async () => {
@@ -289,7 +300,7 @@ describe('a failed send', () => {
       throw new Error(`boom ${ADDRESS} ${CODE}`);
     };
     await expect(sendCode(ask())).rejects.toThrow();
-    expect(logged()).toContain('a***@gmail.com');
+    expect(logged()).toContain('[mail] send failed for a***@gmail.com: unknown');
     expect(logged()).not.toMatch(/123456|an\.nguyen|boom/);
 
     logSpies.forEach((spy) => spy.mockClear());
