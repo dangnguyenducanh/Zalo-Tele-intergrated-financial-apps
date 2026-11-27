@@ -332,6 +332,7 @@ The first match wins, in this order inside `handleMessage` (Telegram button pres
 
 **`classify` is a pure function in `bot/ask.js` (Express), no database, no model.** The first rule that fires decides:
 1. Starts with `?` → question.
+1b. The first word is the `/hoi` command (case, accents and the decomposed Unicode form ignored, as in §2.4: `/hoi`, `/Hỏi`, `/hoi@bot`) → question, even with an amount or on several lines. This is the explicit question command of router row 3, so the web quick add, which has no router and runs only `classify`, treats it like the bots (BUG-044, T81). `/hoiphở 45k` is one other word, not the command.
 2. More than one non-empty line → capture.
 3. Ends with `?` → question, even with an amount.
 4. Last word `chưa`, `không` or `ko`, or `bao nhiêu` anywhere → question.
