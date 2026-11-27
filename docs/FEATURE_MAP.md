@@ -740,7 +740,7 @@ Generated from `main` at `718e838` by reading the code and i18n files (not yet c
 - **Sub-features:**
   - `Draft list`: heading with the total, `Bản nháp chờ duyệt (N)` / `Drafts to review (N)`, newest 100 drafts, no paging.
   - `Draft card`: an inline form with a source chip (Telegram, Zalo, WhatsApp, Hoá đơn / Receipt, Web), a title (the note, or `(không ghi chú)` / `(no note)`) and editable fields.
-  - `Receipt line items`: a native `<details>` with `summary` `Dòng hàng: N` text (bot:drafts.items) and `khớp tổng tiền` / `match the total` or `không khớp tổng tiền` / `do not match the total`. It appears only for drafts that have receipt items.
+  - `Receipt line items`: a native `<details>` with `summary` `N dòng hàng` text (bot:drafts.items; en `Line items: N`), e.g. `2 dòng hàng · khớp tổng tiền`, and `khớp tổng tiền` / `match the total` or `không khớp tổng tiền` / `do not match the total`. It appears only for drafts that have receipt items.
   - `Confirm`: `POST /transactions/:id/confirm`, sending the changed fields if any. Snackbar `Đã lưu giao dịch` / `Transaction saved`, or the budget warning `Đã lưu. Bạn đã dùng N% ngân sách tháng này.` / `Saved. You have used N% of this month's budget.`
   - `Discard`: confirm dialog, then `DELETE /transactions/:id`; snackbar `Đã bỏ bản nháp` / `Draft discarded`.
   - A 404 or 409 on confirm (already confirmed or deleted in the chat) also removes the card.

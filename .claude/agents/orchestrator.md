@@ -114,6 +114,7 @@ Read only these (nothing else unless one of them points you there):
 - Feature map: <the card's section IDs in `docs/FEATURE_MAP.md` (entry files, routes, selectors)>
 - Files to change: <paths>   · Reuse, don't rewrite: <path:symbol of existing helpers, stubs, fixtures>
 - Tests to add or extend: <test file paths> with case IDs <TC-…>
+- Reserved new case IDs: <a range per feature prefix, e.g. TC-F1-40…44, that no other open card holds; track the ranges on the board, so parallel PRs never take the same "next free" ID>
 Already decided (don't revisit): <the student's answers, D-numbers, the orchestrator's scope rulings>
 Already known: <facts from earlier runs: review findings verbatim, the failing CI step and its error line, what a previous attempt left in the worktree>
 Out of scope: <neighbouring work another card owns>

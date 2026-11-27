@@ -142,6 +142,7 @@ sequenceDiagram
 | Mongoose models | One file per model; only the owning task edits it, and changes to another task's model go through that task's card |
 | `package.json` dependencies | Added only by T01, unless a card lists the dependency |
 | `docs/testing/test-cases.json` | Append-only; new IDs use the card's feature prefix |
+| `docs/FEATURE_MAP.md` | Each card edits only its own features' sections; new features add a section and a Quick reference row; on merge conflicts keep both sides |
 
 These one-line registrations (routes index, i18n namespace, router, navigation entry, test-case append) count as in scope for every card, so a coder never stops with `BLOCKED` for them (orchestrator decision, 2026-11-20). When merging `staging` into a branch, a conflict on these lines is resolved by keeping both sides.
 
