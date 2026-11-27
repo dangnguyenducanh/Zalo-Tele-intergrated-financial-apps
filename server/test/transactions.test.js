@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import app from '../src/app.js';
 import { Category } from '../src/models/Category.js';
 import { Transaction } from '../src/models/Transaction.js';
@@ -388,6 +388,36 @@ test('TC-F8-25 POST /transactions/parse reads the amount, not a year or month ty
   expect(res.body.noAmountLines).toEqual([5]);
   const only = await me.post('/transactions/parse', { text: 'năm 2025' });
   expect([only.status, only.body.error.code]).toEqual([422, 'NO_AMOUNT_FOUND']);
+  expect(await Transaction.countDocuments()).toBe(0);
+});
+
+test('TC-F13-08 POST /transactions/parse answers a question with question: true, no drafts and no reading of the user\'s data', async () => {
+  const { me } = await newUser();
+  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', 'hôm nay ăn gì?', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', 'tổng kết tuần trước'];
+
+  const read = [vi.spyOn(Category, 'find'), vi.spyOn(Wallet, 'find')];
+  for (const text of questions) {
+    const res = await me.post('/transactions/parse', { text });
+    expect([text, res.status, res.body]).toEqual([text, 200, { question: true, drafts: [], noAmountLines: [], truncated: false }]);
+  }
+  expect(read.map((spy) => spy.mock.calls.length)).toEqual([0, 0]); // the parser never ran
+  read.forEach((spy) => spy.mockRestore());
+  expect(await Transaction.countDocuments()).toBe(0);
+
+  // A capture answers as before, with no question flag.
+  const capture = await me.post('/transactions/parse', { text: 'phở 45k' });
+  expect(capture.body).not.toHaveProperty('question');
+  expect(capture.body.drafts).toMatchObject([{ amount: 45_000, note: 'phở' }]);
+  // More than one line is a capture (docs/02 §2.11.1 rule 2), even when each line looks like a question.
+  const two = await me.post('/transactions/parse', { text: 'tháng 10 thu bao nhiêu\nphở 45k' });
+  expect(two.body).toMatchObject({ drafts: [{ amount: 45_000 }], noAmountLines: [1], truncated: false });
+  expect(two.body).not.toHaveProperty('question');
+  // A day count is never an amount, and what is no question and has no amount is still a 422.
+  for (const text of ['chi tiêu 7 ngày qua', 'đã chi gì tháng 9', 'chi tiêu năm 2025']) {
+    const none = await me.post('/transactions/parse', { text });
+    expect([text, none.status, none.body.error.code]).toEqual([text, 422, 'NO_AMOUNT_FOUND']);
+  }
+  expect((await me.post('/transactions/parse', { text: 'ăn tối tháng 10 50' })).body.drafts).toMatchObject([{ amount: 50_000 }]);
   expect(await Transaction.countDocuments()).toBe(0);
 });
 
