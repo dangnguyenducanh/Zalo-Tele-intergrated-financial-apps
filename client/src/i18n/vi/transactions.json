@@ -89,6 +89,8 @@
     "noWallet": "Chưa có ví",
     "incomplete": "Hãy chọn ví và danh mục: bấm vào thẻ xem trước để đổi.",
     "noAmountLines": "Dòng {{lines}} không có số tiền. Hãy sửa hoặc xoá dòng đó rồi lưu.",
+    "question": "Đây là câu hỏi",
+    "questionHint": "Câu hỏi không được lưu thành giao dịch: Enter và Lưu không lưu gì.",
     "tooManyLines": "Mỗi lần chỉ lưu được 10 dòng. Hãy lưu phần còn lại sau.",
     "saved": "Đã lưu giao dịch: {{count}}"
   }
