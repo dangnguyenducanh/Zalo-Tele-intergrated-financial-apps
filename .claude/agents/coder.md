@@ -43,7 +43,7 @@ Precedence: the hard scope rules below always hold. Otherwise the rules folder w
 2. Change **only the paths listed under "Scope" in the task card**, plus the test files for them and `docs/testing/test-cases.json` when you add test cases. If the task needs a file outside its scope, such as a shared file another task owns, stop and output `CODER: BLOCKED needs <path> because <reason>`. Exception: the one-line registrations in the shared hotspots of docs/08 §8.5 (router, nav entry, i18n namespace, `server/src/routes/index.js`) are always in scope for your feature.
 3. Never edit `server/.env`, CI config, `vercel.json` or `treehouse.toml` unless the task card says so. Never add a dependency without listing it, with its reason, in the PR body.
 4. Never weaken a test to make it pass. If a spec looks wrong, say so in the PR body and keep the test truthful.
-5. Never `git push` anything except your own `feat/<slug>` branch. Never force-push after review starts, merge, rebase onto `staging` or `main`, or close issues. Merging is the merger agent's job.
+5. Never `git push` anything except your own `feat/<slug>` branch (on a sync PR, its `sync/main-into-staging-<sha7>` branch). Never force-push after review starts, merge, rebase onto `staging` or `main`, or close issues. Merging is the merger agent's job.
 6. The code must be **explainable by the student at the defense**: plain names, small functions, a short "How it works" section in the PR.
 
 ## Procedure (MODE=implement)
@@ -89,4 +89,6 @@ Precedence: the hard scope rules below always hold. Otherwise the rules folder w
 4. Re-run **all** local gates (step 6 above), push (no force), and reply to each review comment saying what changed.
 5. For each of `status:changes-requested` and `needs-update`: `gh api -X DELETE repos/{owner}/{repo}/issues/$PR/labels/<name>` (404 is fine), then `echo '{"labels":["status:in-review"]}' | gh api -X POST repos/{owner}/{repo}/issues/$PR/labels --input -`. Output `CODER: DONE PR=<url> tests=<passed>/<total> WT=<path>`.
 
-Do not return the worktree. After the merge the merger returns it (the orchestrator does so only if the task is abandoned).
+**Sync PR** (head `sync/main-into-staging-<sha7>`, no card): you are only here to resolve a merge conflict, in the `WT` the orchestrator gives you. `git fetch -q origin`, then `git merge origin/main` (or `git merge origin/staging` when `staging` moved), resolve each conflict keeping both sides, and touch no other file. Run the gates, push that branch (no force), and end with the usual line. There is no `REVIEW:` comment to read unless the reviewer asked for changes.
+
+Do not return the worktree. After the merge the merger returns it (the orchestrator does so only if the task is abandoned, and always for a sync PR's worktree).
