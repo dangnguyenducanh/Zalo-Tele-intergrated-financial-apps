@@ -1,6 +1,6 @@
 // Telegram adapter (docs/04 §4.6): turns Telegram updates into bot core calls and talks back through the Bot API.
 import { env } from '../config/env.js';
-import { handleButton, handleMessage, messagesFor } from './core.js';
+import { handleButton, handleChoice, handleMessage, messagesFor } from './core.js';
 
 // Calls one Bot API method (https://core.telegram.org/bots/api) and returns its `result`.
 // The error never contains the URL, because the URL contains the bot token.
@@ -37,6 +37,11 @@ export const telegram = {
     const offered = draft.offers?.length > 0 ? [draft.offers.map(({ id, name }) => ({ text: name, callback_data: `k:${draft.id}:${id}` }))] : [];
     return callApi('sendMessage', { chat_id: chatId, text: draft.text, reply_markup: { inline_keyboard: [draftRow(draft.id, language), ...offered] } });
   },
+  // "typing…" while the agent works (core.js sends it every 4 s and stops it when the answer is out).
+  sendTyping: (chatId) => callApi('sendChatAction', { chat_id: chatId, action: 'typing' }),
+  // An ask-back: the agent's numbered text with one button per option, "q:<n>" (3 bytes; Telegram allows 64).
+  sendChoices: (chatId, text, options) =>
+    callApi('sendMessage', { chat_id: chatId, text, reply_markup: { inline_keyboard: options.map(({ n, label }) => [{ text: `${n}. ${label}`, callback_data: `q:${n}` }]) } }),
   // A photo's file_id → getFile → its bytes (bots may download files up to 20 MB).
   async downloadPhoto(fileId) {
     const { file_path: path } = await callApi('getFile', { file_id: fileId });
@@ -65,6 +70,8 @@ export async function handleTelegramUpdate(update) {
 // ✅ / ❌ / a category under a draft. On success the draft message is replaced by the result (and loses its buttons);
 // otherwise Telegram shows the reason as a short notice. Every press must be answered to stop the spinner.
 async function pressButton(query) {
+  const choice = /^q:([1-3])$/.exec(query.data ?? '');
+  if (choice) return pressChoice(query, choice[1]);
   const [, action, transactionId, categoryId] = /^([cxk]):([0-9a-f]{24})(?::([0-9a-f]{24}))?$/.exec(query.data ?? '') ?? [];
   if (!action || (action === 'k') !== Boolean(categoryId)) return callApi('answerCallbackQuery', { callback_query_id: query.id });
 
@@ -75,4 +82,12 @@ async function pressButton(query) {
     await callApi('editMessageText', { chat_id: query.message.chat.id, message_id: query.message.message_id, text: result.text, reply_markup: keyboard });
   }
   await callApi('answerCallbackQuery', { callback_query_id: query.id, text: result.ok ? undefined : result.text.slice(0, 200) });
+}
+
+// "q:1" … "q:3" under an ask-back: the number is the user's next message. The spinner stops first, because the answer can take up to 25 s.
+// The press has no message id of its own, so its callback id (the same on a redelivery) is the request id: pressed twice, answered once.
+async function pressChoice(query, digit) {
+  await callApi('answerCallbackQuery', { callback_query_id: query.id });
+  if (!query.message) return;
+  await handleChoice(telegram, { platformUserId: String(query.from.id), chatId: String(query.message.chat.id), messageId: `cb${query.id}`, displayName: '', text: digit });
 }

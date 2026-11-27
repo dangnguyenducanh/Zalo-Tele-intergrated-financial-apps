@@ -78,4 +78,6 @@ export default {
   learned: ({ name, word }) => `Moved to ${name} and remembered "${word}". Next time I file it myself (edit it on the Categories page).`,
   moved: ({ name }) => `Moved to ${name}.`,
   hasCategory: 'This one already has a category.',
+  // The reply to a bare 1-3 (or an old button) once the assistant's "which one?" ran out (docs/02 §2.11.3): never a draft.
+  askBackExpired: 'That question has expired, please ask it again',
 };

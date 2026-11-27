@@ -79,4 +79,6 @@ export default {
   learned: ({ name, word }) => `Đã chuyển sang ${name} và ghi nhớ "${word}". Lần sau mình tự xếp (sửa ở trang Danh mục).`,
   moved: ({ name }) => `Đã chuyển sang ${name}.`,
   hasCategory: 'Khoản này đã có danh mục rồi.',
+  // The reply to a bare 1-3 (or an old button) once the assistant's "which one?" ran out (docs/02 §2.11.3): never a draft.
+  askBackExpired: 'Câu hỏi đã hết hạn, hãy hỏi lại',
 };

@@ -1,12 +1,16 @@
 // The one client of the agent service (docs/04 §4.11 "Express side"): POST /v1/turn with the shared secret as a bearer.
 // The agent holds the question engine; Express keeps classify, capture and every write. Nothing here is called unless
 // agentConfigured() is true, and the callers answer the help text otherwise (docs/04 §4.2).
+import mongoose from 'mongoose';
 import { env } from '../config/env.js';
+import { AgentTurn } from '../models/AgentTurn.js';
 import { AppError } from '../utils/AppError.js';
 import { vnParts } from '../utils/vnTime.js';
 
 const WEB_BUDGET_MS = 40_000; // docs/02 §2.11.3: a turn has 40 s on the web and 25 s in a chat
 const CHAT_BUDGET_MS = 25_000;
+const FOLLOW_UP_MS = 10 * 60 * 1000; // an answer opens a follow-up for 10 minutes (docs/02 §2.11.1 rule 7)
+const ASK_BACK_GRACE_MS = 24 * 60 * 60 * 1000; // a lapsed ask-back still gets the "expired" line for a day (docs/02 §2.11.3)
 
 // Both settings are needed (docs/04 §4.2): with one missing the agent is never called.
 export const agentConfigured = () => Boolean(env.AGENT_URL && env.AGENT_SECRET);
@@ -50,4 +54,25 @@ export async function turn({ trigger = 'chat', userId, channel, threadKey, reque
   if (!res.ok) throw unavailable(`status ${res.status} ${code}`);
   if (typeof answer?.text !== 'string') throw unavailable('status 200 with no answer');
   return answer;
+}
+
+// followUp (docs/02 §2.11.1 rule 7) for a chat: did an answer go to this chat, for this user, in the last 10 minutes? Read from the
+// agent's own rows (a finished turn has its `answer`); `userId` is in the filter, because a chat id outlives the account it was linked to.
+export async function hasRecentAnswer(userId, channel, threadKey) {
+  const since = new Date(Date.now() - FOLLOW_UP_MS);
+  return Boolean(await AgentTurn.exists({ userId, channel, threadKey, answer: mongoose.trusted({ $ne: null }), createdAt: mongoose.trusted({ $gte: since }) }));
+}
+
+// The state of this chat's last ask-back (docs/02 §2.11.3), read the way the agent reads it: 'live' until its `expiresAt`, 'expired' for the
+// next 24 hours, null after that or when there never was one. The latest one decides. Only this user's rows are read.
+export async function askBackState(userId, channel, threadKey) {
+  const now = Date.now();
+  const row = await AgentTurn.findOne(
+    { userId, channel, threadKey, clearedAt: null, 'askBack.expiresAt': mongoose.trusted({ $gte: new Date(now - ASK_BACK_GRACE_MS) }) },
+    { 'askBack.expiresAt': 1 },
+  )
+    .sort({ createdAt: -1, _id: -1 })
+    .lean();
+  if (!row) return null;
+  return row.askBack.expiresAt.getTime() > now ? 'live' : 'expired';
 }

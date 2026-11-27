@@ -59,6 +59,7 @@ beforeAll(async () => {
 let errorLog;
 beforeEach(() => {
   errorLog = vi.spyOn(console, 'error');
+  delete env.AGENT_URL; // the assistant is off in this file: a question gets the help text (the agent has its own stub in chatAssistant.test.js)
 });
 afterEach(async () => {
   vi.useRealTimers(); // the pace tests pin the clock

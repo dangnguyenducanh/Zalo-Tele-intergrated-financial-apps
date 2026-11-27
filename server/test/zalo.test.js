@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vi
 import app from '../src/app.js';
 import enText from '../src/bot/messages.en.js';
 import viText from '../src/bot/messages.vi.js';
+import { env } from '../src/config/env.js';
 import { Budget } from '../src/models/Budget.js';
 import { Category } from '../src/models/Category.js';
 import { ChannelUsage } from '../src/models/ChannelUsage.js';
@@ -66,6 +67,7 @@ beforeAll(async () => {
 let errorLog;
 beforeEach(() => {
   errorLog = vi.spyOn(console, 'error');
+  delete env.AGENT_URL; // the assistant is off in this file: a question gets the help text (the agent has its own stub in chatAssistant.test.js)
 });
 afterEach(async () => {
   vi.useRealTimers(); // the pace test pins the clock

@@ -31,18 +31,19 @@ export function createAgentStub() {
     busy: () => (stub.handler = () => error(503, 'AGENT_BUSY')),
     down: () => (stub.handler = () => error(500, 'INTERNAL')),
   };
-  const server = setupServer(
-    http.post(`${AGENT_URL}/v1/turn`, async ({ request }) => {
-      const body = await request.json();
-      calls.push({ authorization: request.headers.get('authorization'), body });
-      const key = `${body.userId}:${body.requestId}`;
-      if (seen.has(key)) return error(409, 'DUPLICATE'); // checked and set in one synchronous step: two at once cannot both pass
-      seen.add(key);
-      const answer = await stub.handler(body);
-      return answer instanceof Response ? answer : HttpResponse.json(answer);
-    }),
-  );
+  const turnRoute = http.post(`${AGENT_URL}/v1/turn`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ authorization: request.headers.get('authorization'), body });
+    const key = `${body.userId}:${body.requestId}`;
+    if (seen.has(key)) return error(409, 'DUPLICATE'); // checked and set in one synchronous step: two at once cannot both pass
+    seen.add(key);
+    const answer = await stub.handler(body);
+    return answer instanceof Response ? answer : HttpResponse.json(answer);
+  });
+  const server = setupServer(turnRoute);
   return Object.assign(stub, {
+    // The route itself, for a test file that already runs its own MSW server (the bot tests stub Telegram and Zalo too).
+    route: turnRoute,
     listen: () =>
       server.listen({
         // Supertest talks to the app on 127.0.0.1; any other unmocked host is a test bug.

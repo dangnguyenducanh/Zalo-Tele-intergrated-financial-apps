@@ -8,6 +8,7 @@ import { ChatLink } from '../models/ChatLink.js';
 import { MAX_MONEY, Transaction } from '../models/Transaction.js';
 import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
+import { agentConfigured, askBackState, hasRecentAnswer, turn } from '../services/agent.js';
 import { maySend } from '../services/channelUsage.js';
 import { createClaimToken, redeemLinkCode } from '../services/chatLinks.js';
 import { budgetWarning, listBudgets, monthProgress, PACE_FROM_DAY } from '../services/budgets.js';
@@ -20,12 +21,18 @@ import { updateMe } from '../services/users.js';
 import { AppError } from '../utils/AppError.js';
 import { normalize } from '../utils/normalize.js';
 import { monthKey, vnParts } from '../utils/vnTime.js';
-import { classify } from './ask.js';
+import { classifyWithRule } from './ask.js';
 import { loneSplit, readFixes, splitBill } from './parser.js';
 import en from './messages.en.js';
 import vi from './messages.vi.js';
 
 export const messagesFor = (language) => (language === 'en' ? en : vi);
+
+// The chats that get assistant answers: an explicit allowlist (docs/02 §2.11.6), so an adapter added later (WhatsApp) keeps the help text
+// until its own card puts it here.
+const ASSISTANT_PLATFORMS = ['telegram', 'zalo'];
+const ANSWER_MAX = 1500; // characters in an answer: one message, never split (Zalo allows 2000, Telegram 4096)
+const TYPING_EVERY_MS = 4000; // Telegram's "typing" fades after about 5 s
 
 // Every text reply goes out through here with its kind (docs/02 §2.11.6): 'capture' (drafts, receipts, ok/huy, corrections)
 // and 'link' (linking a chat) always go out; anything else is 'other' and stops when the platform's monthly quota is
@@ -80,7 +87,7 @@ function readCommand(text) {
 // Without a link, a valid "/start CODE" or "/link CODE" links the chat; anything else gets a claim link, the only
 // thing ever stored for an unlinked chat (no message text, no transaction).
 // For a linked, active chat the first match wins, in the order of docs/02 §2.11.1: a photo, "/hoi", any other command,
-// "ok" / "huy" / "hoàn tác" / "undo" / "khôi phục" / on Zalo a category name typed under a waiting fallback draft / a lone "chia N" (reserved words), then classify(): a question or a capture. A question never reaches createDrafts.
+// "ok" / "huy" / "hoàn tác" / "undo" / "khôi phục" / a lone 1-3 that answers the chat's last ask-back / on Zalo a category name typed under a waiting fallback draft / a lone "chia N" (reserved words), then classify(): a question or a capture. A question never reaches createDrafts: on Telegram and Zalo the agent service answers it (T50).
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
   const [command, arg] = readCommand(message.text);
@@ -90,26 +97,107 @@ export async function handleMessage(adapter, message) {
   const user = await User.findById(link.userId).lean();
   if (user.status === 'locked') return reply(adapter, message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
   if (message.photo) return readReceipt(adapter, link, user.language, message);
-  if (command === 'hoi') return answerQuestion(adapter, message.chatId, user.language);
+  if (command === 'hoi') return askAgent(adapter, link, user.language, message, arg);
   if (command === 'sua') return fixLast(adapter, link, user.language, message.chatId, arg);
   if (command) return reply(adapter, message.chatId, await runCommand(link, user, command, arg));
   const word = normalize(message.text);
   if (word === 'ok' || word === 'huy') return reply(adapter, message.chatId, await answerPending(link, word), 'capture');
   if (word === 'hoan tac' || word === 'undo') return reply(adapter, message.chatId, await undoLast(link), 'capture');
   if (word === 'khoi phuc') return reply(adapter, message.chatId, await restoreLast(link), 'capture');
+  if (/^[1-3]$/.test(message.text.trim()) && (await answerChoice(adapter, link, user.language, message))) return; // before any rule that would read the digit as money
   const typed = adapter.categoryOffer === 'type' && (await typedCategory(adapter, link, user.language, message)); // a typed category name answers the offer (A7), before classify and the help reply
   if (typed) return;
   const people = loneSplit(message.text); // before classify, so a follow-up never reads "chia 3" as a question (D11)
   if (people) return splitPending(adapter, link, user.language, message.chatId, people);
-  // followUp is false until the assistant's answers are remembered per chat (T50).
-  if (classify(message.text, { followUp: false }) === 'question') return answerQuestion(adapter, message.chatId, user.language);
+  // followUp (an assistant answer went to this chat in the last 10 minutes) only turns rule 8 into rule 7 (docs/02 §2.11.1), so it is looked up
+  // for those texts alone: "phở 45k" and every other explicit capture costs no extra read. "55k" corrects a waiting Zalo draft either way.
+  const first = classifyWithRule(message.text, { followUp: false });
+  const question = first.answer === 'question' || (first.rule === '8' && (await isFollowUp(adapter, link, message.chatId)));
+  if (question) return askAgent(adapter, link, user.language, message, message.text);
   return createDrafts(adapter, link, user.language, message);
 }
 
-// A question (a "/hoi …" or a text classify() reads as one) is never money: nothing is drafted or stored. There is no
-// question engine yet, so it gets the help text, which lists "/hoi" and the plain commands. 'other' like any help (docs/02 §2.11.6).
-function answerQuestion(adapter, chatId, language) {
-  return reply(adapter, chatId, messagesFor(language).help);
+const isFollowUp = async (adapter, link, chatId) =>
+  ASSISTANT_PLATFORMS.includes(adapter.platform) && agentConfigured() && hasRecentAnswer(link.userId, adapter.platform, chatId);
+
+// A question (a "/hoi …" or a text classify() reads as one) is never money: nothing is drafted or stored. On Telegram and Zalo it goes to
+// the agent service (docs/02 §2.11.3) and its answer is the reply. Anything else gets the help text, which lists "/hoi" and the plain
+// commands ('other' like any help, docs/02 §2.11.6): another adapter (WhatsApp), a bare "/hoi", the agent unset, down or busy, and Zalo
+// from 2,400 messages a month (T49's `assistant` guard: the agent is not called at all). Capture never waits on the agent.
+async function askAgent(adapter, link, language, message, text) {
+  const { platform } = adapter;
+  const { chatId } = message;
+  if (!text.trim() || !ASSISTANT_PLATFORMS.includes(platform) || !agentConfigured() || !(await maySend(platform, 'assistant'))) {
+    return reply(adapter, chatId, messagesFor(language).help);
+  }
+  const stopTyping = keepTyping(adapter, chatId);
+  let answer;
+  try {
+    // requestId = the chat reference: a webhook delivered twice is answered once, because the agent refuses the second as DUPLICATE.
+    answer = await turn({ userId: link.userId, channel: platform, threadKey: chatId, requestId: `${platform}:${chatId}:${message.messageId}`, text, language: language === 'en' ? 'en' : 'vi' });
+  } catch (err) {
+    if (!(err instanceof AppError)) throw err;
+    if (err.code === 'DUPLICATE') return; // answered already: nothing to send twice
+    return reply(adapter, chatId, messagesFor(language).help); // AGENT_UNAVAILABLE or AGENT_BUSY
+  } finally {
+    stopTyping();
+  }
+  return sendAnswer(adapter, chatId, answer);
+}
+
+// "typing…" every 4 s while the agent works, for adapters that have it (Telegram). Returns the function that stops it, called in `finally`.
+// A failed ping is ignored: it is a courtesy and never costs the user their answer.
+function keepTyping(adapter, chatId) {
+  if (!adapter.sendTyping) return () => {};
+  const ping = () => adapter.sendTyping(chatId).catch(() => {});
+  ping();
+  const timer = setInterval(ping, TYPING_EVERY_MS);
+  return () => clearInterval(timer);
+}
+
+// The answer as one message of at most 1,500 characters (docs/02 §2.11.6). A longer one is cut at the end of its body, so the sources line
+// (its last line, when the agent names sources) always stays.
+function oneMessage(text, sources = []) {
+  if (Array.from(text).length <= ANSWER_MAX) return text;
+  const lineStart = text.lastIndexOf('\n');
+  const hasSources = lineStart > 0 && sources.length > 0 && text.slice(lineStart + 1).endsWith(sources.join('; '));
+  const body = Array.from(hasSources ? text.slice(0, lineStart) : text);
+  const tail = hasSources ? text.slice(lineStart) : '';
+  return `${body.slice(0, Math.max(0, ANSWER_MAX - Array.from(tail).length - 1)).join('')}…${tail}`;
+}
+
+// The agent's answer, in one message. An ask-back ("which one?") also gets one button per option where the adapter has buttons
+// (Telegram); where it has none (Zalo) its text already numbers the options and the user types the number.
+async function sendAnswer(adapter, chatId, { text, sources, card }) {
+  const body = oneMessage(text, sources);
+  const options = card?.kind === 'ask_back' && Array.isArray(card.options) ? card.options : [];
+  if (options.length > 0 && adapter.sendChoices && (await maySend(adapter.platform, 'assistant'))) return adapter.sendChoices(chatId, body, options);
+  return reply(adapter, chatId, body, 'assistant');
+}
+
+// A bare 1, 2 or 3 (typed, or Telegram's q:<n> button) answers the chat's last ask-back (docs/02 §2.11.3). While it is live (10 minutes) the digit
+// goes to the agent, which runs that option. For the next 24 hours it gets the "expired" line and is never money, so it never reaches draft
+// creation or the Zalo amount correction. Later a typed digit is an ordinary message again (false); an old button never is. True when handled.
+async function answerChoice(adapter, link, language, message, { button = false } = {}) {
+  const state = ASSISTANT_PLATFORMS.includes(adapter.platform) && agentConfigured() ? await askBackState(link.userId, adapter.platform, message.chatId) : null;
+  if (state === 'live') {
+    await askAgent(adapter, link, language, message, message.text.trim());
+    return true;
+  }
+  if (state === 'expired' || button) {
+    await reply(adapter, message.chatId, messagesFor(language).askBackExpired);
+    return true;
+  }
+  return false;
+}
+
+// Telegram's q:<n> button under an ask-back: the same as typing the digit, except that it is never read as money, however old it is.
+// Unlinked and locked chats get nothing (a button has no room for the link instructions).
+export async function handleChoice(adapter, message) {
+  const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
+  const user = link && (await User.findById(link.userId).lean());
+  if (!user || user.status === 'locked') return;
+  await answerChoice(adapter, link, user.language, message, { button: true });
 }
 
 // A button press (Telegram and WhatsApp ✅ / ❌, Telegram's category tap) → { ok, text }. Only the presser's own drafts can be touched.
