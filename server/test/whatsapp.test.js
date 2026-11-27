@@ -480,6 +480,25 @@ test('TC-F14-27 a question typed in a WhatsApp chat gets the help text and makes
   expect(await Transaction.find().lean()).toMatchObject([{ amount: 45_000, status: 'draft', source: 'whatsapp' }]);
 });
 
+test('TC-F14-27 every existing command is read without case or accents in either Unicode form on WhatsApp: /Today, /tôday, /MONTH and /Lang vi run as the plain command (docs/02 §2.11.1)', async () => {
+  const { user } = await linkedUser();
+  const reply = async (text) => textOf((await say(text))[0]);
+  const plain = { today: await reply('/today'), month: await reply('/month') };
+  expect(plain.today).toMatch(/^📅 Hôm nay/);
+  expect(plain.month).toMatch(/^📅 Tháng/);
+  for (const [text, command] of [['/Today', 'today'], ['/tôday', 'today'], [nfd('/tôday'), 'today'], ['/MONTH', 'month'], ['/Mônth', 'month'], [nfd('/Mônth'), 'month']]) {
+    expect([text, await reply(text)]).toEqual([text, plain[command]]);
+  }
+  // /lang switches the language whatever the case or accents; each variant starts again from English.
+  for (const text of ['/Lang vi', '/LANG vi', '/Lâng vi', nfd('/Lâng vi')]) {
+    await say('/lang en');
+    expect((await User.findById(user.id)).language).toBe('en');
+    await say(text);
+    expect([text, (await User.findById(user.id)).language]).toEqual([text, 'vi']);
+  }
+  expect(await Transaction.countDocuments()).toBe(0); // a command is never a capture
+});
+
 test('TC-F8-34 a receipt photo is fetched from the Graph API with the token, read by KIE and becomes a draft with buttons; a redelivery repeats nothing', async () => {
   const { user } = await linkedUser();
   graph.length = 0;

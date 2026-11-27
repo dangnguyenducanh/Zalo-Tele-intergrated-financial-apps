@@ -330,6 +330,25 @@ test('TC-F14-27 a question typed in a Zalo chat gets the help text and makes no 
   expect((await Transaction.find().sort({ _id: 1 }).lean()).map((t) => t.amount)).toEqual([32_000, 25_000, 55_000]); // the newest draft was corrected, no new one
 });
 
+test('TC-F14-27 every existing command is read without case or accents in either Unicode form on Zalo: /Today, /tôday, /MONTH and /Lang vi run as the plain command (docs/02 §2.11.1)', async () => {
+  const user = await linkedUser();
+  const reply = async (text) => textOf((await say(text))[0]);
+  const plain = { today: await reply('/today'), month: await reply('/month') };
+  expect(plain.today).toMatch(/^📅 Hôm nay/);
+  expect(plain.month).toMatch(/^📅 Tháng/);
+  for (const [text, command] of [['/Today', 'today'], ['/tôday', 'today'], [nfd('/tôday'), 'today'], ['/MONTH', 'month'], ['/Mônth', 'month'], [nfd('/Mônth'), 'month']]) {
+    expect([text, await reply(text)]).toEqual([text, plain[command]]);
+  }
+  // /lang switches the language whatever the case or accents; each variant starts again from English.
+  for (const text of ['/Lang vi', '/LANG vi', '/Lâng vi', nfd('/Lâng vi')]) {
+    await say('/lang en');
+    expect((await User.findById(user.id)).language).toBe('en');
+    await say(text);
+    expect([text, (await User.findById(user.id)).language]).toEqual([text, 'vi']);
+  }
+  expect(await Transaction.countDocuments()).toBe(0); // a command is never a capture
+});
+
 // ---- Zalo's monthly quota (docs/02 §2.11.6, card T49): every send is counted, and from 2,850 only capture and linking replies go out ----
 
 const thisMonth = () => monthKey(new Date());
