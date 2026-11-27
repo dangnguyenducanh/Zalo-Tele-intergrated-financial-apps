@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { requireAuth } from '../middleware/auth.js';
-import { authRateLimit } from '../middleware/rateLimit.js';
+import { authRateLimit, mailRateLimit } from '../middleware/rateLimit.js';
 import * as auth from '../services/auth.js';
+import { canSendCodes } from '../services/mail.js';
 import { getUser } from '../services/users.js';
 
 const router = Router();
@@ -22,6 +23,8 @@ const registerBody = z.object({
   language: z.enum(['vi', 'en']).optional(),
 });
 const loginBody = z.object({ email, password: z.string().min(1) });
+const verifyBody = z.object({ email, code: z.string().regex(/^\d{6}$/), signupToken: z.string().min(1).max(256) });
+const resendBody = z.object({ email });
 
 // The refresh token travels only in this cookie, and the browser sends it only to /api/auth (docs/04 §4.3).
 const REFRESH_COOKIE = 'rt';
@@ -35,8 +38,20 @@ function sendLogin(res, status, { user, accessToken, refreshToken }) {
   res.status(status).json({ accessToken, user });
 }
 
-router.post('/register', authRateLimit, async (req, res) => {
-  sendLogin(res, 201, await auth.register(registerBody.parse(req.body), clientOf(req)));
+// With mail on: 202 and a code in the user's inbox, no account yet. With mail off: today's 201 and a session.
+router.post('/register', authRateLimit, mailRateLimit, async (req, res) => {
+  const body = registerBody.parse(req.body);
+  if (!canSendCodes()) return sendLogin(res, 201, await auth.register(body, clientOf(req)));
+  res.status(202).json(await auth.startSignup(body));
+});
+
+// No per-IP limit (decision D7): the 5 tries per code and the token that only the registering tab holds are the guard.
+router.post('/register/verify', async (req, res) => {
+  sendLogin(res, 201, await auth.verifySignup(verifyBody.parse(req.body), clientOf(req)));
+});
+
+router.post('/register/resend', mailRateLimit, async (req, res) => {
+  res.status(202).json(await auth.resendSignup(resendBody.parse(req.body)));
 });
 
 router.post('/login', authRateLimit, async (req, res) => {

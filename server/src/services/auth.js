@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { waitUntil } from '@vercel/functions';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
@@ -7,6 +8,8 @@ import { Session } from '../models/Session.js';
 import { User } from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { copyDefaultCategories } from './categories.js';
+import { checkCode, dropIssued, issueCode, reissueCode, RESEND_WAIT_S } from './emailCodes.js';
+import { canSendCodes, maskEmail, sendCode } from './mail.js';
 import { endSessionChain, revokeAllSessions } from './sessions.js';
 import { createDefaultWallet } from './wallets.js';
 
@@ -54,16 +57,57 @@ async function openSession(user, { userAgent, ip }, chainStartedAt = new Date())
   return { user, accessToken, refreshToken, session };
 }
 
-export async function register({ name, email, password, language }, client) {
+// Creates the account and opens its first session. Today's register, and the last step of a verified sign-up.
+async function createAccount({ name, email, language, passwordHash }, client) {
   let user;
   try {
-    user = await User.create({ name, email, language, passwordHash: await hashPassword(password) });
+    user = await User.create({ name, email, language, passwordHash });
   } catch (err) {
     if (err.code === 11000) throw new AppError(409, 'EMAIL_TAKEN', 'This email is already registered');
     throw err;
   }
   await onUserRegistered(user);
   return openSession(user, client);
+}
+
+// Register with mail off (production without the Gmail settings, docs/02 §2.12.4): no code, the account at once.
+export async function register({ name, email, password, language }, client) {
+  return createAccount({ name, email, language, passwordHash: await hashPassword(password) }, client);
+}
+
+// Register with mail on (docs/02 §2.12.2): no user yet, only a pending sign-up and a mailed code. The answer carries a
+// random signupToken that only this request gets; the row keeps its hash, and verify needs it (decision D1).
+export async function startSignup({ name, email, password, language = 'vi' }) {
+  if (await User.exists({ email })) throw new AppError(409, 'EMAIL_TAKEN', 'This email is already registered');
+  const signupToken = randomBytes(24).toString('base64url');
+  const signup = { name, language, passwordHash: await hashPassword(password), tokenHash: hashToken(signupToken) };
+  const issued = await issueCode({ purpose: 'signup', email, signup });
+  try {
+    await sendCode({ to: email, purpose: 'signup', code: issued.code, language });
+  } catch {
+    await dropIssued(issued); // nothing is left behind to block a retry; the mailer logged its safe error line
+    throw new AppError(503, 'EMAIL_SEND_FAILED', "We couldn't send the email. Try again in a few minutes.");
+  }
+  return { email: maskEmail(email), resendAfter: RESEND_WAIT_S, signupToken };
+}
+
+// The right code, with the token that register returned, creates the account (docs/02 §2.12.2 step 5): the answer is
+// today's register answer, and the row is already gone, so a second request with the same code finds nothing.
+export async function verifySignup({ email, code, signupToken }, client) {
+  const row = await checkCode({ purpose: 'signup', email, code, also: { 'signup.tokenHash': hashToken(signupToken) } });
+  const { name, language, passwordHash } = row.signup;
+  return createAccount({ name, email, language, passwordHash }, client);
+}
+
+// A new code for a pending sign-up. The answer is the same 202 for every address, pending or not, and also when the
+// mail fails (decisions D5 and D6), so it never tells who is signing up; only a pending address can answer 429.
+export async function resendSignup({ email }) {
+  if (!canSendCodes()) throw new AppError(503, 'FEATURE_NOT_CONFIGURED', 'Email codes are not set up');
+  const issued = await reissueCode({ purpose: 'signup', email });
+  // The mail goes out in the background, so a failing mailer cannot show whether a sign-up was pending. The mailer
+  // already logged its safe error line (masked address, error code), so there is nothing more to say here.
+  if (issued) waitUntil(sendCode({ to: email, purpose: 'signup', code: issued.code, language: issued.row.signup.language }).catch(() => {}));
+  return { resendAfter: RESEND_WAIT_S };
 }
 
 export async function login({ email, password }, client) {

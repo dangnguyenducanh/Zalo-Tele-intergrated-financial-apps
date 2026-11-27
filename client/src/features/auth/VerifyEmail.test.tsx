@@ -3,9 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import ProtectedRoute from '@/auth/ProtectedRoute';
+import { useAuth } from '@/auth/useAuth';
 import { CODE, fake, LAN, PASSWORD, server } from '@/test/fakeApi';
 import { renderApp } from '@/test/renderApp';
 import { readPendingSignup, savePendingSignup, type PendingSignup } from './pendingSignup';
+import { authRoutes } from './routes';
 
 // docs/07 §7.10.4: the Register page's 201 / 202 / 503 answers and every state of /verify-email (API stubbed by MSW).
 
@@ -351,5 +354,24 @@ test('TC-F1-41 logging in drops a pending sign-up left in this tab (logout leave
   await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
 
   await screen.findByRole('heading', { level: 1, name: /^Xin chào/ });
+  expect(readPendingSignup()).toBeNull();
+});
+
+// Follow-up of T37 (#136): AuthContext.logout drops the entry, so the next person in this tab never sees an address left behind.
+test('TC-F1-41 logging out drops a pending sign-up left in this tab', async () => {
+  const user = userEvent.setup();
+  function LogOut() {
+    const { logout } = useAuth();
+    return <button onClick={() => void logout()}>Log out</button>;
+  }
+  fake.loggedIn = true; // a valid refresh cookie: the app opens logged in
+  renderApp('/', [{ hydrateFallbackElement: <p>Loading</p>, children: [...authRoutes, { element: <ProtectedRoute />, children: [{ path: '/', element: <LogOut /> }] }] }]);
+  const logOut = await screen.findByRole('button', { name: 'Log out' });
+  savePendingSignup(PENDING); // a sign-up someone began in this tab and left
+  expect(readPendingSignup()).not.toBeNull();
+
+  await user.click(logOut);
+
+  expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument();
   expect(readPendingSignup()).toBeNull();
 });

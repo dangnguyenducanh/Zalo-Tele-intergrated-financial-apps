@@ -9,6 +9,9 @@ import { env } from '../src/config/env.js';
 import vitestConfig from '../vitest.config.js';
 import { canSendCodes, maskEmail, sendCode, setMailSender } from '../src/services/mail.js';
 
+// The setup file replaces the mailer in every test file (helpers/mail-mock.js); this file tests the real one.
+vi.unmock('../src/services/mail.js');
+
 // Nothing here can reach Gmail (docs/07 §7.10.5). nodemailer's `jsonTransport` is the real one: it builds the message
 // and sends nothing. Any other transport is replaced: the options it was made with are recorded, and `smtp.sendMail`
 // is what a "send" does.
