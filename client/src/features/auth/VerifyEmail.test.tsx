@@ -34,7 +34,7 @@ async function fillRegister(user: ReturnType<typeof userEvent.setup>, email = 'm
 
 const storedText = () => JSON.stringify({ ...sessionStorage }) + JSON.stringify({ ...localStorage });
 
-test('TC-F1-27 register: a 201 logs in as today and keeps nothing', async () => {
+test('TC-F1-35 register: a 201 logs in as today and keeps nothing', async () => {
   const user = userEvent.setup();
   renderApp('/register');
   await fillRegister(user);
@@ -44,7 +44,7 @@ test('TC-F1-27 register: a 201 logs in as today and keeps nothing', async () => 
   expect(storedText()).not.toContain('password1');
 });
 
-test('TC-F1-27 register: a 202 goes to /verify-email with no session, the pending entry and the password in no storage', async () => {
+test('TC-F1-35 register: a 202 goes to /verify-email with no session, the pending entry and the password in no storage', async () => {
   const user = userEvent.setup();
   fake.mailOn = true;
   const { router } = renderApp('/register');
@@ -58,7 +58,7 @@ test('TC-F1-27 register: a 202 goes to /verify-email with no session, the pendin
   expect(fake.loggedIn).toBe(false);
 });
 
-test('TC-F1-28 register shows EMAIL_SEND_FAILED (503) and a 429 on the form, translated, and stays on /register', async () => {
+test('TC-F1-36 register shows EMAIL_SEND_FAILED (503) and a 429 on the form, translated, and stays on /register', async () => {
   const user = userEvent.setup();
   server.use(http.post('*/api/auth/register', () => failWith('EMAIL_SEND_FAILED', 503)));
   const { router } = renderApp('/register');
@@ -73,7 +73,7 @@ test('TC-F1-28 register shows EMAIL_SEND_FAILED (503) and a 429 on the form, tra
   expect(router.state.location.pathname).toBe('/register');
 });
 
-test('TC-F1-29 verify: six digits send email, code and signupToken once, then the session starts, the entry is removed and the Dashboard opens', async () => {
+test('TC-F1-37 verify: six digits send email, code and signupToken once, then the session starts, the entry is removed and the Dashboard opens', async () => {
   const user = userEvent.setup();
   seedPending();
   const { router } = renderApp('/verify-email');
@@ -87,7 +87,7 @@ test('TC-F1-29 verify: six digits send email, code and signupToken once, then th
   expect(storedText()).not.toContain('token-1');
 });
 
-test('TC-F1-30 the code box is a numeric one-time-code input of 6 digits that takes digits only', async () => {
+test('TC-F1-38 the code box is a numeric one-time-code input of 6 digits that takes digits only', async () => {
   const user = userEvent.setup();
   seedPending();
   renderApp('/verify-email');
@@ -103,7 +103,7 @@ test('TC-F1-30 the code box is a numeric one-time-code input of 6 digits that ta
   expect(fake.verifyBodies).toHaveLength(0);
 });
 
-test('TC-F1-30 a pasted " 654 321 " becomes six digits and submits', async () => {
+test('TC-F1-38 a pasted " 654 321 " becomes six digits and submits', async () => {
   const user = userEvent.setup();
   seedPending();
   renderApp('/verify-email');
@@ -115,7 +115,7 @@ test('TC-F1-30 a pasted " 654 321 " becomes six digits and submits', async () =>
   expect(fake.verifyBodies[0]).toMatchObject({ code: '654321' });
 });
 
-test('TC-F1-30 auto-submit on the 6th digit followed by Enter sends one request', async () => {
+test('TC-F1-38 auto-submit on the 6th digit followed by Enter sends one request', async () => {
   const user = userEvent.setup();
   seedPending();
   let calls = 0;
@@ -134,7 +134,7 @@ test('TC-F1-30 auto-submit on the 6th digit followed by Enter sends one request'
   expect(calls).toBe(1);
 });
 
-test('TC-F1-31 a wrong code shows the tries left and refocuses the cleared box', async () => {
+test('TC-F1-39 a wrong code shows the tries left and refocuses the cleared box', async () => {
   const user = userEvent.setup();
   seedPending();
   renderApp('/verify-email');
@@ -149,7 +149,7 @@ test('TC-F1-31 a wrong code shows the tries left and refocuses the cleared box',
   expect(box).toHaveAttribute('aria-invalid', 'true');
 });
 
-test('TC-F1-31 an expired code offers Resend and a register-again link; a taken email offers login', async () => {
+test('TC-F1-39 an expired code offers Resend and a register-again link; a taken email offers login', async () => {
   const user = userEvent.setup();
   seedPending();
   server.use(http.post('*/api/auth/register/verify', () => failWith('CODE_EXPIRED', 400)));
@@ -167,7 +167,7 @@ test('TC-F1-31 an expired code offers Resend and a register-again link; a taken 
   expect(screen.getByRole('link', { name: 'Đến trang đăng nhập' })).toHaveAttribute('href', '/login');
 });
 
-test('TC-F1-31 a network error keeps the code and Confirm retries it', async () => {
+test('TC-F1-39 a network error keeps the code and Confirm retries it', async () => {
   const user = userEvent.setup();
   seedPending();
   server.use(http.post('*/api/auth/register/verify', () => HttpResponse.error(), { once: true }));
@@ -181,7 +181,7 @@ test('TC-F1-31 a network error keeps the code and Confirm retries it', async () 
   expect(await screen.findByRole('heading', { level: 1, name: 'Xin chào, Minh' })).toBeInTheDocument();
 });
 
-test('TC-F1-32 Resend is off during the countdown, and Confirm with fewer than 6 digits sends nothing', async () => {
+test('TC-F1-40 Resend is off during the countdown, and Confirm with fewer than 6 digits sends nothing', async () => {
   const user = userEvent.setup();
   seedPending({ resendAt: Date.now() + 60_000 });
   renderApp('/verify-email');
@@ -197,7 +197,7 @@ test('TC-F1-32 Resend is off during the countdown, and Confirm with fewer than 6
   expect(fake.verifyBodies).toHaveLength(0);
 });
 
-test('TC-F1-32 after the countdown Resend sends { email }, says a new code was sent and starts the countdown again', async () => {
+test('TC-F1-40 after the countdown Resend sends { email }, says a new code was sent and starts the countdown again', async () => {
   const user = userEvent.setup();
   seedPending({ resendAt: Date.now() - 1000 });
   renderApp('/verify-email');
@@ -211,7 +211,7 @@ test('TC-F1-32 after the countdown Resend sends { email }, says a new code was s
   expect(readPendingSignup()?.resendAt).toBeGreaterThan(Date.now() + 50_000); // a reload keeps the countdown
 });
 
-test('TC-F1-32 a 429 with retryAfter 30 restarts the countdown from 30', async () => {
+test('TC-F1-40 a 429 with retryAfter 30 restarts the countdown from 30', async () => {
   const user = userEvent.setup();
   seedPending();
   server.use(http.post('*/api/auth/register/resend', () => rateLimited({ retryAfter: 30 })));
@@ -224,7 +224,7 @@ test('TC-F1-32 a 429 with retryAfter 30 restarts the countdown from 30', async (
   expect(screen.getByRole('status')).toHaveTextContent('Vui lòng đợi một chút trước khi xin mã mới.');
 });
 
-test('TC-F1-32 a 429 without retryAfter shows the plain rate-limit text', async () => {
+test('TC-F1-40 a 429 without retryAfter shows the plain rate-limit text', async () => {
   const user = userEvent.setup();
   seedPending();
   server.use(http.post('*/api/auth/register/resend', () => rateLimited()));
@@ -235,7 +235,7 @@ test('TC-F1-32 a 429 without retryAfter shows the plain rate-limit text', async 
   expect(await screen.findByRole('alert')).toHaveTextContent('Bạn thao tác quá nhiều lần. Vui lòng thử lại sau ít phút.');
 });
 
-test('TC-F1-32 resend FEATURE_NOT_CONFIGURED (503) shows the message and a way to register again', async () => {
+test('TC-F1-40 resend FEATURE_NOT_CONFIGURED (503) shows the message and a way to register again', async () => {
   const user = userEvent.setup();
   seedPending();
   server.use(http.post('*/api/auth/register/resend', () => failWith('FEATURE_NOT_CONFIGURED', 503)));
@@ -247,7 +247,7 @@ test('TC-F1-32 resend FEATURE_NOT_CONFIGURED (503) shows the message and a way t
   expect(screen.getByRole('link', { name: 'Đăng ký lại' })).toHaveAttribute('href', '/register');
 });
 
-test('TC-F1-33 "Wrong email? Change it" goes to /register with name and email filled and both passwords empty', async () => {
+test('TC-F1-41 "Wrong email? Change it" goes to /register with name and email filled and both passwords empty', async () => {
   const user = userEvent.setup();
   seedPending();
   const { router } = renderApp('/verify-email');
@@ -262,14 +262,14 @@ test('TC-F1-33 "Wrong email? Change it" goes to /register with name and email fi
   expect(readPendingSignup()).toBeNull();
 });
 
-test('TC-F1-33 /verify-email with no pending entry goes to /register', async () => {
+test('TC-F1-41 /verify-email with no pending entry goes to /register', async () => {
   const { router } = renderApp('/verify-email'); // opened bare, or in another tab
 
   expect(await screen.findByRole('heading', { level: 1, name: 'Tạo tài khoản' })).toBeInTheDocument();
   expect(router.state.location.pathname).toBe('/register');
 });
 
-test('TC-F1-33 /verify-email for a logged-in user goes to /', async () => {
+test('TC-F1-41 /verify-email for a logged-in user goes to /', async () => {
   seedPending();
   fake.account = LAN;
   fake.loggedIn = true; // a valid refresh cookie, so the app restores the session
@@ -279,7 +279,7 @@ test('TC-F1-33 /verify-email for a logged-in user goes to /', async () => {
   expect(router.state.location.pathname).toBe('/');
 });
 
-test('TC-F1-34 while a code is checked a status line says so, and the error is tied to the box', async () => {
+test('TC-F1-42 while a code is checked a status line says so, and the error is tied to the box', async () => {
   const user = userEvent.setup();
   seedPending();
   server.use(
@@ -297,7 +297,7 @@ test('TC-F1-34 while a code is checked a status line says so, and the error is t
   expect(codeBox()).toHaveAccessibleDescription(/Còn 1 lần thử/);
 });
 
-test('TC-F1-34 switching the language after a wrong code re-translates the message and the labels', async () => {
+test('TC-F1-42 switching the language after a wrong code re-translates the message and the labels', async () => {
   const user = userEvent.setup();
   seedPending();
   renderApp('/verify-email');
