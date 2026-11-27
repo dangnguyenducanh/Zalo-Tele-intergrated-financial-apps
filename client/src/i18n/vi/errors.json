@@ -30,6 +30,9 @@
   "RATE_LIMITED": "Bạn thao tác quá nhiều lần. Vui lòng thử lại sau ít phút.",
   "KIE_UNAVAILABLE": "Dịch vụ đọc hoá đơn đang tạm ngưng. Vui lòng thử lại sau.",
   "KIE_TIMEOUT": "Đọc hoá đơn quá lâu. Vui lòng thử lại.",
+  "DUPLICATE": "Câu hỏi này đã được gửi rồi.",
+  "AGENT_UNAVAILABLE": "Trợ lý đang bận bảo trì, thử lại sau.",
+  "AGENT_BUSY": "Trợ lý đang trả lời nhiều người, thử lại sau vài giây.",
   "FEATURE_NOT_CONFIGURED": "Tính năng này chưa được cấu hình trên máy chủ.",
   "INTERNAL": "Máy chủ gặp sự cố. Vui lòng thử lại sau."
 }

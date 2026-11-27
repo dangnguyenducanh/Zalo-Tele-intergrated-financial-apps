@@ -2,7 +2,7 @@
 # Copy server/.env into a Vercel project's Production environment variables.
 # Usage: tools/vercel-env-push.sh staging|production [KEY...]
 #        tools/vercel-env-push.sh staging|production --remove KEY...
-#   With no KEY: push every key (plus the per-target APP_URL, MONGODB_DB, KIE_URL).
+#   With no KEY: push every key (plus the per-target APP_URL, MONGODB_DB, KIE_URL, and on production AGENT_URL).
 #   With KEYs: push only those (tools/set-secret.sh uses this after saving a secret).
 #   With --remove: delete those variables from that Vercel project. server/.env is not read for them or changed,
 #   so a key that is only in the dashboard (the GMAIL_* pair, docs/06 §6.14) is removed just the same.
@@ -70,7 +70,7 @@ if [ "$remove" = 1 ]; then
 fi
 
 # Local-only keys that must not go to Vercel (or get a per-target value below).
-skip='^(VERCEL_|SEED_|TEST_USER_|PROD_URL|STAGING_URL|APP_URL|MONGODB_DB|PORT|VITE_PORT|WT_SLOT|KIE_URL|KIE_PUBLIC_URL)'
+skip='^(VERCEL_|SEED_|TEST_USER_|PROD_URL|STAGING_URL|APP_URL|MONGODB_DB|PORT|VITE_PORT|WT_SLOT|KIE_URL|KIE_PUBLIC_URL|AGENT_URL|AGENT_PUBLIC_URL)'
 
 all=1; only=" $* "
 [ $# -eq 0 ] || all=0
@@ -92,7 +92,7 @@ push() { # key value
   fi
 }
 # Keys whose Vercel value is computed per target below instead of copied.
-derived() { case "$1" in APP_URL | MONGODB_DB | KIE_URL | KIE_PUBLIC_URL) return 0 ;; esac; return 1; }
+derived() { case "$1" in APP_URL | MONGODB_DB | KIE_URL | KIE_PUBLIC_URL | AGENT_URL | AGENT_PUBLIC_URL) return 0 ;; esac; return 1; }
 
 echo "Pushing env to Vercel ($target):"
 for k in "$@"; do # a requested key that isn't in server/.env is an error, not a silent no-op
@@ -118,6 +118,18 @@ if wanted KIE_URL || wanted KIE_PUBLIC_URL; then
     push KIE_URL "$(get KIE_PUBLIC_URL)"
   else
     echo "  keep KIE_URL local only (Vercel's KIE_URL comes from KIE_PUBLIC_URL: tools/set-secret.sh KIE_PUBLIC_URL)"
+  fi
+fi
+# Vercel's AGENT_URL is the agent service's public tunnel, kept locally in AGENT_PUBLIC_URL (the same way as KIE_URL). The local
+# AGENT_URL, the GPU host's own address, is never sent, not even when AGENT_PUBLIC_URL is empty. Decision D19 (docs/06 §6.13): the agent
+# reads the production database, so staging gets AGENT_URL only when it is named: a full push and AGENT_PUBLIC_URL leave it unset.
+if wanted AGENT_URL || wanted AGENT_PUBLIC_URL; then
+  if [ "$target" = staging ] && [[ "$only" != *" AGENT_URL "* ]]; then
+    echo "  keep AGENT_URL unset on staging (the agent reads production's database; decision D19). To set it anyway: tools/vercel-env-push.sh staging AGENT_URL"
+  elif [ -z "$(get AGENT_PUBLIC_URL)" ]; then
+    echo "  skip AGENT_URL (AGENT_PUBLIC_URL is empty: set it with tools/set-secret.sh AGENT_PUBLIC_URL)"
+  else
+    push AGENT_URL "$(get AGENT_PUBLIC_URL)"
   fi
 fi
 

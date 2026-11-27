@@ -11,6 +11,7 @@ import budgets from './budgets.js';
 import stats from './stats.js';
 import chatLinks from './chatLinks.js';
 import receipts from './receipts.js';
+import assistant from './assistant.js';
 import webhooks from './webhooks.js';
 import admin from './admin.js';
 
@@ -31,6 +32,7 @@ router.use('/budgets', budgets);
 router.use('/stats', stats);
 router.use('/chat-links', chatLinks);
 router.use('/receipts', receipts);
+router.use('/assistant', assistant);
 router.use('/webhooks', webhooks); // checks the platform's secret header instead of a JWT
 router.use('/admin', admin); // requireAuth + requireRole('admin')
 

@@ -196,3 +196,114 @@ describe('the normal push', () => {
     expect(r.out).not.toContain('new-sender@example.com');
   });
 });
+
+// The agent service's address (docs/06 §6.13, decision D19): the local AGENT_URL and AGENT_PUBLIC_URL are never sent as they are.
+// Vercel's AGENT_URL takes the value of AGENT_PUBLIC_URL; staging gets it only when it is asked for by name.
+describe('TC-F14-99 AGENT_URL on Vercel comes from AGENT_PUBLIC_URL', () => {
+  const TUNNEL = 'https://made-up-tunnel.trycloudflare.com';
+  const LOCAL = 'http://127.0.0.1:8310';
+  const SECRET = 'made-up-agent-secret';
+  const agentLines = (publicUrl = TUNNEL) => [`AGENT_URL=${LOCAL}`, `AGENT_PUBLIC_URL=${publicUrl}`, `AGENT_SECRET=${SECRET}`, ''].join('\n');
+  const useEnv = (extra) => writeFileSync(join(repo, 'server', '.env'), ENV_FILE + extra, { mode: 0o600 });
+  const added = (r) => r.calls.filter((c) => / env add /.test(c.args)).map((c) => ({ project: c.project, key: c.args.split(' ')[4], value: c.stdin }));
+  const agentAdds = (r) => added(r).filter((a) => a.key.startsWith('AGENT_'));
+  const neverLocal = (r) => {
+    for (const call of r.calls) expect(call.stdin, call.args).not.toBe(LOCAL);
+    expect(added(r).map((a) => a.key)).not.toContain('AGENT_PUBLIC_URL');
+    expect(r.out).not.toContain(LOCAL);
+    expect(r.out).not.toContain(TUNNEL);
+    expect(r.out).not.toContain(SECRET);
+  };
+
+  test('TC-F14-99 a full production push sets AGENT_URL from AGENT_PUBLIC_URL and AGENT_SECRET as typed; neither local address is sent', () => {
+    useEnv(agentLines());
+    const r = run('vercel-env-push.sh', ['production']);
+
+    expect(r.status, r.out).toBe(0);
+    expect(agentAdds(r)).toHaveLength(2); // AGENT_URL once, AGENT_SECRET once: nothing else starts with AGENT_
+    expect(agentAdds(r)).toEqual(
+      expect.arrayContaining([
+        { project: PROD, key: 'AGENT_SECRET', value: SECRET },
+        { project: PROD, key: 'AGENT_URL', value: TUNNEL },
+      ]),
+    );
+    neverLocal(r);
+  });
+
+  test('TC-F14-99 a full staging push pushes AGENT_SECRET but not AGENT_URL, and says why and how to push it anyway', () => {
+    useEnv(agentLines());
+    const r = run('vercel-env-push.sh', ['staging']);
+
+    expect(r.status, r.out).toBe(0);
+    expect(agentAdds(r)).toEqual([{ project: STAGING, key: 'AGENT_SECRET', value: SECRET }]);
+    expect(r.out).toMatch(/AGENT_URL/);
+    expect(r.out).toMatch(/staging/);
+    expect(r.out).toContain('tools/vercel-env-push.sh staging AGENT_URL');
+    neverLocal(r);
+  });
+
+  test('TC-F14-99 on production, naming AGENT_PUBLIC_URL (what tools/set-secret.sh passes) or AGENT_URL sets AGENT_URL from AGENT_PUBLIC_URL, once', () => {
+    useEnv(agentLines());
+    for (const key of ['AGENT_PUBLIC_URL', 'AGENT_URL']) {
+      writeFileSync(log, ''); // the fake npx's log adds up from run to run
+      const r = run('vercel-env-push.sh', ['production', key]);
+      expect(r.status, `${key}\n${r.out}`).toBe(0);
+      expect(added(r), key).toEqual([{ project: PROD, key: 'AGENT_URL', value: TUNNEL }]);
+      neverLocal(r);
+    }
+  });
+
+  test('TC-F14-99 on staging, AGENT_PUBLIC_URL pushes nothing and says so; only `staging AGENT_URL` pushes AGENT_URL (from AGENT_PUBLIC_URL)', () => {
+    useEnv(agentLines());
+    const skipped = run('vercel-env-push.sh', ['staging', 'AGENT_PUBLIC_URL']);
+    expect(skipped.status, skipped.out).toBe(0);
+    expect(skipped.calls).toEqual([]);
+    expect(skipped.out).toMatch(/AGENT_URL/);
+    expect(skipped.out).toContain('tools/vercel-env-push.sh staging AGENT_URL');
+    neverLocal(skipped);
+
+    const explicit = run('vercel-env-push.sh', ['staging', 'AGENT_URL']);
+    expect(explicit.status, explicit.out).toBe(0);
+    expect(added(explicit)).toEqual([{ project: STAGING, key: 'AGENT_URL', value: TUNNEL }]);
+    neverLocal(explicit);
+  });
+
+  test('TC-F14-99 an empty or missing AGENT_PUBLIC_URL pushes no AGENT_URL, even when the local AGENT_URL looks public, and the tool says so', () => {
+    for (const lines of [`AGENT_URL=https://looks-public.example.com\nAGENT_PUBLIC_URL=\nAGENT_SECRET=${SECRET}\n`, `AGENT_URL=https://looks-public.example.com\n`]) {
+      useEnv(lines);
+      for (const [target, keys] of [['production', []], ['production', ['AGENT_PUBLIC_URL']], ['production', ['AGENT_URL']], ['staging', ['AGENT_URL']]]) {
+        const r = run('vercel-env-push.sh', [target, ...keys]);
+        expect(r.status, `${target} ${keys}\n${r.out}`).toBe(0);
+        expect(agentAdds(r).filter((a) => a.key === 'AGENT_URL'), `${target} ${keys}`).toEqual([]);
+        for (const call of r.calls) expect(call.stdin).not.toContain('looks-public');
+        if (keys.length > 0) expect(r.out, `${target} ${keys}`).toMatch(/AGENT_PUBLIC_URL is empty/);
+      }
+    }
+  });
+
+  test('TC-F14-99 AGENT_URL can be named when server/.env has no AGENT_URL line (the value comes from AGENT_PUBLIC_URL)', () => {
+    useEnv(`AGENT_PUBLIC_URL=${TUNNEL}\n`);
+    const r = run('vercel-env-push.sh', ['production', 'AGENT_URL']);
+
+    expect(r.status, r.out).toBe(0);
+    expect(added(r)).toEqual([{ project: PROD, key: 'AGENT_URL', value: TUNNEL }]);
+  });
+
+  test('TC-F14-99 set-secret.sh AGENT_PUBLIC_URL AGENT_SECRET saves both locally, sends AGENT_URL to production only and AGENT_SECRET to both projects', () => {
+    const r = run('set-secret.sh', ['AGENT_PUBLIC_URL', 'AGENT_SECRET'], { input: `${TUNNEL}\n${SECRET}\n` });
+
+    expect(r.status, r.out).toBe(0);
+    expect(envFile()).toContain(`AGENT_PUBLIC_URL=${TUNNEL}`);
+    expect(envFile()).toContain(`AGENT_SECRET=${SECRET}`);
+    expect(added(r)).toHaveLength(3);
+    expect(added(r)).toEqual(
+      expect.arrayContaining([
+        { project: STAGING, key: 'AGENT_SECRET', value: SECRET },
+        { project: PROD, key: 'AGENT_URL', value: TUNNEL },
+        { project: PROD, key: 'AGENT_SECRET', value: SECRET },
+      ]),
+    );
+    expect(r.out).not.toContain(SECRET);
+    expect(r.out).not.toContain(TUNNEL);
+  });
+});

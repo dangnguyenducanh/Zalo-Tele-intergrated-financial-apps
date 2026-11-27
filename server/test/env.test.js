@@ -133,3 +133,37 @@ test('TC-NF-21 under NODE_ENV=test neither Gmail variable has a default: a defau
   expect(gmail(parseEnv({ NODE_ENV: 'test' }))).toEqual([undefined, undefined]);
   expect(gmail(parseEnv({ NODE_ENV: 'test', GMAIL_USER: 'sender@gmail.com' }))).toEqual(['sender@gmail.com', undefined]);
 });
+
+const agent = (e) => [e.AGENT_URL, e.AGENT_SECRET];
+
+test('TC-F14-90 AGENT_URL and AGENT_SECRET are optional, alone or together, and an empty value counts as not set; AGENT_PUBLIC_URL is not read by the server', () => {
+  const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64) };
+  expect(agent(parseEnv(base))).toEqual([undefined, undefined]);
+  expect(agent(parseEnv({ ...base, AGENT_URL: '', AGENT_SECRET: '' }))).toEqual([undefined, undefined]); // as copied from .env.example
+  expect(agent(parseEnv({ ...base, AGENT_URL: 'https://agent.example.com' }))).toEqual(['https://agent.example.com', undefined]);
+  expect(agent(parseEnv({ ...base, AGENT_SECRET: 'a'.repeat(64) }))).toEqual([undefined, 'a'.repeat(64)]);
+  // The tunnel address kept on the developer's machine is only an input of tools/vercel-env-push.sh.
+  expect(parseEnv({ ...base, AGENT_PUBLIC_URL: 'https://x.trycloudflare.com' })).not.toHaveProperty('AGENT_PUBLIC_URL');
+});
+
+test('TC-F14-90 AGENT_URL must be an http(s) URL; the startup error names it but not its value', () => {
+  const base = { NODE_ENV: 'production', MONGODB_URI: 'mongodb://h/db', JWT_ACCESS_SECRET: 'a'.repeat(64) };
+  for (const bad of ['not a url hunter2', 'agent.example.com', 'ftp://agent.example.com']) {
+    let message = '';
+    try {
+      parseEnv({ ...base, AGENT_URL: bad });
+    } catch (err) {
+      message = err.message;
+    }
+    expect(message, bad).toMatch(/AGENT_URL/);
+    expect(message, bad).not.toMatch(/hunter2/);
+  }
+  expect(parseEnv({ ...base, AGENT_URL: 'http://127.0.0.1:8310' }).AGENT_URL).toBe('http://127.0.0.1:8310'); // the local address of a developer on the GPU host
+});
+
+test('TC-F14-90 under NODE_ENV=test both get a dummy value on a host that is not this machine, so an unstubbed call to the agent cannot reach anything', () => {
+  const [url, secret] = agent(parseEnv({ NODE_ENV: 'test' }));
+  expect(new URL(url).hostname).not.toMatch(/^(localhost|127\.|0\.0\.0\.0|\[?::1)/);
+  expect(secret).toBeTruthy();
+  expect(agent(parseEnv({ NODE_ENV: 'test', AGENT_URL: 'http://other.test' }))[0]).toBe('http://other.test');
+});

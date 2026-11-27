@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Validates process.env once at startup and fails fast with the names of missing or invalid variables
-// (never their values). Only MONGODB_URI and JWT_ACCESS_SECRET are required. The bot, KIE, APP_URL and
+// (never their values). Only MONGODB_URI and JWT_ACCESS_SECRET are required. The bot, KIE, agent, APP_URL and
 // seed variables are optional and checked only when set, so the API still boots without them; a
 // feature that needs a missing one answers 503 FEATURE_NOT_CONFIGURED. Under NODE_ENV=test every
 // variable has a harmless default (except GMAIL_USER and GMAIL_APP_PASSWORD, which stay unset), so the
@@ -57,6 +57,11 @@ export function parseEnv(source) {
       .optional(),
     KIE_URL: optional(z.url(), 'http://127.0.0.1:9'),
     KIE_API_KEY: optional(z.string(), 'test-kie-key'),
+    // The agent service (docs/02 §2.11.6): it is called only when both are set, so unset the API still boots and a question gets
+    // the help text. The test default is a made-up host that is not this machine, so a call nobody stubbed reaches nothing.
+    // AGENT_PUBLIC_URL is only an input of tools/vercel-env-push.sh and is not read here.
+    AGENT_URL: optional(z.url({ protocol: /^https?$/ }), 'http://agent.test'),
+    AGENT_SECRET: optional(z.string(), 'test-agent-secret'),
     SEED_ADMIN_EMAIL: z.string().optional(), // used by `npm run seed` only
     SEED_ADMIN_PASSWORD: z.string().optional(),
   });
