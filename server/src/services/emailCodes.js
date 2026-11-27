@@ -88,23 +88,25 @@ export async function reissueCode({ purpose, email }) {
 // Takes a failed send's row away, unless a newer send already replaced the code in it.
 export const dropIssued = ({ row }) => EmailCode.deleteOne({ _id: row._id, codeHash: row.codeHash });
 
+// The answer for a code that cannot be used any more, and for a reset whose account is gone.
+export const codeExpired = () => new AppError(400, 'CODE_EXPIRED', 'This code has expired. Send a new one.');
+
 // Checks a code (docs/02 §2.12.2 step 5). `also` narrows the live row (sign-up adds the token's hash). Returns the row,
 // now deleted, when the code is right. Wrong: 400 CODE_INVALID with the tries left. No live row (none, 10 minutes
 // gone, 5 tries used, a token that doesn't match), or another request used the right code first: 400 CODE_EXPIRED.
 export async function checkCode({ purpose, email, code, also = {} }) {
-  const expired = () => new AppError(400, 'CODE_EXPIRED', 'This code has expired. Send a new one.');
   // One atomic $inc on a live row: parallel guesses each take their own try, so 5 tries cannot become 50.
   const row = await EmailCode.findOneAndUpdate(
     { purpose, email, ...also, codeExpiresAt: mongoose.trusted({ $gt: new Date() }), attempts: mongoose.trusted({ $lt: MAX_ATTEMPTS }) },
     { $inc: { attempts: 1 } },
     { returnDocument: 'after' },
   );
-  if (!row) throw expired();
+  if (!row) throw codeExpired();
   if (!sameHash(row.codeHash, hashCode(code))) {
     throw new AppError(400, 'CODE_INVALID', 'The code is wrong', { attemptsLeft: Math.max(0, MAX_ATTEMPTS - row.attempts) });
   }
   // Two equal requests both get here; only the one that deletes the row wins.
   const won = await EmailCode.findOneAndDelete({ _id: row._id, codeHash: row.codeHash });
-  if (!won) throw expired();
+  if (!won) throw codeExpired();
   return won;
 }

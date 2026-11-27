@@ -51,6 +51,19 @@ export async function deleteChatLink(userId, linkId) {
   await link.deleteOne();
 }
 
+// Password reset (docs/02 §2.12.3, decision D3): every chat of the user is unlinked, on every platform, and the user's
+// link codes go with them, so a code made before the reset cannot link a chat after it. Claim links of those chats go too,
+// as in deleteChatLink. Transactions and drafts stay. The bot needs no change: an unlinked chat gets the please-link reply.
+export async function unlinkAllChats(userId) {
+  await LinkCode.deleteMany({ userId });
+  const chats = (await ChatLink.find({ userId }).select('platform platformUserId').lean()).map((link) => ({
+    'chat.platform': link.platform,
+    'chat.platformUserId': link.platformUserId,
+  }));
+  if (chats.length) await LinkCode.deleteMany({ $or: chats });
+  await ChatLink.deleteMany({ userId });
+}
+
 // PATCH /chat-links/:id/claim-notice: the user has seen the "Not you? [Unlink]" notice of a claim-made link.
 export async function dismissClaimNotice(userId, linkId) {
   const { matchedCount } = await ChatLink.updateOne({ _id: linkId, userId }, { claimNoticeDismissedAt: new Date() });

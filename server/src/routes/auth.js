@@ -25,6 +25,8 @@ const registerBody = z.object({
 const loginBody = z.object({ email, password: z.string().min(1) });
 const verifyBody = z.object({ email, code: z.string().regex(/^\d{6}$/), signupToken: z.string().min(1).max(256) });
 const resendBody = z.object({ email });
+const forgotBody = z.object({ email });
+const resetBody = z.object({ email, code: z.string().regex(/^\d{6}$/), newPassword });
 
 // The refresh token travels only in this cookie, and the browser sends it only to /api/auth (docs/04 §4.3).
 const REFRESH_COOKIE = 'rt';
@@ -52,6 +54,17 @@ router.post('/register/verify', async (req, res) => {
 
 router.post('/register/resend', mailRateLimit, async (req, res) => {
   res.status(202).json(await auth.resendSignup(resendBody.parse(req.body)));
+});
+
+// Same mailRateLimit count as register and resend. Always 202 (docs/02 §2.12.3); 503 only when codes are off.
+router.post('/password/forgot', mailRateLimit, async (req, res) => {
+  res.status(202).json(await auth.startReset(forgotBody.parse(req.body)));
+});
+
+// No per-IP limit (decision D7): the 5 tries per code are the guard, and no mail is sent here.
+router.post('/password/reset', async (req, res) => {
+  await auth.resetPassword(resetBody.parse(req.body));
+  res.sendStatus(204);
 });
 
 router.post('/login', authRateLimit, async (req, res) => {

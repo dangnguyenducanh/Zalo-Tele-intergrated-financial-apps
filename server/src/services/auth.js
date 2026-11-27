@@ -8,7 +8,8 @@ import { Session } from '../models/Session.js';
 import { User } from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { copyDefaultCategories } from './categories.js';
-import { checkCode, dropIssued, issueCode, reissueCode, RESEND_WAIT_S } from './emailCodes.js';
+import { unlinkAllChats } from './chatLinks.js';
+import { checkCode, codeExpired, dropIssued, issueCode, reissueCode, RESEND_WAIT_S } from './emailCodes.js';
 import { canSendCodes, maskEmail, sendCode } from './mail.js';
 import { endSessionChain, revokeAllSessions } from './sessions.js';
 import { createDefaultWallet } from './wallets.js';
@@ -108,6 +109,35 @@ export async function resendSignup({ email }) {
   // already logged its safe error line (masked address, error code), so there is nothing more to say here.
   if (issued) waitUntil(sendCode({ to: email, purpose: 'signup', code: issued.code, language: issued.row.signup.language }).catch(() => {}));
   return { resendAfter: RESEND_WAIT_S };
+}
+
+// Forgot password (docs/02 §2.12.3): the same 202 for every address. Every address gets a `reset` row with a code and goes
+// through the same two database steps (decision D2), so neither the answer, a later wrong code on reset, nor a 429 on the
+// second request shows whether the address has an account. Only an active user gets the mail, in the background.
+export async function startReset({ email }) {
+  if (!canSendCodes()) throw new AppError(503, 'FEATURE_NOT_CONFIGURED', 'Email codes are not set up');
+  const issued = await issueCode({ purpose: 'reset', email });
+  const user = await User.findOne({ email }).select('status language').lean();
+  // The mailer already logged its safe error line (masked address, error code), so there is nothing more to say here.
+  if (user?.status === 'active') waitUntil(sendCode({ to: email, purpose: 'reset', code: issued.code, language: user.language }).catch(() => {}));
+  return { resendAfter: RESEND_WAIT_S };
+}
+
+// Reset (docs/02 §2.12.3): the right code, checked as in sign-up, sets the new password, signs out every device and
+// unlinks every chat (decision D3). The code is spent before anything else is looked at: an account that is gone is
+// CODE_EXPIRED and a locked one is 403 with nothing changed. No cookie and no token: the user logs in again.
+export async function resetPassword({ email, code, newPassword }) {
+  await checkCode({ purpose: 'reset', email, code });
+  const user = await User.findOne({ email }).select('status').lean();
+  if (!user) throw codeExpired();
+  if (user.status === 'locked') throw accountLocked();
+  const passwordHash = await hashPassword(newPassword);
+  // The status is part of the write, so a lock that landed while the hash was made cannot be overwritten.
+  const { matchedCount } = await User.updateOne({ _id: user._id, status: 'active' }, { passwordHash });
+  if (!matchedCount) throw accountLocked();
+  // In this order: login's re-check (BUG-040) sees the new hash first, then every session goes, then the chats.
+  await revokeAllSessions(user._id);
+  await unlinkAllChats(user._id);
 }
 
 export async function login({ email, password }, client) {

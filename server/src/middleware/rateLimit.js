@@ -16,8 +16,8 @@ export const authRateLimit = rateLimit({
 });
 
 // Gmail stops an account that sends too many mails to fake or mistyped addresses, and then nobody can sign up, so the
-// code mails have their own per-IP guard (docs/02 §2.12.1): 10 requests per IP per 15 minutes on register and resend
-// (password/forgot joins them later), successful ones included, which is why there is no skipSuccessfulRequests.
+// code mails have their own per-IP guard (docs/02 §2.12.1): 10 requests per IP per 15 minutes on register, resend and
+// password/forgot, successful ones included, which is why there is no skipSuccessfulRequests.
 // Off when codes are off (production without the Gmail settings), because then nothing is mailed. 429 says when to retry.
 // ponytail: in each instance's memory, best-effort like authRateLimit.
 export const mailRateLimit = rateLimit({
