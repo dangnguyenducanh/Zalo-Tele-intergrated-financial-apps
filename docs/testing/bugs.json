@@ -658,12 +658,12 @@
     "expected": "The suite passes however busy the machine is.",
     "actual": "3 of 3 loaded runs failed, 1 to 4 tests each; the failing screens still showed the loading spinner.",
     "rootCause": "The first test of each file opened a lazy route, so that page's code was loaded and compiled inside the test, under the 1 s findBy timer.",
-    "fix": "preloadRoutes(routes) in client/src/test/renderApp.tsx calls every route's lazy() and is awaited at import, before any test starts. One shared place; no sleeps, no per-test timeouts, no app code changed.",
+    "fix": "preloadRoutes(routes) in client/src/test/renderApp.tsx calls every route's lazy() and is awaited at import, before any test starts. Second part (found by the review of PR #140): on a loaded machine a fully rendered page and the whole-app tests also took longer than the defaults, so client/src/setupTests.ts sets one configure({ asyncUtilTimeout: 5000 }) and client/vite.config.ts one testTimeout: 30000. One shared place each; no sleeps, no per-test timeouts, no app code changed.",
     "filesOrCommit": "client/src/test/renderApp.tsx, client/src/test/renderApp.test.tsx; T80 (#137), PR #140",
     "regressionTest": "TC-NF-24",
     "status": "Fixed (awaiting retest)",
     "dateClosed": "",
-    "evidence": "PR #140: with 48 busy-loop processes the 4 files failed 3 of 3 runs before the fix and passed 5 of 5 after it (77/77)"
+    "evidence": "PR #140: the 4 files with 48 busy-loop processes failed 3 of 3 runs before the fix; with preloadRoutes alone 2 of 5 runs still failed (96 processes: 3 of 3); with the timeouts too see the PR's numbers"
   },
   {
     "id": "BUG-044",

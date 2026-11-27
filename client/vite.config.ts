@@ -17,6 +17,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
+    testTimeout: 30_000, // BUG-043: 5 s (default) is too short for a whole-app test on a loaded machine (many agents in parallel); a passing test is not slower
     setupFiles: ['./src/setupTests.ts'],
     reporters: ['default', 'junit'],
     outputFile: { junit: '../test-results/client-vitest.xml' },
