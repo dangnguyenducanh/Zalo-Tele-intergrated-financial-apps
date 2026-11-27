@@ -20,7 +20,10 @@ export type TransactionInput = Pick<Transaction, 'type' | 'amount' | 'walletId' 
 
 // POST /transactions/parse: one draft per line that has an amount. The ids are null when the user has no
 // wallet, or no fallback category of that type.
-export type ParsedDraft = Omit<TransactionInput, 'walletId' | 'categoryId'> & { walletId: string | null; categoryId: string | null };
+// hints: what to double-check before saving (docs/02 §2.11.2, A6), absent when there is nothing: an amount `times` the
+// category's usual (median) one, or a repeat of the same amount and category in the last 10 minutes.
+export type DraftHint = { code: 'big'; times: number; median: number } | { code: 'duplicate' };
+export type ParsedDraft = Omit<TransactionInput, 'walletId' | 'categoryId'> & { walletId: string | null; categoryId: string | null; hints?: DraftHint[] };
 // noAmountLines: line numbers (1 = first) that have no amount; truncated: the text has more than 10 lines.
 // question: the server read the text as a question, not money (docs/02 §2.11.1); the drafts are then empty and nothing may be saved.
 export type ParseResult = { drafts: ParsedDraft[]; noAmountLines: number[]; truncated: boolean; question?: true };

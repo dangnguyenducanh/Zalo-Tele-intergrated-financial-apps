@@ -10,15 +10,18 @@ import { User } from '../models/User.js';
 import { Wallet } from '../models/Wallet.js';
 import { maySend } from '../services/channelUsage.js';
 import { createClaimToken, redeemLinkCode } from '../services/chatLinks.js';
-import { listBudgets, monthProgress, PACE_FROM_DAY } from '../services/budgets.js';
+import { budgetWarning, listBudgets, monthProgress, PACE_FROM_DAY } from '../services/budgets.js';
+import { learnKeyword, topExpenseCategories } from '../services/categories.js';
+import { draftHints } from '../services/draftHints.js';
 import { createReceiptDraft } from '../services/receipts.js';
 import { daily, monthSummary } from '../services/stats.js';
-import { confirmTransaction, parseTransactions, updateTransaction } from '../services/transactions.js';
+import { confirmTransaction, deleteTransaction, parseTransactions, restoreTransaction, updateTransaction } from '../services/transactions.js';
 import { updateMe } from '../services/users.js';
 import { AppError } from '../utils/AppError.js';
 import { normalize } from '../utils/normalize.js';
 import { monthKey, vnParts } from '../utils/vnTime.js';
 import { classify } from './ask.js';
+import { loneSplit, readFixes, splitBill } from './parser.js';
 import en from './messages.en.js';
 import vi from './messages.vi.js';
 
@@ -77,7 +80,7 @@ function readCommand(text) {
 // Without a link, a valid "/start CODE" or "/link CODE" links the chat; anything else gets a claim link, the only
 // thing ever stored for an unlinked chat (no message text, no transaction).
 // For a linked, active chat the first match wins, in the order of docs/02 §2.11.1: a photo, "/hoi", any other command,
-// "ok" / "huy", then classify(): a question or a capture. A question never reaches createDrafts.
+// "ok" / "huy" / "hoàn tác" / "undo" / "khôi phục" / on Zalo a category name typed under a waiting fallback draft / a lone "chia N" (reserved words), then classify(): a question or a capture. A question never reaches createDrafts.
 export async function handleMessage(adapter, message) {
   const link = await ChatLink.findOne({ platform: adapter.platform, platformUserId: message.platformUserId });
   const [command, arg] = readCommand(message.text);
@@ -88,9 +91,16 @@ export async function handleMessage(adapter, message) {
   if (user.status === 'locked') return reply(adapter, message.chatId, messagesFor(user.language).locked); // admin lock covers the bots too
   if (message.photo) return readReceipt(adapter, link, user.language, message);
   if (command === 'hoi') return answerQuestion(adapter, message.chatId, user.language);
+  if (command === 'sua') return fixLast(adapter, link, user.language, message.chatId, arg);
   if (command) return reply(adapter, message.chatId, await runCommand(link, user, command, arg));
   const word = normalize(message.text);
   if (word === 'ok' || word === 'huy') return reply(adapter, message.chatId, await answerPending(link, word), 'capture');
+  if (word === 'hoan tac' || word === 'undo') return reply(adapter, message.chatId, await undoLast(link), 'capture');
+  if (word === 'khoi phuc') return reply(adapter, message.chatId, await restoreLast(link), 'capture');
+  const typed = adapter.categoryOffer === 'type' && (await typedCategory(adapter, link, user.language, message)); // a typed category name answers the offer (A7), before classify and the help reply
+  if (typed) return;
+  const people = loneSplit(message.text); // before classify, so a follow-up never reads "chia 3" as a question (D11)
+  if (people) return splitPending(adapter, link, user.language, message.chatId, people);
   // followUp is false until the assistant's answers are remembered per chat (T50).
   if (classify(message.text, { followUp: false }) === 'question') return answerQuestion(adapter, message.chatId, user.language);
   return createDrafts(adapter, link, user.language, message);
@@ -102,12 +112,14 @@ function answerQuestion(adapter, chatId, language) {
   return reply(adapter, chatId, messagesFor(language).help);
 }
 
-// A button press (Telegram and WhatsApp ✅ / ❌) → { ok, text }. Only the presser's own drafts can be touched.
-export async function handleButton(platform, platformUserId, action, transactionId) {
+// A button press (Telegram and WhatsApp ✅ / ❌, Telegram's category tap) → { ok, text }. Only the presser's own drafts can be touched.
+// A category tap ('learn') also returns `draft` ({ id, language }): the draft stays waiting, so its message gets its ✅ / ❌ back.
+export async function handleButton(platform, platformUserId, action, transactionId, categoryId) {
   const link = await ChatLink.findOne({ platform, platformUserId });
   if (!link) return { ok: false, text: inBothLanguages((m) => [pleaseLink(m)]) }; // a button's short notice can't be tapped
   const user = await User.findById(link.userId).lean();
   if (user.status === 'locked') return { ok: false, text: messagesFor(user.language).locked };
+  if (action === 'learn') return tapCategory(link, user.language, transactionId, categoryId);
   return action === 'confirm' ? confirm(link, transactionId) : discard(link, transactionId);
 }
 
@@ -235,13 +247,16 @@ async function createDrafts(adapter, link, language, message) {
   // Zalo has no ✏️ button, so a reply that is only an amount ("55k") corrects the waiting draft (docs/02 §2.4).
   if (adapter.platform === 'zalo' && drafts.length === 1 && drafts[0].note === '') {
     const pending = await pendingDraft(link);
-    if (pending) return correctDraft(adapter, link, language, message.chatId, pending, drafts[0].amount);
+    if (pending) return correctDraft(adapter, link, language, message.chatId, pending, { amount: drafts[0].amount }, drafts[0].guessed);
   }
   const saved = [];
-  for (const [i, draft] of drafts.entries()) {
+  const guessed = new Map(); // draft id → the parser read a bare number as thousands (the draft check is stricter then)
+  for (const [i, { guessed: bare, ...draft }] of drafts.entries()) {
     const chatRef = { platform: adapter.platform, chatId: message.chatId, messageId: `${message.messageId}:${i + 1}` };
     try {
-      saved.push(await Transaction.create({ ...draft, userId: link.userId, status: 'draft', source: adapter.platform, chatRef }));
+      const transaction = await Transaction.create({ ...draft, userId: link.userId, status: 'draft', source: adapter.platform, chatRef });
+      guessed.set(transaction.id, bare);
+      saved.push(transaction);
     } catch (err) {
       if (err.code === 11000) continue; // delivered again: this line's draft exists already
       throw err;
@@ -251,8 +266,8 @@ async function createDrafts(adapter, link, language, message) {
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: saved.at(-1)._id });
   let failed = null;
   for (const transaction of saved) {
-    const text = m.draft(await describe(transaction, m));
-    await adapter.sendDraft(message.chatId, { id: transaction.id, text }, language).catch((err) => {
+    const draft = await draftMessage(adapter, transaction, m, { guessed: guessed.get(transaction.id) });
+    await adapter.sendDraft(message.chatId, draft, language).catch((err) => {
       failed ??= err; // still reply to the other lines
     });
   }
@@ -265,13 +280,107 @@ async function createDrafts(adapter, link, language, message) {
   if (failed) throw failed; // the webhook logs it
 }
 
-// A Zalo correction: the new amount goes through the same service as the web Bot inbox edit (PATCH /transactions/:id).
-// Note, category, wallet and date stay. The draft is sent again, and "ok" / "huy" still act on it.
-async function correctDraft(adapter, link, language, chatId, draft, amount) {
+// A Zalo correction, or a lone "chia N": `changes` (an amount, or an amount and a note) go through the same service as the
+// web Bot inbox edit (PATCH /transactions/:id). Category, wallet and date stay. The draft is sent again, checked again
+// for a typo or a repeat (A6), and "ok" / "huy" still act on it.
+async function correctDraft(adapter, link, language, chatId, draft, changes, guessed = false) {
   const m = messagesFor(language);
-  const updated = await updateTransaction(link.userId, draft._id, { amount });
+  const updated = await updateTransaction(link.userId, draft._id, changes);
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: updated._id });
-  return adapter.sendDraft(chatId, { id: updated.id, text: m.draft(await describe(updated, m)) }, language);
+  return adapter.sendDraft(chatId, await draftMessage(adapter, updated, m, { guessed }), language);
+}
+
+// "chia 3" alone (docs/02 §2.11.2, A5): the waiting draft, a receipt draft too, becomes one share of its amount.
+// With no draft waiting nothing changes, and the reply says so.
+async function splitPending(adapter, link, language, chatId, people) {
+  const draft = await pendingDraft(link);
+  if (!draft) return reply(adapter, chatId, messagesFor(language).nothingToSplit, 'capture');
+  const { amount, note } = splitBill(draft.amount, people, draft.note);
+  return correctDraft(adapter, link, language, chatId, draft, { amount, note });
+}
+
+// The draft's one line of text, then what to double-check (A6) in the draft message itself, so Zalo pays for no extra send.
+// A failed check never costs the draft its reply: it is only advice.
+async function draftText(transaction, m, { guessed = false, lines = [] } = {}) {
+  const hints = await draftHints(transaction.userId, { amount: transaction.amount, categoryId: transaction.categoryId, id: transaction._id }, { guessed }).catch((err) => {
+    console.error('draftHints failed', err);
+    return [];
+  });
+  const name = hints.length > 0 && categoryName(await Category.findById(transaction.categoryId).lean(), m);
+  const hintLines = hints.map((hint) => (hint.code === 'big' ? m.hintBig({ name, times: hint.times, median: money(hint.median, m) }) : m.hintDuplicate({ name })));
+  return [m.draft(await describe(transaction, m)), ...lines, ...hintLines].join('\n');
+}
+
+// What an adapter's sendDraft gets: { id, text, offers }. `offers` are the categories offered under a fallback draft (A7), [] otherwise.
+async function draftMessage(adapter, transaction, m, { guessed = false, lines = [] } = {}) {
+  const offers = await categoryOffers(adapter, transaction).catch((err) => {
+    console.error('categoryOffers failed', err); // only advice: the draft still goes out
+    return [];
+  });
+  const names = offers.map((category) => categoryName(category, m));
+  const offerLine = offers.length > 0 && (adapter.categoryOffer === 'tap' ? m.offerTap : m.offerType(names.join(', ')));
+  const text = await draftText(transaction, m, { guessed, lines: [...lines, offerLine].filter(Boolean) });
+  return { id: transaction.id, text, offers: offers.map((category, i) => ({ id: String(category._id), name: names[i] })) };
+}
+
+// A7: an expense draft the parser could not file (it is in the fallback "Khác") offers the user's 3 most used categories.
+// Only on platforms that can answer: adapter.categoryOffer is 'tap' (Telegram buttons) or 'type' (Zalo); WhatsApp has neither yet.
+async function categoryOffers(adapter, transaction) {
+  if (!adapter.categoryOffer || transaction.type !== 'expense' || !(await isFallbackDraft(transaction))) return [];
+  return topExpenseCategories(transaction.userId);
+}
+
+const isFallbackDraft = async (transaction) => Boolean((await Category.findById(transaction.categoryId).lean())?.isFallback);
+
+// A7: the waiting draft goes to `category` and that category learns the note's first word. The write only matches a draft that
+// still sits in the fallback it was read in, so two taps close together cannot both win: the late one changes nothing, learns
+// nothing and gets null. The caller has checked `category` (own, same type, not the fallback), so no reference check is needed.
+async function moveToCategory(link, m, draft, category) {
+  const updated = await Transaction.findOneAndUpdate(
+    { _id: draft._id, userId: link.userId, status: 'draft', deletedAt: null, categoryId: draft.categoryId },
+    { categoryId: category._id },
+    { returnDocument: 'after' },
+  );
+  if (!updated) return null;
+  const name = categoryName(category, m);
+  const word = await learnKeyword(link.userId, category._id, draft.note);
+  return { updated, line: word ? m.learned({ name, word }) : m.moved({ name }) };
+}
+
+// Telegram's `k:<draft>:<category>` tap. The category must be one of this user's own, of the draft's type and not the fallback,
+// and the draft must still sit in the fallback: a tap never moves a draft that has a category already, and never reaches another user's data.
+async function tapCategory(link, language, transactionId, categoryId) {
+  const m = messagesFor(language);
+  const draft = await Transaction.findOne({ _id: transactionId, userId: link.userId, status: 'draft', deletedAt: null });
+  const category = draft && (await Category.findOne({ _id: categoryId, userId: link.userId, type: draft.type, isFallback: false, deletedAt: null }));
+  if (!category) return { ok: false, text: m.notFound };
+  if (!(await isFallbackDraft(draft))) return { ok: false, text: m.hasCategory };
+  const moved = await moveToCategory(link, m, draft, category);
+  if (!moved) return { ok: false, text: m.hasCategory }; // another tap got there first
+  const { updated, line } = moved;
+  await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: updated._id });
+  return { ok: true, text: await draftText(updated, m, { lines: [line] }), draft: { id: updated.id, language } };
+}
+
+// Zalo: a message that is exactly one of the user's category names, while a fallback draft waits, answers the offer.
+// false when it is not that (the message then goes on to the other rules).
+async function typedCategory(adapter, link, language, message) {
+  const draft = await pendingDraft(link);
+  if (!draft || draft.type !== 'expense' || !(await isFallbackDraft(draft))) return false;
+  const typed = normalize(message.text);
+  const categories = await Category.find({ userId: link.userId, type: draft.type, isFallback: false, deletedAt: null }).lean();
+  const category = categories.find((c) => [c.name, c.names?.vi, c.names?.en].some((name) => name && normalize(name) === typed));
+  if (!category) return false;
+  const m = messagesFor(language);
+  const moved = await moveToCategory(link, m, draft, category);
+  if (!moved) {
+    await reply(adapter, message.chatId, m.hasCategory, 'capture'); // another answer got there first
+    return true;
+  }
+  const { updated, line } = moved;
+  await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: updated._id });
+  await adapter.sendDraft(message.chatId, await draftMessage(adapter, updated, m, { lines: [line] }), language);
+  return true;
 }
 
 // A receipt photo (docs/02 §2.6): "Reading receipt…", then KIE (about 20 s), then a draft with its buttons that
@@ -296,10 +405,9 @@ async function readReceipt(adapter, link, language, message) {
     throw err; // anything else (a failed download, a bug) is logged by the webhook
   }
   await ChatLink.updateOne({ _id: link._id }, { pendingTransactionId: transaction._id });
-  const lines = [m.draft(await describe(transaction, m))];
   const { items, reconciled } = transaction.receipt;
-  if (items.length > 0) lines.push(m.receiptItems({ count: items.length, reconciled }));
-  await adapter.sendDraft(message.chatId, { id: transaction.id, text: lines.join('\n') }, language);
+  const lines = items.length > 0 ? [m.receiptItems({ count: items.length, reconciled })] : [];
+  await adapter.sendDraft(message.chatId, await draftMessage(adapter, transaction, m, { lines }), language);
 }
 
 // Confirm a draft through the same service as POST /transactions/:id/confirm, plus the budget warning line.
@@ -314,9 +422,72 @@ async function confirm(link, transactionId) {
     throw err;
   }
   await clearPending(link, transactionId);
+  await ChatLink.updateOne({ _id: link._id }, { lastConfirmedId: result.transaction._id, lastConfirmedAt: new Date() }); // for "/sua" and "hoàn tác"
   const lines = [m.saved(await describe(result.transaction, m))];
   if (result.budgetWarning) lines.push(await warningLine(result.budgetWarning, m));
   return { ok: true, text: lines.join('\n') };
+}
+
+// What "/sua" and "hoàn tác" may touch: a transaction this chat confirmed in the last 15 minutes (docs/02 §2.11.2, A4).
+const FIX_WINDOW_MS = 15 * 60 * 1000;
+
+// The waiting draft (the same one "ok" / "huy" act on), else this chat's own last confirm while it is under 15 minutes
+// old, still saved and not deleted. null when there is neither. Always this link's own user: the stored id is
+// only a pointer, and the query adds userId.
+async function fixTarget(link) {
+  const draft = await pendingDraft(link);
+  if (draft) return draft;
+  if (!link.lastConfirmedId || Date.now() - link.lastConfirmedAt > FIX_WINDOW_MS) return null;
+  return Transaction.findOne({ _id: link.lastConfirmedId, userId: link.userId, status: 'confirmed', deletedAt: null });
+}
+
+// "/sua <changes>": the amount, wallet alias, date or category keyword in the text replace those of the target (see
+// fixTarget); the note stays. A draft is sent again with its buttons, like a Zalo correction. A saved transaction gets one
+// line, and after an amount change on an expense the budget warning runs again. The same service as the web edit.
+async function fixLast(adapter, link, language, chatId, text) {
+  const m = messagesFor(language);
+  const target = await fixTarget(link);
+  if (!target) return reply(adapter, chatId, m.nothingToFix, 'capture');
+  const [categories, wallets] = await Promise.all([
+    Category.find({ userId: link.userId, deletedAt: null, type: target.type }).lean(),
+    Wallet.find({ userId: link.userId, deletedAt: null, archived: false }).lean(),
+  ]);
+  const { changes, guessed } = readFixes(text, { categories, wallets });
+  if (Object.keys(changes).length === 0) return reply(adapter, chatId, m.help, 'capture'); // nothing recognised: no change
+  if (target.status === 'draft') return correctDraft(adapter, link, language, chatId, target, changes, guessed);
+  const updated = await updateTransaction(link.userId, target._id, changes);
+  const lines = [m.fixed(await describe(updated, m))];
+  const warning = changes.amount && updated.type === 'expense' && (await budgetWarning(link.userId, updated.categoryId, monthKey(updated.occurredAt)));
+  if (warning) lines.push(await warningLine(warning, m));
+  return reply(adapter, chatId, lines.join('\n'), 'capture');
+}
+
+// "hoàn tác" / "undo": the last transaction this chat confirmed is soft-deleted, as the web's undo snackbar does. The pointer stays,
+// so "khôi phục" can bring it back; once it is deleted a second "hoàn tác" finds nothing.
+async function undoLast(link) {
+  const m = await messagesOf(link);
+  const last = link.lastConfirmedId && (await Transaction.findOne({ _id: link.lastConfirmedId, userId: link.userId, deletedAt: null }));
+  if (!last) return m.nothingToUndo;
+  try {
+    await deleteTransaction(link.userId, last._id);
+  } catch (err) {
+    if (err instanceof AppError) return m.nothingToUndo; // deleted on the web between the two steps
+    throw err;
+  }
+  return m.undone(await describe(last, m));
+}
+
+// "khôi phục": the last transaction this chat confirmed, when it was undone, is back. Refused (nothing to restore) when it
+// is not deleted, or when its wallet or category was deleted since.
+async function restoreLast(link) {
+  const m = await messagesOf(link);
+  try {
+    if (!link.lastConfirmedId) return m.nothingToRestore;
+    return m.restored(await describe(await restoreTransaction(link.userId, link.lastConfirmedId), m));
+  } catch (err) {
+    if (err instanceof AppError) return m.nothingToRestore;
+    throw err;
+  }
 }
 
 // Discard = soft delete, and only of a draft: a saved transaction is changed on the web.

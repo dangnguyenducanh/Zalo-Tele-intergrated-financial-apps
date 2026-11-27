@@ -646,5 +646,41 @@
     "status": "Closed",
     "dateClosed": "2026-11-26",
     "evidence": "retest after the 2026-11-26 restart: charter-runs/2026-11-26/manual-T32-receipts/receipt.mp4 (staging draft 116.000) ; recurs until a named tunnel replaces the quick tunnel"
+  },
+  {
+    "id": "BUG-043",
+    "dateFound": "2026-11-27",
+    "foundBy": "verify-staging-cd1b982 (client suite on a busy machine)",
+    "feature": "Non-functional",
+    "severity": "S3 Minor",
+    "title": "Client unit tests time out when the machine is busy (findBy* gives up at 1 s with the loading spinner still showing)",
+    "stepsToReproduce": "1. Run the client suite while many processes use the CPU (e.g. 48 busy-loop node processes), or while several agents run suites in parallel.\n2. App, TransactionsPage, DashboardPage and BotInboxPage tests fail on a findByRole; a rerun on an idle machine passes.",
+    "expected": "The suite passes however busy the machine is.",
+    "actual": "3 of 3 loaded runs failed, 1 to 4 tests each; the failing screens still showed the loading spinner.",
+    "rootCause": "The first test of each file opened a lazy route, so that page's code was loaded and compiled inside the test, under the 1 s findBy timer.",
+    "fix": "preloadRoutes(routes) in client/src/test/renderApp.tsx calls every route's lazy() and is awaited at import, before any test starts. Second part (found by the review of PR #140): on a loaded machine a fully rendered page and the whole-app tests also took longer than the defaults, so client/src/setupTests.ts sets one configure({ asyncUtilTimeout: 5000 }) and client/vite.config.ts one testTimeout: 30000. One shared place each; no sleeps, no per-test timeouts, no app code changed.",
+    "filesOrCommit": "client/src/test/renderApp.tsx, client/src/test/renderApp.test.tsx; T80 (#137), PR #140",
+    "regressionTest": "TC-NF-24",
+    "status": "Fixed (awaiting retest)",
+    "dateClosed": "",
+    "evidence": "PR #140: the 4 files with 48 busy-loop processes failed 3 of 3 runs before the fix; with preloadRoutes alone 2 of 5 runs still failed (96 processes: 3 of 3); with the timeouts too see the PR's numbers"
+  },
+  {
+    "id": "BUG-044",
+    "dateFound": "2026-11-27",
+    "foundBy": "Staging charter charter-T41-web (2026-11-27)",
+    "feature": "F13 Quick add",
+    "severity": "S3 Minor",
+    "title": "'/hoi phở 45k' typed in web QuickAdd saves a 45.000 ₫ draft with the note '/hoi phở' instead of being a question",
+    "stepsToReproduce": "1. Open QuickAdd on the web.\n2. Type '/hoi phở 45k' (or '/hỏi …'), see the preview, press Enter.\n3. Or POST /api/transactions/parse {\"text\": \"/hoi phở 45k\"}.",
+    "expected": "A question like in the chat bots (router row 3): no preview, nothing saved; parse answers question: true with no drafts.",
+    "actual": "A 45.000 ₫ draft with the note '/hoi phở' was previewed and saved.",
+    "rootCause": "The web parse route runs only classify (docs/02 §2.11.1), and classify did not know the chat command: '/hoi' is handled by the bots' router (readCommand in bot/core.js) before classify ever runs, so a text with an amount fell to rule 5 (capture).",
+    "fix": "classify has rule 1b: a first word that is the /hoi command (case, accents and NFC/NFD ignored, same normalizer as readCommand; '/hoi@bot' too; '/hoiphở' is another word) is a question. Documented in docs/02 §2.11.1 and docs/07 §7.9.4.",
+    "filesOrCommit": "server/src/bot/ask.js, docs/02 §2.11.1, docs/07 §7.9.4; T81 (#138)",
+    "regressionTest": "TC-F14-57, TC-F14-58",
+    "status": "Fixed (awaiting retest)",
+    "dateClosed": "",
+    "evidence": "found: charter-runs/2026-11-27/charter-T41-web/ (run.log parse lines, results.json) ; fix: PR pending"
   }
 ]

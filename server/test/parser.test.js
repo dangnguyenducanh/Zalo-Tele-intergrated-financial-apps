@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { parseLine, parseText } from '../src/bot/parser.js';
+import { parseLine, parseText, readLine } from '../src/bot/parser.js';
 
 // A user's categories as copied from the default templates (docs/03 §3.5), plus one custom category.
 const categories = [
@@ -289,5 +289,56 @@ describe('TC-F14-26 more numbers that are never an amount: a day count, a count 
 
   test('TC-F14-26 one result per line: a line with only a day count is null, its neighbours are read', () => {
     expect(parseText('chi tiêu 7 ngày qua\nphở 45k\ntop 3 cafe\ngrab 32k', ctx).map((d) => d?.amount ?? null)).toEqual([null, 45_000, null, 32_000]);
+  });
+});
+
+describe('TC-F14-50 split the bill: "chia N" (docs/02 §2.11.2 A5)', () => {
+  test.each([
+    ['cơm 1tr2 chia 4', 300_000, 'cơm (1.200.000 ₫ ÷ 4)'],
+    ['cơm nhà hàng 1tr2 chia 4', 300_000, 'cơm nhà hàng (1.200.000 ₫ ÷ 4)'],
+    ['100k chia 3', 34_000, '(100.000 ₫ ÷ 3)'], // 33.333 rounds up to the next 1.000
+    ['chia 3 cơm 100k', 34_000, 'cơm (100.000 ₫ ÷ 3)'], // the words can come first
+    ['cơm 90k chia 2', 45_000, 'cơm (90.000 ₫ ÷ 2)'],
+    ['cơm 100k chia 2', 50_000, 'cơm (100.000 ₫ ÷ 2)'],
+    ['cơm 1tr chia 50', 20_000, 'cơm (1.000.000 ₫ ÷ 50)'], // the top of the range
+    ['cơm 1,245tr chia 3', 415_000, 'cơm (1.245.000 ₫ ÷ 3)'],
+    ['cơm 1.245.000 chia 3', 415_000, 'cơm (1.245.000 ₫ ÷ 3)'],
+    ['CHIA 4 cơm 1tr2', 300_000, 'cơm (1.200.000 ₫ ÷ 4)'], // case is ignored
+    ['cơm 5k chia 50', 1_000, 'cơm (5.000 ₫ ÷ 50)'], // never below 1.000 ₫
+  ])('"%s" → %i with the note "%s"', (text, amount, note) => {
+    expect(parse(text)).toMatchObject({ amount, note });
+  });
+
+  test('the N is never an amount: it is read before the amount, so a bare "4" does not beat or join the total', () => {
+    expect(parse('cơm chia 4 1tr2')?.amount).toBe(300_000);
+    expect(parse('chia 4')).toBeNull(); // only a divisor: no amount
+  });
+
+  test.each([
+    ['cơm 1tr2 chia 1', 'cơm chia 1'],
+    ['cơm 1tr2 chia 51', 'cơm chia 51'],
+    ['cơm 1tr2 chia 0', 'cơm chia 0'],
+    ['cơm 1tr2 chia 4.5', 'cơm chia 4.5'], // not a whole count
+  ])('"%s" is not a split: the amount stays 1.200.000 ₫', (text, note) => {
+    expect(parse(text)).toMatchObject({ amount: 1_200_000, note });
+  });
+
+  test('the split keeps the type, category, wallet and date, and a multi-line message splits per line', () => {
+    expect(parse('+lương 1tr chia 2 mm hôm qua')).toMatchObject({ type: 'income', categoryId: 'salary', walletId: 'momo', amount: 500_000, occurredAt: yesterday });
+    expect(parseText('cơm 1tr2 chia 4\nphở 45k\ngrab 100k chia 3', ctx).map((d) => d?.amount)).toEqual([300_000, 45_000, 34_000]);
+  });
+
+  test('the note with the split label stays within 200 characters', () => {
+    const { note } = parse(`${'a'.repeat(250)} 1tr2 chia 4`);
+    expect(note).toHaveLength(200);
+    expect(note.endsWith('(1.200.000 ₫ ÷ 4)')).toBe(true);
+  });
+
+  test('the parser says whether the amount was a guess, so the draft check can use 3× instead of 5×', () => {
+    const read = (text) => readLine(text, ctx);
+    expect(read('phở 45')).toMatchObject({ amount: 45_000, guessed: true });
+    expect(read('phở 45k')).toMatchObject({ amount: 45_000, guessed: false });
+    expect(read('cơm 120 chia 4')).toMatchObject({ amount: 30_000, guessed: true }); // the total was a guess
+    expect(parse('phở 45')).not.toHaveProperty('guessed'); // parseLine keeps its shape
   });
 });

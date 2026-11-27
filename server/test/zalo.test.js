@@ -5,12 +5,16 @@ import { setupServer } from 'msw/node';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import app from '../src/app.js';
+import enText from '../src/bot/messages.en.js';
 import viText from '../src/bot/messages.vi.js';
+import { Budget } from '../src/models/Budget.js';
+import { Category } from '../src/models/Category.js';
 import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
 import { Transaction } from '../src/models/Transaction.js';
 import { User } from '../src/models/User.js';
+import { Wallet } from '../src/models/Wallet.js';
 import { monthKey } from '../src/utils/vnTime.js';
 import recorded from './fixtures/kie-analyze.json' with { type: 'json' };
 import fixtures from './fixtures/zalo-events.json' with { type: 'json' };
@@ -295,6 +299,44 @@ test('TC-F8-20 Zalo: a reply with only an amount ("55k") corrects the pending dr
   expect(await Transaction.countDocuments({ amount: 40_000, status: 'draft' })).toBe(1);
 });
 
+test('TC-F14-51 Zalo: "chia 3" after a draft divides it, and the reply still ends with the "ok / huy / amount" hint', async () => {
+  await linkedUser();
+  await say('cơm nhà hàng 1tr2');
+  const draft = await Transaction.findOne().lean();
+
+  const split = await say('chia 4');
+  expect(split).toHaveLength(1);
+  expect(textOf(split[0])).toMatch(/300\.000.*cơm nhà hàng \(1\.200\.000 ₫ ÷ 4\)/);
+  expect(textOf(split[0]).endsWith(`\n${viText.replyHint}`)).toBe(true);
+  expect(await Transaction.find().lean()).toMatchObject([{ _id: draft._id, amount: 300_000, status: 'draft' }]);
+  expect((await ChatLink.findOne()).pendingTransactionId).toEqual(draft._id);
+
+  // With the draft saved, nothing waits: the same text says so and a "ok" has nothing to do either.
+  await say('ok');
+  expect(textOf((await say('chia 3'))[0])).toBe(viText.nothingToSplit);
+  expect(await Transaction.countDocuments({ amount: 100_000 })).toBe(0); // "chia 3" was not turned into a 3.000 ₫ draft
+  expect((await Transaction.findOne().lean()).amount).toBe(300_000);
+});
+
+test('TC-F14-55 Zalo: the check line sits between the draft and the reply hint, and a corrected amount ("300k") is checked again', async () => {
+  const owner = await linkedUser();
+  const transport = (await Category.findOne({ userId: owner.id, 'names.vi': 'Đi lại' }))._id;
+  await Transaction.insertMany(
+    [30_000, 30_000, 30_000, 30_000, 30_000].map((amount) => ({
+      userId: owner.id, walletId: owner.defaultWalletId, categoryId: transport, type: 'expense', amount, occurredAt: new Date(Date.now() - 24 * 60 * 60 * 1000), status: 'confirmed',
+    })),
+  );
+
+  const first = textOf((await say('grab 32k'))[0]).split('\n');
+  expect(first).toHaveLength(2); // the draft, then the reply hint: nothing to warn about
+  expect(first[1]).toBe(viText.replyHint);
+
+  const corrected = textOf((await say('300k'))[0]).split('\n');
+  expect(corrected).toHaveLength(3);
+  expect(corrected[1]).toMatch(/gấp 10 lần.*Đi lại/);
+  expect(corrected[2]).toBe(viText.replyHint);
+});
+
 test('TC-F8-21 Zalo: after a multi-line message, each "ok"/"huy" reaches the next waiting draft, newest first (BUG-028)', async () => {
   await linkedUser();
   await say('an sang 30k\ntra sua 40k');
@@ -525,4 +567,150 @@ test('TC-F14-30 /dubao and /month give a Zalo chat the same pace as Telegram, in
   expect(plain(textOf((await say('/month'))[0]))).toContain('Ngân sách: 89% (7.100.000 ₫ / 8.000.000 ₫) · tối đa 150.000 ₫/ngày');
   expect(textOf((await say('/help'))[0])).toContain('/dubao');
   expect(await Transaction.countDocuments()).toBe(2); // only the two spendings seedPaceMonth() wrote: a forecast is not a draft
+});
+
+// docs/02 §2.11.2 A4. The bot's "now" is the real clock, so a test that waits 10 or 20 minutes moves only Date.
+const MINUTE = 60 * 1000;
+const inMinutes = (start, minutes) => vi.setSystemTime(new Date(start.getTime() + minutes * MINUTE));
+const confirmedGrab = async () => {
+  await say('grab 32k');
+  await say('ok');
+  return Transaction.findOne({ status: 'confirmed' });
+};
+
+test('TC-F14-80 /sua changes the waiting draft: amount, wallet alias, date and category keyword together; a text with none of them changes nothing', async () => {
+  const owner = await linkedUser();
+  const momo = await Wallet.create({ userId: owner.id, name: 'MoMo', type: 'ewallet', aliases: ['mm'] });
+  const fun = await Category.findOne({ userId: owner.id, 'names.vi': 'Giải trí' });
+  await say('grab 32k');
+  const draft = await Transaction.findOne();
+
+  const fixed = await say('/sua mm hôm qua 50k phim');
+  expect(fixed).toHaveLength(1);
+  expect(textOf(fixed[0])).toMatch(/50\.000.*Giải trí.*MoMo/); // the draft again, so "ok" / "huy" still act on it
+  expect(textOf(fixed[0]).endsWith(`\n${viText.replyHint}`)).toBe(true);
+  const after = await Transaction.findById(draft._id).lean();
+  expect(after).toMatchObject({ amount: 50_000, status: 'draft', walletId: momo._id, categoryId: fun._id });
+  const days = (Date.now() - after.occurredAt.getTime()) / (24 * 60 * MINUTE);
+  expect(days).toBeGreaterThan(0.99);
+  expect(days).toBeLessThan(1.01);
+  expect(after.note).toBe(draft.note); // the note stays
+
+  // Each part alone, in any case: "/SUA 70K", a wallet alone, a date alone.
+  await say('/SUA 70K');
+  expect((await Transaction.findById(draft._id)).amount).toBe(70_000);
+  await say('/sua tm');
+  expect((await Transaction.findById(draft._id)).walletId).toEqual(oid(owner.defaultWalletId));
+  await say('/sua 20/11');
+  expect((await Transaction.findById(draft._id)).occurredAt.toISOString()).toMatch(/^2026-11-(19|20)T/); // 20/11 in Vietnam time
+
+  // Nothing recognised (or nothing at all) is the help text and no change.
+  const before = await Transaction.findById(draft._id).lean();
+  for (const text of ['/sua xin chào', '/sua']) expect(textOf((await say(text))[0])).toBe(viText.help);
+  expect(await Transaction.findById(draft._id).lean()).toEqual(before);
+  expect(await Transaction.countDocuments()).toBe(1); // never a second draft
+});
+
+test('TC-F14-81 /sua with no draft waiting edits the transaction this chat confirmed 10 minutes ago, not 20; a waiting draft comes first; a budget warning follows an amount change', async () => {
+  const owner = await linkedUser();
+  const transport = await Category.findOne({ userId: owner.id, 'names.vi': 'Đi lại' });
+  await Budget.create({ userId: owner.id, month: monthKey(new Date()), categoryId: transport._id, limit: 100_000 });
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(new Date());
+    const start = new Date();
+    const saved = await confirmedGrab();
+    expect(await ChatLink.findOne()).toMatchObject({ lastConfirmedId: saved._id, lastConfirmedAt: start });
+
+    inMinutes(start, 10);
+    const fixed = textOf((await say('/sua 90k'))[0]);
+    expect(fixed).toMatch(/^✏️ Đã sửa: Chi 90\.000.*Đi lại/);
+    expect(fixed).toContain('Ngân sách "Đi lại" đã dùng 90%'); // the budget warning runs again after an amount change
+    expect(await Transaction.findById(saved._id)).toMatchObject({ amount: 90_000, status: 'confirmed' });
+    expect(textOf((await say('/sua hôm qua'))[0])).not.toContain('Ngân sách'); // only an amount change warns
+
+    inMinutes(start, 20);
+    expect(textOf((await say('/sua 10k'))[0])).toBe(viText.nothingToFix);
+    expect((await Transaction.findById(saved._id)).amount).toBe(90_000);
+
+    // A waiting draft is the target, whatever was confirmed before.
+    await say('phở 45k');
+    await say('/sua 50k');
+    expect(await Transaction.findOne({ status: 'draft' })).toMatchObject({ amount: 50_000 });
+    expect((await Transaction.findById(saved._id)).amount).toBe(90_000);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('TC-F14-82 "hoàn tác" (or "undo") soft-deletes the last confirmed, "khôi phục" brings it back; with nothing to act on each says so', async () => {
+  await linkedUser();
+  expect(textOf((await say('hoàn tác'))[0])).toBe(viText.nothingToUndo);
+  expect(textOf((await say('khôi phục'))[0])).toBe(viText.nothingToRestore);
+
+  const saved = await confirmedGrab();
+  const undone = textOf((await say('Hoàn Tác'))[0]);
+  expect(undone).toMatch(/Đã xoá.*32\.000.*khôi phục/);
+  expect((await Transaction.findById(saved._id)).deletedAt).toBeInstanceOf(Date);
+  expect(await Transaction.countDocuments()).toBe(1); // never read as a capture, a question or a new draft
+  expect(textOf((await say('undo'))[0])).toBe(viText.nothingToUndo); // it is already deleted
+
+  expect(textOf((await say('khôi phục'))[0])).toMatch(/Đã khôi phục.*32\.000/);
+  expect((await Transaction.findById(saved._id)).deletedAt).toBeNull();
+  expect(textOf((await say('khoi phuc'))[0])).toBe(viText.nothingToRestore); // already back
+
+  await say('undo'); // the English alias, and in English
+  expect((await Transaction.findById(saved._id)).deletedAt).toBeInstanceOf(Date);
+  await say('/lang en');
+  expect(textOf((await say('undo'))[0])).toBe(enText.nothingToUndo);
+  expect(textOf((await say('khôi phục'))[0])).toMatch(/^♻️ Restored: Expense/);
+  expect((await Transaction.findById(saved._id)).deletedAt).toBeNull();
+
+  // A real expense that starts with the same word is still a capture.
+  expect(textOf((await say('sửa xe 150k'))[0])).toMatch(/150,000/); // a draft, in English now
+  expect(await Transaction.findOne({ status: 'draft' })).toMatchObject({ amount: 150_000, note: 'sửa xe' });
+  expect(await Transaction.countDocuments()).toBe(2);
+});
+
+test("TC-F14-83 another chat's or another user's transactions are never fixed, undone or restored", async () => {
+  const owner = await linkedUser();
+  const other = await linkedUser(USER_B);
+  const mine = await confirmedGrab();
+  await say('cafe 20k', USER_B);
+  await say('ok', USER_B);
+  const theirs = await Transaction.findOne({ userId: other.id });
+
+  // B has a confirmed one and no draft: "/sua" and "hoàn tác" reach B's, never A's.
+  await say('/sua 99k', USER_B);
+  await say('hoàn tác', USER_B);
+  expect(await Transaction.findById(mine._id)).toMatchObject({ amount: 32_000, deletedAt: null, userId: oid(owner.id) });
+  expect(await Transaction.findById(theirs._id)).toMatchObject({ amount: 99_000 });
+  expect((await Transaction.findById(theirs._id)).deletedAt).toBeInstanceOf(Date);
+
+  // A second chat of A's own that confirmed nothing has nothing to fix or undo, though A's first chat did.
+  const second = await ChatLink.create({ userId: owner.id, platform: 'zalo', platformUserId: 'second', chatId: 'second' });
+  expect(second.lastConfirmedId).toBeNull();
+  expect(textOf((await say('hoàn tác', 'second'))[0])).toBe(viText.nothingToUndo);
+  expect(textOf((await say('/sua 1k', 'second'))[0])).toBe(viText.nothingToFix);
+  expect((await Transaction.findById(mine._id)).deletedAt).toBeNull();
+  expect((await Transaction.findById(mine._id)).amount).toBe(32_000);
+
+  // A pointer to someone else's transaction (a stale or tampered row) is not followed either.
+  await ChatLink.updateOne({ platformUserId: USER_B }, { lastConfirmedId: mine._id, lastConfirmedAt: new Date() });
+  await say('/sua 1k', USER_B);
+  await say('hoàn tác', USER_B);
+  expect(await Transaction.findById(mine._id)).toMatchObject({ amount: 32_000, deletedAt: null });
+});
+
+test('TC-F14-84 /help lists /sua, "hoàn tác" and "khôi phục" in both languages', async () => {
+  await linkedUser();
+  for (const text of [viText.help, enText.help]) {
+    expect(text).toContain('/sua');
+    expect(text).toContain('hoàn tác');
+    expect(text).toContain('khôi phục');
+  }
+  expect(enText.help).toContain('undo');
+  expect(textOf((await say('/help'))[0])).toBe(viText.help);
+  await say('/lang en');
+  expect(textOf((await say('/help'))[0])).toBe(enText.help);
 });

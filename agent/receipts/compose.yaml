@@ -1,0 +1,53 @@
+# The model and the receipt service on the GPU host (runbook: docs/06 §6.6). Both listen on loopback only.
+name: sochitieu-receipts
+
+services:
+  vllm:
+    image: vllm/vllm-openai@sha256:c1c9f6fd5c109ba7f0546a59f5b2f15fb87f64c77782e90a27b648b42a8e67c3
+    container_name: sochitieu-vllm # one fixed name, so a second copy (another 12 GB of GPU memory) cannot start
+    # The image's entrypoint is "vllm serve". Flags and pins: docs/06 §6.13.
+    command:
+      - Qwen/Qwen3.5-2B
+      - --revision
+      - 15852e8c16360a2fea060d615a32b45270f8a8fc
+      - --served-model-name
+      - qwen3.5-2b
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --max-model-len
+      - "16384"
+      - --gpu-memory-utilization
+      - "0.25"
+      - --max-num-seqs
+      - "8"
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - qwen3_coder
+      - --limit-mm-per-prompt
+      - '{"image": 1}'
+    ports:
+      - 127.0.0.1:8300:8000 # published on the host's loopback only
+    ipc: host
+    volumes:
+      - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface # the weights, downloaded once
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+    restart: unless-stopped
+
+  qwen-receipts:
+    build: .
+    image: sochitieu/qwen-receipts:local
+    container_name: qwen-receipts
+    network_mode: host # so 127.0.0.1 is the host's loopback, for vLLM and for the tunnel
+    command: ["--port", "${QWEN_RECEIPTS_PORT:-8290}"] # 8290 is KIE's port; another one for tests
+    environment:
+      - KIE_API_KEY # taken from the shell that runs compose, never from a file here
+      - VLLM_URL=${VLLM_URL:-http://127.0.0.1:8300/v1}
+    read_only: true # nothing, and so no receipt photo, can be written to the container's disk
+    tmpfs: [/tmp]
+    depends_on: [vllm]
+    restart: unless-stopped

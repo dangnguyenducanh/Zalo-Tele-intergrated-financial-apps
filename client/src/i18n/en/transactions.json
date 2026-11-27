@@ -92,6 +92,8 @@
     "question": "This is a question",
     "questionHint": "A question is not saved as a transaction: Enter and Save store nothing.",
     "tooManyLines": "Up to 10 lines can be saved at once. Save the rest afterwards.",
+    "hintBig": "{{times}} times your usual {{category}} amount ({{median}}). A typo?",
+    "hintDuplicate": "Same amount as a recent {{category}} entry in the last 10 minutes. Entered twice?",
     "saved": "Transactions saved: {{count}}"
   }
 }

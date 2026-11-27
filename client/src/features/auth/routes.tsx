@@ -5,4 +5,6 @@ import type { RouteObject } from 'react-router';
 export const authRoutes: RouteObject[] = [
   { path: '/login', lazy: async () => ({ Component: (await import('./LoginPage')).default }) },
   { path: '/register', lazy: async () => ({ Component: (await import('./RegisterPage')).default }) },
+  { path: '/forgot-password', lazy: async () => ({ Component: (await import('./ForgotPasswordPage')).default }) },
+  { path: '/verify-email', lazy: async () => ({ Component: (await import('./VerifyEmailPage')).default }) },
 ];

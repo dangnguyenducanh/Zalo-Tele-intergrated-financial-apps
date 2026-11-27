@@ -3,17 +3,24 @@ import { useTranslation } from 'react-i18next';
 import { AuthError } from '@/auth/session';
 import { fieldErrorsFromApi, type FieldErrors } from './validation';
 
-// Form state shared by the login and register pages: values, field errors, the server error code.
+export type SetField<T> = (name: keyof T & string, value: string) => void;
+
+// Form state shared by the login, register and forgot-password pages: values, field errors, the server error code.
+// `onError` lets a page show some errors itself (at a field, say): return true and no alert is raised for that error.
 export function useAuthForm<T extends Record<string, string>>(
   initial: T,
   validate: (values: T) => FieldErrors<T>,
   send: (values: T) => Promise<void>,
+  onError?: (error: AuthError, set: SetField<T>) => boolean,
 ) {
   const { t } = useTranslation('auth');
   const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState<FieldErrors<T>>({});
   const [serverError, setServerError] = useState<string | null>(null); // an API error code, translated when shown
   const [busy, setBusy] = useState(false);
+
+  // For a field that is not a plain TextField (the code box): set its value from outside.
+  const set: SetField<T> = (name, value) => setValues((current) => ({ ...current, [name]: value }));
 
   // Props for one TextField: value, change handler and its translated error.
   const field = (name: keyof T & string) => {
@@ -48,11 +55,15 @@ export function useAuthForm<T extends Record<string, string>>(
     try {
       await send(values); // on success AuthContext turns "authenticated" and the page redirects
     } catch (error) {
+      if (error instanceof AuthError && onError?.(error, set)) {
+        setBusy(false);
+        return;
+      }
       setServerError(error instanceof AuthError ? error.code : 'GENERIC');
       if (error instanceof AuthError) showErrors(form, fieldErrorsFromApi(error.details, values));
       setBusy(false);
     }
   }
 
-  return { field, onSubmit, serverError, busy };
+  return { field, set, onSubmit, serverError, busy };
 }

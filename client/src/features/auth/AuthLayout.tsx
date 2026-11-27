@@ -1,5 +1,5 @@
 import { Box, LinearProgress, Paper, Stack, Typography } from '@mui/material';
-import { useId, type ReactNode } from 'react';
+import { useId, type ReactNode, type Ref } from 'react';
 import { Check } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import telegramLogo from '@/assets/telegram.svg'; // the real Telegram mark (SVG Logos, CC0)
@@ -11,7 +11,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 // Login and register: the form on the page ground on the left; on wide screens the product itself on the right
 // (a month figure, a budget bar and a bot chat, drawn with the app's own components), so a first visitor sees
 // what the app does before signing up. Phones get the form alone.
-export default function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
+// `headingRef`: a screen with steps (forgot password) moves focus to the heading when its step changes.
+export default function AuthLayout({ title, headingRef, children }: { title: string; headingRef?: Ref<HTMLHeadingElement>; children: ReactNode }) {
   const { t } = useTranslation();
   return (
     <>
@@ -27,7 +28,7 @@ export default function AuthLayout({ title, children }: { title: string; childre
           </Stack>
           <Box component="main" id="main" sx={{ flex: 1, display: 'grid', placeItems: 'center', px: { xs: 2, sm: 4 }, pt: 2, pb: 8 }}>
             <Box sx={{ width: '100%', maxWidth: 400 }}>
-              <Typography variant="h4" component="h1" sx={{ mb: 3 }}>
+              <Typography ref={headingRef} tabIndex={headingRef ? -1 : undefined} variant="h4" component="h1" sx={{ mb: 3, outline: 'none' }}>
                 {title}
               </Typography>
               {children}

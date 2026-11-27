@@ -9,6 +9,7 @@ import { Session } from '../src/models/Session.js';
 import { User } from '../src/models/User.js';
 import { revokeAllSessions } from '../src/services/sessions.js';
 import { clearTestDb, startTestDb, stopTestDb } from './helpers/db.js';
+import { lastCode } from './helpers/mailbox.js';
 import { claimsOf, loginAs, refresh, refreshCookie, registerUser, resetLoginLimit } from './helpers/auth.js';
 
 beforeAll(async () => {
@@ -25,9 +26,19 @@ const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
 describe('register', () => {
   test('TC-F1-01 register stores a bcrypt hash and opens a session', async () => {
-    const res = await request(app)
+    // With mail on (the default under test) register only starts the sign-up (202, no account, no session); the hash and
+    // the session come with the verify, whose answer is today's register answer (docs/07 §7.10.1).
+    const pending = await request(app)
       .post('/api/auth/register')
       .send({ name: 'Lan', email: 'Lan@Example.com', password: 'correct-horse-1' });
+    expect(pending.status).toBe(202);
+    expect(pending.headers['set-cookie']).toBeUndefined();
+    expect(await User.countDocuments()).toBe(0);
+    expect(await Session.countDocuments()).toBe(0);
+
+    const res = await request(app)
+      .post('/api/auth/register/verify')
+      .send({ email: 'lan@example.com', code: lastCode('lan@example.com'), signupToken: pending.body.signupToken });
 
     expect(res.status).toBe(201);
     expect(res.body.user).toMatchObject({ name: 'Lan', email: 'lan@example.com', role: 'user', status: 'active', language: 'vi', theme: 'system' });
@@ -85,11 +96,10 @@ describe('register', () => {
     expect(await User.countDocuments()).toBe(0);
 
     // Exactly 72 bytes is still fine, and then a longer new password is refused the same way.
-    const ok = await register(prefix, 'exact@example.com');
-    expect(ok.status).toBe(201);
+    const ok = await registerUser({ email: 'exact@example.com', password: prefix });
     const change = await request(app)
       .patch('/api/users/me/password')
-      .set('Authorization', `Bearer ${ok.body.accessToken}`)
+      .set('Authorization', `Bearer ${ok.accessToken}`)
       .send({ currentPassword: prefix, newPassword: tooLong });
     expect([change.status, change.body.error.details]).toEqual([400, [{ path: 'newPassword', issue: 'custom' }]]);
   });
