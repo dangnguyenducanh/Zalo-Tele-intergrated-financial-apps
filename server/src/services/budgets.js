@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { Budget } from '../models/Budget.js';
 import { Category } from '../models/Category.js';
 import { AppError } from '../utils/AppError.js';
+import { monthKey, monthRange, vnParts } from '../utils/vnTime.js';
 import { totalsByCategory } from './stats.js';
 
 const budgetNotFound = () => new AppError(404, 'NOT_FOUND', 'Budget not found');
@@ -15,10 +16,45 @@ async function spentInMonth(userId, month) {
   return spent;
 }
 
-// A budget as the API returns it: its fields plus `spent` and `percent` used (rounded; may pass 100).
-function withUsage(budget, spentByCategory) {
+// ---- Pace (docs/02 §2.11.2, A2) ---------------------------------------------------------------------------------
+// One pace figure for the Budgets chip, /dubao, /month, the confirm warning and the agent's get_budget_pace. The agent
+// service has its own copy; both are tested on shared/fixtures/pace.json, so they cannot drift apart.
+export const PACE_FROM_DAY = 5; // a straight-line projection from fewer days overstates early-month spending such as rent
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// What is left to spend, and where the month is heading, for a budget `spent` of `limit` on day `day` of a month of
+// `daysInMonth` days (today counts as a day left). Whole dong; null before day 5.
+//   daysLeft: days from today to the month's end · perDay: the most to spend each of them, or null once the limit is
+//   reached (never negative) · projectedEnd: spent / day × daysInMonth, rounded half up · overDay: the first day the
+//   projection is over the limit, or null when it never is this month.
+// The products stay exact while spent × daysInMonth × 2 is below 2^53 (spent below about 1.4 × 10^14 ₫); the figure is an estimate anyway.
+export function pace({ spent, limit, day, daysInMonth }) {
+  if (day < PACE_FROM_DAY) return null;
+  const daysLeft = daysInMonth - day + 1;
+  const perDay = spent >= limit ? null : Math.floor((limit - spent) / daysLeft);
+  const projectedEnd = Math.floor((2 * spent * daysInMonth + day) / (2 * day));
+  let overDay = null;
+  if (spent > 0 && spent < limit) {
+    const first = Math.floor((limit * day) / spent) + 1; // the first day spent / day × that day is over the limit
+    if (first <= daysInMonth) overDay = first;
+  }
+  return { daysLeft, perDay, projectedEnd, overDay };
+}
+
+// Where `now` is in the budget's month: { day, daysInMonth } while `month` is the current Vietnam month, else null
+// (a past or a future month has no "today").
+export function monthProgress(month, now = new Date()) {
+  if (monthKey(now) !== month) return null;
+  const { start, end } = monthRange(month);
+  return { day: vnParts(now).day, daysInMonth: Math.round((end - start) / DAY_MS) };
+}
+
+// A budget as the API returns it: its fields plus `spent`, `percent` used (rounded; may pass 100) and its `pace`
+// (null outside the current Vietnam month and before day 5).
+function withUsage(budget, spentByCategory, now) {
   const spent = spentByCategory.get(budget.categoryId ? String(budget.categoryId) : OVERALL) ?? 0;
-  return { ...budget.toJSON(), spent, percent: Math.round((spent * 100) / budget.limit) };
+  const progress = monthProgress(budget.month, now);
+  return { ...budget.toJSON(), spent, percent: Math.round((spent * 100) / budget.limit), pace: progress && pace({ spent, limit: budget.limit, ...progress }) };
 }
 
 // The month's budgets, overall budget first. A deleted category's budget is left out: its transactions
@@ -48,9 +84,9 @@ async function checkCategory(userId, categoryId) {
 }
 
 // GET /budgets?month: the month's budgets with how much of each is used.
-export async function listBudgets(userId, month) {
+export async function listBudgets(userId, month, now = new Date()) {
   const [budgets, spent] = await Promise.all([liveBudgets(userId, month), spentInMonth(userId, month)]);
-  return budgets.map((budget) => withUsage(budget, spent));
+  return budgets.map((budget) => withUsage(budget, spent, now));
 }
 
 // POST /budgets. The unique index (docs/03) turns a second budget for the same category and month into 409.
@@ -63,7 +99,7 @@ export async function createBudget(userId, { month, categoryId, limit }) {
     if (err.code === 11000) throw new AppError(409, 'BUDGET_EXISTS', 'This month already has a budget for this category');
     throw err;
   }
-  return withUsage(budget, await spentInMonth(userId, month));
+  return withUsage(budget, await spentInMonth(userId, month), new Date());
 }
 
 // POST /budgets/copy: "copy last month". Budgets the target month already has are kept as they are.
@@ -82,7 +118,7 @@ export async function updateBudget(userId, budgetId, { limit }) {
   const budget = await findOwnBudget(userId, budgetId);
   budget.limit = limit;
   await budget.save();
-  return withUsage(budget, await spentInMonth(userId, budget.month));
+  return withUsage(budget, await spentInMonth(userId, budget.month), new Date());
 }
 
 export async function deleteBudget(userId, budgetId) {
@@ -91,15 +127,15 @@ export async function deleteBudget(userId, budgetId) {
 }
 
 // For the bots (T11) and /confirm after an expense is confirmed: the category's budget or the overall budget
-// of that month once it is at least 80 % used, as { ...budget, spent, percent, threshold: 80 | 100 }.
+// of that month once it is at least 80 % used, as { ...budget, spent, percent, pace, threshold: 80 | 100 }.
 // When both are, the fuller one. null when neither budget exists or is that full.
-export async function budgetWarning(userId, categoryId, month) {
+export async function budgetWarning(userId, categoryId, month, now = new Date()) {
   const [budgets, spent] = await Promise.all([
     Budget.find({ userId, month, categoryId: mongoose.trusted({ $in: [categoryId, null] }) }),
     spentInMonth(userId, month),
   ]);
   const fullest = budgets
-    .map((budget) => withUsage(budget, spent))
+    .map((budget) => withUsage(budget, spent, now))
     .sort((a, b) => b.spent / b.limit - a.spent / a.limit)[0];
   if (!fullest || fullest.spent * 100 < fullest.limit * 80) return null; // exact, not the rounded percent
   return { ...fullest, threshold: fullest.spent >= fullest.limit ? 100 : 80 };

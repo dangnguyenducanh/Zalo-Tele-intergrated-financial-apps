@@ -1,0 +1,37 @@
+# The weekly report (docs/02 §2.11.3, B4): a week's income and spending, its biggest categories, the same days of the week before (decision D18) and the pace of
+# this month's budgets, from MongoDB with no model. A week is Monday to Sunday; with no period named it is this week, compared by the days gone so far
+# (Mon 23 to Wed 25/11 against Mon 16 to Wed 18/11). The cron runs it on Sunday evening with trigger: schedule.
+code: tong_ket_tuan
+labelVi: Tổng kết tuần
+labelEn: Weekly summary
+description: Tổng kết một tuần (thứ Hai đến Chủ Nhật) gồm thu, chi, các danh mục chi nhiều nhất, so với cùng các ngày của tuần trước và nhịp ngân sách tháng này. A week's income and spending, its biggest categories, the same days of the week before and the budget pace.
+examples:
+  - tổng kết tuần trước
+  - tổng kết tuần này
+  - tổng kết tuần
+triggers: [tổng kết tuần, tóm tắt tuần, báo cáo tuần, weekly summary, week summary, weekly report, summary of the week]
+anchored: true
+defaultPeriod: week
+mode: pipeline
+tools:
+  - {name: get_period_summary, ord: 1, preset: {}}
+  - {name: get_category_totals, ord: 2, preset: {top: 5}}
+  - {name: compare_periods, ord: 3, preset: {}}
+  - {name: get_budget_pace, ord: 4, preset: {}}
+followups:
+  - {vi: "Tổng kết tuần này", en: "Weekly summary"}
+  - {vi: "Báo cáo tuần này", en: "Weekly report"}
+maxSteps: 4
+enabled: true
+version: 1
+templates:
+  vi:
+    answer: |-
+      Tổng kết {period}, tính các giao dịch đã xác nhận:
+      {facts}
+    sources: Giao dịch đã xác nhận {range}, so với cùng các ngày tuần trước; ngân sách tháng này
+  en:
+    answer: |-
+      Weekly summary for {period}, confirmed transactions only:
+      {facts}
+    sources: Confirmed transactions {range}, against the same days of the week before; this month's budgets

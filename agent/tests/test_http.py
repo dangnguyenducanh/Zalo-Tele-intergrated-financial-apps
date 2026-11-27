@@ -52,9 +52,13 @@ def test_every_path_but_health_needs_the_bearer(make_app, auth, settings, method
         response = client.request(method, path, headers=headers, content=b'not json')  # 401 comes before the body
         assert response.status_code == 401, headers
         assert response.json() == {'error': {'code': 'UNAUTHENTICATED', 'message': 'Bad or missing agent secret'}}
-    # With the secret the check passes. No route is there yet (the next cards add them), and the API docs are off.
+    # With the secret the check passes. /v1/turn (T45) is a route now and refuses an empty body with 422; the others are
+    # not there yet (the next cards add them), and the API docs are off.
     response = client.request(method, path, headers=auth)
-    assert response.status_code in (404, 405) and response.json()['error']['code'] in ('NOT_FOUND', 'METHOD_NOT_ALLOWED')
+    if (method, path) == ('POST', '/v1/turn'):
+        assert response.status_code == 422 and response.json()['error']['code'] == 'VALIDATION_ERROR'
+    else:
+        assert response.status_code in (404, 405) and response.json()['error']['code'] in ('NOT_FOUND', 'METHOD_NOT_ALLOWED')
 
 
 def test_a_websocket_route_needs_the_bearer_too(make_app, auth, settings):

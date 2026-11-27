@@ -15,6 +15,7 @@
   "usage": "Đã chi {{spent}} / {{limit}} ({{percent}}%)",
   "left": "Còn {{amount}}",
   "over": "Vượt {{amount}}",
+  "pace": "tối đa {{amount}}/ngày",
   "level": {
     "ok": "Trong hạn mức",
     "warn": "Sắp hết",

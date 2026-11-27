@@ -8,6 +8,8 @@ import app from '../src/app.js';
 import enText from '../src/bot/messages.en.js';
 import viText from '../src/bot/messages.vi.js';
 import { env } from '../src/config/env.js';
+import { Budget } from '../src/models/Budget.js';
+import { Category } from '../src/models/Category.js';
 import { ChannelUsage } from '../src/models/ChannelUsage.js';
 import { ChatLink } from '../src/models/ChatLink.js';
 import { LinkCode } from '../src/models/LinkCode.js';
@@ -18,6 +20,7 @@ import { setWebhooks } from '../src/scripts/setWebhooks.js';
 import { monthKey, vnDate, vnParts } from '../src/utils/vnTime.js';
 import fixtures from './fixtures/telegram-updates.json' with { type: 'json' };
 import { registerUser, resetLoginLimit } from './helpers/auth.js';
+import { A2_DUBAO_VI, novemberDay, plain, seedPaceMonth } from './helpers/pace.js';
 import { clearTestDb, startTestDb, stopTestDb } from './helpers/db.js';
 
 // The webhook answers 200 first and hands the real work to waitUntil(). Collect that work so a test can wait for it.
@@ -58,6 +61,7 @@ beforeEach(() => {
   errorLog = vi.spyOn(console, 'error');
 });
 afterEach(async () => {
+  vi.useRealTimers(); // the pace tests pin the clock
   expect(errorLog).not.toHaveBeenCalled();
   errorLog.mockRestore();
   outbound.resetHandlers();
@@ -627,6 +631,7 @@ test('TC-F8-11 /today and /month match the statistics API, in the language chose
 });
 
 test('TC-F8-22 /month lists the category budgets with their usage, also without an overall budget (BUG-029)', async () => {
+  novemberDay(4); // before day 5 a budget line has no pace (TC-F14-31 covers the lines with one)
   const a = await linkedUser();
   const month = monthKey(new Date());
   const add = (amount, categoryId) =>
@@ -670,6 +675,118 @@ test('TC-F5-03 confirming an expense past 80 % / 100 % of its budget warns on th
   const income = await a.me.post(`/transactions/${(await draftOf(1_000_000)).id}/confirm`);
   expect(income.status).toBe(200);
   expect(income.body).not.toHaveProperty('budgetWarning');
+});
+
+// The A2 month (seedPaceMonth) of a linked user, with the clock on `day` of November 2026.
+async function paceUser(day = 25) {
+  novemberDay(day);
+  const a = await linkedUser();
+  await seedPaceMonth({ userId: a.user.id, walletId: a.user.defaultWalletId });
+  return a;
+}
+
+test('TC-F14-30 /dubao gives the pace of the overall budget and of each category budget, in the chat\'s language, without the agent', async () => {
+  novemberDay(25);
+  const a = await linkedUser();
+  const before = await say('/dubao'); // no budget yet: one clear line, nothing is stored
+  expect(before.map(textOf)).toEqual([viText.paceNoBudget]);
+  await seedPaceMonth({ userId: a.user.id, walletId: a.user.defaultWalletId });
+
+  expect(plain(textOf((await say('/dubao'))[0]))).toBe(A2_DUBAO_VI);
+  expect(plain(textOf((await say('/Dubao'))[0]))).toBe(A2_DUBAO_VI); // a command is read without case
+  expect(plain(textOf((await say('/dubao cho tháng này'))[0]))).toBe(A2_DUBAO_VI); // and whatever follows it
+  expect(await Transaction.countDocuments()).toBe(2); // only the two spendings seedPaceMonth() wrote: a forecast writes nothing
+  expect(calls.every((call) => call.method === 'sendMessage')).toBe(true); // no agent, no other host (the stub throws on any)
+
+  // English; the last day says "1 day".
+  await say('/lang en');
+  expect(plain(textOf((await say('/dubao'))[0]))).toBe(
+    [
+      '📊 Forecast for 11/2026 (day 25 of 30)',
+      'Overall: spent ₫7,100,000 of ₫8,000,000. ₫900,000 left for 6 days → at most ₫150,000 a day. At this pace the month ends at about ₫8,520,000, over around Nov 29.',
+      'Food & drinks: at most ₫26,000 a day. Month end about ₫1,012,800, over around Nov 30.',
+    ].join('\n'),
+  );
+  novemberDay(30);
+  expect(plain(textOf((await say('/dubao'))[0]))).toMatch(/Overall: spent ₫7,100,000 of ₫8,000,000\. ₫900,000 left for 1 day → at most ₫900,000 a day\. At this pace the month ends at about ₫7,100,000\.\n/);
+  await say('/lang vi');
+
+  // Over the limit: no allowance and no negative number, but the month-end figure stays.
+  novemberDay(25);
+  const category = await Category.findOne({ userId: a.user.id, 'names.vi': 'Nhà ở' });
+  await Transaction.create({ userId: a.user.id, walletId: a.user.defaultWalletId, categoryId: category._id, type: 'expense', amount: 1_000_000, occurredAt: new Date('2026-11-12T05:00:00.000Z') });
+  const over = plain(textOf((await say('/dubao'))[0]));
+  expect(over).toContain('Tổng: đã chi 8.100.000 ₫ / 8.000.000 ₫. Đã vượt ngân sách. Theo nhịp này cuối tháng ≈ 9.720.000 ₫.\n');
+  expect(over).not.toMatch(/-\d|tối đa 0 /);
+
+  // The help text lists it, in both languages.
+  expect(viText.help).toContain('/dubao');
+  expect(enText.help).toContain('/dubao');
+});
+
+test('TC-F14-30 /dubao before day 5 says when it starts; with no budget it says there is nothing to forecast', async () => {
+  const a = await paceUser(4);
+  expect(plain(textOf((await say('/dubao'))[0]))).toBe(plain(viText.paceTooEarly({ day: 4, from: 5 })));
+  expect(viText.paceTooEarly({ day: 4, from: 5 })).toMatch(/ngày 5[^]*ngày 4/);
+  novemberDay(5);
+  expect(plain(textOf((await say('/dubao'))[0]))).toMatch(/^📊 Dự báo tháng 11\/2026 \(ngày 5\/30\)\nTổng: .*tối đa 34\.615 ₫\/ngày/); // day 5 is the first
+  await Budget.deleteMany({ userId: a.user.id });
+  novemberDay(4);
+  expect(textOf((await say('/dubao'))[0])).toBe(viText.paceNoBudget); // nothing to forecast, whatever the day
+  await say('/lang en');
+  expect(textOf((await say('/dubao'))[0])).toBe(enText.paceNoBudget);
+  expect(await Transaction.countDocuments({ status: 'draft' })).toBe(0);
+});
+
+test('TC-F14-31 /month adds the daily limit to each budget line, the same figure as /dubao and GET /budgets', async () => {
+  const a = await paceUser(25);
+  const month = plain(textOf((await say('/month'))[0]));
+  expect(month).toContain('\nNgân sách: 89% (7.100.000 ₫ / 8.000.000 ₫) · tối đa 150.000 ₫/ngày');
+  expect(month).toContain('\nNgân sách "Ăn uống": 84% (844.000 ₫ / 1.000.000 ₫) · tối đa 26.000 ₫/ngày');
+
+  const web = (await a.me.get('/budgets?month=2026-11')).body;
+  expect(web.map((b) => b.pace.perDay)).toEqual([150_000, 26_000]); // the Budgets chip's figures
+  expect(plain(textOf((await say('/dubao'))[0]))).toContain('tối đa 150.000 ₫/ngày');
+
+  // Past the limit a line has no allowance; before day 5 no line has one; English says it in English.
+  const category = await Category.findOne({ userId: a.user.id, 'names.vi': 'Nhà ở' });
+  await Transaction.create({ userId: a.user.id, walletId: a.user.defaultWalletId, categoryId: category._id, type: 'expense', amount: 1_000_000, occurredAt: new Date('2026-11-12T05:00:00.000Z') });
+  expect(plain(textOf((await say('/month'))[0]))).toMatch(/\nNgân sách: 101% \(8\.100\.000 ₫ \/ 8\.000\.000 ₫\)\nNgân sách "Ăn uống": 84% .* · tối đa 26\.000 ₫\/ngày$/);
+  await say('/lang en');
+  expect(plain(textOf((await say('/month'))[0]))).toMatch(/\n"Food & drinks" budget: 84% \(₫844,000 \/ ₫1,000,000\) · at most ₫26,000 a day$/);
+  novemberDay(4);
+  expect(textOf((await say('/month'))[0])).not.toMatch(/at most|·/);
+});
+
+test('TC-F14-32 the confirm warning shows the same daily limit as the Budgets chip, on the bot and the web', async () => {
+  const a = await paceUser(25);
+  const draftOf = (amount) => Transaction.findOne({ amount, status: 'draft' });
+  const foodPace = async () => (await a.me.get('/budgets?month=2026-11')).body.find((b) => b.categoryId === a.food).pace;
+
+  // Bot ✅: food goes to 900.000 of 1.000.000 (90 %), 100.000 left for 6 days.
+  await say('phở 56k');
+  const saved = await press(`c:${(await draftOf(56_000)).id}`);
+  expect(plain(textOf(saved[0]))).toMatch(/Đã lưu[^\n]*\n⚠️ Ngân sách "Ăn uống" đã dùng 90% \(900\.000 ₫ \/ 1\.000\.000 ₫\) · tối đa 16\.666 ₫\/ngày$/);
+  expect((await foodPace()).perDay).toBe(16_666);
+
+  // Web /confirm: the warning carries the pace, the same one.
+  await say('bún 20k');
+  const web = await a.me.post(`/transactions/${(await draftOf(20_000)).id}/confirm`);
+  expect(web.body.budgetWarning).toMatchObject({ percent: 92, pace: { daysLeft: 6, perDay: 13_333 } });
+  expect(await foodPace()).toEqual(web.body.budgetWarning.pace);
+
+  // Over the limit: the 🚨 line has no allowance; the pace says so (perDay null).
+  await say('phở 100k');
+  const over = await press(`c:${(await draftOf(100_000)).id}`);
+  expect(plain(textOf(over[0]))).toMatch(/\n🚨 Vượt ngân sách "Ăn uống": 102% \(1\.020\.000 ₫ \/ 1\.000\.000 ₫\)$/);
+  expect((await foodPace()).perDay).toBeNull();
+
+  // Before day 5 there is no pace and the line is the one it always was.
+  novemberDay(4);
+  await say('/lang en');
+  await say('coffee 10k');
+  expect(plain(textOf((await press(`c:${(await draftOf(10_000)).id}`))[0]))).toMatch(/\n🚨 Over the "Food & drinks" budget: 103% \(₫1,030,000 \/ ₫1,000,000\)$/);
+  expect(await foodPace()).toBeNull();
 });
 
 test('TC-F8-15 a locked account cannot record or confirm anything through its linked chat', async () => {

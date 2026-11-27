@@ -1,5 +1,13 @@
 import { api } from '@/app/api';
 
+// Where a budget is heading this month (docs/04 §4.4 `pace`, docs/02 §2.11.2 A2). Computed by the server's pace(); the page only shows it.
+export type Pace = {
+  daysLeft: number; // days from today to the month's end, today included
+  perDay: number | null; // the most to spend each of them, whole VND; null once the limit is reached
+  projectedEnd: number; // the month's total at this pace
+  overDay: number | null; // the day of the month the pace passes the limit; null when it never does
+};
+
 // Response shapes of /api/budgets (docs/04 §4.4, server/src/services/budgets.js).
 export type Budget = {
   id: string;
@@ -8,6 +16,7 @@ export type Budget = {
   limit: number; // whole VND
   spent: number; // computed by the server: confirmed expenses of the month in this category (or all of them)
   percent: number; // round(spent / limit × 100); may pass 100
+  pace: Pace | null; // null before day 5 of the current Vietnam month, and for every other month
 };
 
 // Green below 80 %, amber from 80 % to 100 %, red above 100 % (docs/05 §5.7), the bot's rule too (services/budgets.js).
