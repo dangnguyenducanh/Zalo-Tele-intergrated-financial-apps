@@ -307,6 +307,48 @@ test('TC-F8-21 Zalo: after a multi-line message, each "ok"/"huy" reaches the nex
   expect(await Transaction.find({ deletedAt: null }).lean()).toMatchObject([{ amount: 40_000, status: 'confirmed' }]);
 });
 
+const nfd = (text) => text.normalize('NFD'); // a decomposing keyboard or a paste: "o" + hook-above mark, not the one letter "ỏ"
+
+test('TC-F14-27 a question typed in a Zalo chat gets the help text and makes no draft; a capture and the amount-only correction still work (docs/02 §2.11.1)', async () => {
+  await linkedUser();
+  const questions = ['tháng 10 thu bao nhiêu', 'tháng 3 năm 2025 tiêu bao nhiêu', '7 ngày qua tiêu bao nhiêu', '?phở 45k', '5 khoản chi lớn nhất tuần trước', 'top 3 cafe', '/hoi tháng này ăn uống hết bao nhiêu', '/hoi', '/hỏi phở 45k', '/Hỏi', nfd('/hỏi phở 45k'), nfd('/Hỏi')];
+
+  for (const text of questions) {
+    const replies = await say(text);
+    expect([text, replies.map((c) => c.method), textOf(replies[0])]).toEqual([text, ['sendMessage'], viText.help]);
+  }
+  expect(viText.help).toContain('/hoi');
+  expect(await Transaction.countDocuments()).toBe(0);
+  expect(textOf((await say('ok'))[0])).toBe(viText.nothingPending);
+  for (const text of ['chi tiêu 7 ngày qua', 'đã chi gì tháng 9', 'chi tiêu năm 2025']) expect(textOf((await say(text))[0])).toBe(viText.help);
+  expect(await Transaction.countDocuments()).toBe(0);
+
+  // A capture is a draft; a reply with only an amount ("55k") still corrects the newest one (TC-F8-20).
+  for (const text of ['grab 32k', 'cà phê không đường 25', 'ăn tối tháng 10 50']) await say(text);
+  expect((await Transaction.find().sort({ _id: 1 }).lean()).map((t) => [t.amount, t.status])).toEqual([[32_000, 'draft'], [25_000, 'draft'], [50_000, 'draft']]);
+  await say('55k');
+  expect((await Transaction.find().sort({ _id: 1 }).lean()).map((t) => t.amount)).toEqual([32_000, 25_000, 55_000]); // the newest draft was corrected, no new one
+});
+
+test('TC-F14-27 every existing command is read without case or accents in either Unicode form on Zalo: /Today, /tôday, /MONTH and /Lang vi run as the plain command (docs/02 §2.11.1)', async () => {
+  const user = await linkedUser();
+  const reply = async (text) => textOf((await say(text))[0]);
+  const plain = { today: await reply('/today'), month: await reply('/month') };
+  expect(plain.today).toMatch(/^📅 Hôm nay/);
+  expect(plain.month).toMatch(/^📅 Tháng/);
+  for (const [text, command] of [['/Today', 'today'], ['/tôday', 'today'], [nfd('/tôday'), 'today'], ['/MONTH', 'month'], ['/Mônth', 'month'], [nfd('/Mônth'), 'month']]) {
+    expect([text, await reply(text)]).toEqual([text, plain[command]]);
+  }
+  // /lang switches the language whatever the case or accents; each variant starts again from English.
+  for (const text of ['/Lang vi', '/LANG vi', '/Lâng vi', nfd('/Lâng vi')]) {
+    await say('/lang en');
+    expect((await User.findById(user.id)).language).toBe('en');
+    await say(text);
+    expect([text, (await User.findById(user.id)).language]).toEqual([text, 'vi']);
+  }
+  expect(await Transaction.countDocuments()).toBe(0); // a command is never a capture
+});
+
 // ---- Zalo's monthly quota (docs/02 §2.11.6, card T49): every send is counted, and from 2,850 only capture and linking replies go out ----
 
 const thisMonth = () => monthKey(new Date());

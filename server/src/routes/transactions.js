@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { classify } from '../bot/ask.js';
 import { requireAuth } from '../middleware/auth.js';
 import { MAX_MONEY } from '../models/Transaction.js';
 import {
@@ -49,9 +50,12 @@ router.get('/', async (req, res) => {
   res.json(await listTransactions(req.user.id, listQuery.parse(req.query)));
 });
 
-// Quick-add preview: registered before '/:id' routes; it only reads.
+// Quick-add preview: registered before '/:id' routes; it only reads. A question (docs/02 §2.11.1) is not money: it is
+// answered here, before the parser and without reading the user's categories or wallets.
 router.post('/parse', async (req, res) => {
-  res.json(await parseTransactions(req.user.id, parseBody.parse(req.body).text));
+  const { text } = parseBody.parse(req.body);
+  if (classify(text, { followUp: false }) === 'question') return res.json({ question: true, drafts: [], noAmountLines: [], truncated: false });
+  res.json(await parseTransactions(req.user.id, text));
 });
 
 router.post('/', async (req, res) => {
