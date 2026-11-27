@@ -1,21 +1,24 @@
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import app from '../src/app.js';
 import { Budget } from '../src/models/Budget.js';
 import { Category } from '../src/models/Category.js';
 import { Transaction } from '../src/models/Transaction.js';
 import { User } from '../src/models/User.js';
 import { Wallet } from '../src/models/Wallet.js';
-import { budgetWarning } from '../src/services/budgets.js';
+import fixture from '../../shared/fixtures/pace.json' with { type: 'json' };
+import { budgetWarning, listBudgets } from '../src/services/budgets.js';
 import { monthKey } from '../src/utils/vnTime.js';
 import { clearTestDb, startTestDb, stopTestDb } from './helpers/db.js';
 import { registerUser, resetLoginLimit } from './helpers/auth.js';
+import { novemberDay, seedPaceMonth } from './helpers/pace.js';
 
 beforeAll(async () => {
   await startTestDb();
   await Promise.all([User.init(), Wallet.init(), Category.init(), Transaction.init(), Budget.init()]); // unique indexes first
 });
 afterEach(async () => {
+  vi.useRealTimers(); // the pace tests pin the clock
   await clearTestDb();
   await resetLoginLimit();
 });
@@ -212,4 +215,43 @@ test('TC-F5-05 budgetWarning reports a category or overall budget at 80 % and at
   // Another user's spending never counts.
   const other = await newUser();
   expect(await warningFor(other.user.id, other.food, month)).toBeNull();
+});
+
+test('TC-F14-29 every budget the API returns carries its pace, null outside the current Vietnam month; the confirm warning too', async () => {
+  novemberDay(25);
+  const u = await newUser();
+  await seedPaceMonth({ userId: u.user.id, walletId: u.walletId });
+  const a2 = fixture.pace[0]; // 7.100.000 of 8.000.000 on day 25 of 30: shared/fixtures/pace.json
+
+  const list = (await u.me.get('/budgets?month=2026-11')).body;
+  expect(list[0]).toMatchObject({ categoryId: null, spent: 7_100_000, limit: 8_000_000, pace: a2.pace });
+  expect(list[1]).toMatchObject({ categoryId: u.food, spent: 844_000, pace: { daysLeft: 6, perDay: 26_000, projectedEnd: 1_012_800, overDay: 30 } });
+
+  // The confirm warning is a budget too: this month's carries the pace (the fuller of food 84 % and overall 89 %), last month's (below) does not.
+  expect(await warningFor(u.user.id, u.food, '2026-11')).toMatchObject({ categoryId: null, percent: 89, pace: a2.pace });
+
+  // POST and PATCH answer with the pace too: a new budget has nothing spent, a limit below what is spent has no allowance.
+  const created = await u.me.post('/budgets', { month: '2026-11', categoryId: u.transport, limit: 500_000 });
+  expect(created.body.pace).toEqual({ daysLeft: 6, perDay: 83_333, projectedEnd: 0, overDay: null });
+  const patched = await u.me.patch(`/budgets/${list[0].id}`, { limit: 7_000_000 });
+  expect(patched.body.pace).toEqual({ daysLeft: 6, perDay: null, projectedEnd: 8_520_000, overDay: null });
+
+  // Another month is not "now": the past and the future have no pace.
+  await u.me.post('/budgets', { month: '2026-10', categoryId: u.food, limit: 100_000 });
+  await u.me.post('/budgets', { month: '2026-12', categoryId: u.food, limit: 100_000 });
+  for (const month of ['2026-10', '2026-12']) expect((await u.me.get(`/budgets?month=${month}`)).body[0].pace).toBeNull();
+
+  await spend(u, u.food, 90_000, '2026-10-10T05:00:00.000Z');
+  expect(await warningFor(u.user.id, u.food, '2026-10')).toMatchObject({ percent: 90, pace: null });
+});
+
+test('TC-F14-29 pace follows the clock the service is given: nothing on day 4, a pace on day 5, December starts at 00:00 in Vietnam', async () => {
+  const u = await newUser();
+  await seedPaceMonth({ userId: u.user.id, walletId: u.walletId });
+  const overallAt = async (now) => (await listBudgets(u.user.id, '2026-11', new Date(now)))[0].pace;
+
+  expect(await overallAt('2026-11-04T12:00:00+07:00')).toBeNull();
+  expect(await overallAt('2026-11-05T12:00:00+07:00')).toMatchObject({ daysLeft: 26, perDay: 34_615, projectedEnd: 42_600_000 }); // 900.000 left over 26 days
+  expect(await overallAt('2026-11-30T16:59:59Z')).toMatchObject({ daysLeft: 1, perDay: 900_000, projectedEnd: 7_100_000 }); // 23:59:59 on 30/11
+  expect(await overallAt('2026-11-30T17:00:00Z')).toBeNull(); // 00:00 on 01/12: November is over
 });

@@ -1,4 +1,4 @@
-max_trees = 9   # 3 coders + up to 3 reviewers + 1 merger + 2 spare
+max_trees = 32  # no fixed agent count: the orchestrator raises this when the pool is full
 root = ""
 
 # Worktree root directory (relative to repo root or absolute path).
@@ -13,7 +13,7 @@ root = ""
 # When set, the branch must exist locally or on origin; treehouse fails
 # rather than falling back to the inferred default.
 # Override per-command with the --base flag. Example: base_branch = "develop"
-base_branch = "main"
+base_branch = "staging"  # card work starts from staging; release/verify of main pass --base main
 
 # Unique worktree directory names.
 # Unset (default) names every slot's directory after the repository, so

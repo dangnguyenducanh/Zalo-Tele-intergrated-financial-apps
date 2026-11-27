@@ -15,6 +15,7 @@
   "usage": "Spent {{spent}} of {{limit}} ({{percent}}%)",
   "left": "{{amount}} left",
   "over": "{{amount}} over",
+  "pace": "at most {{amount}} a day",
   "level": {
     "ok": "On track",
     "warn": "Almost used up",
